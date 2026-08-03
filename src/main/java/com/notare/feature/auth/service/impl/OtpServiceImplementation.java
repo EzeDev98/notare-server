@@ -1,9 +1,8 @@
 package com.notare.feature.auth.service.impl;
 
-import com.notare.common.exception.InvalidOtpException;
-import com.notare.common.exception.OtpAttemptsExceededException;
-import com.notare.common.exception.OtpExpiredException;
-import com.notare.common.exception.OtpResendCooldownException;
+import com.notare.common.exception.*;
+import com.notare.config.OtpProperties;
+import com.notare.feature.auth.dto.request.ResendOtpRequest;
 import com.notare.feature.auth.enums.OtpPurpose;
 import com.notare.feature.auth.model.Otp;
 import com.notare.feature.auth.respository.OtpRepository;
@@ -20,9 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Optional;
-
-import static com.notare.common.constant.GeneralConstant.*;
+import java.util.function.Consumer;
 
 @RequiredArgsConstructor
 @Service
@@ -32,8 +31,13 @@ public class OtpServiceImplementation implements OtpService {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final UserRepository userRepository;
+    private final OtpProperties otpProperties;
 
     private final SecureRandom random = new SecureRandom();
+
+    private final Map<OtpPurpose, Consumer<Long>> postVerificationActions = Map.of(
+            OtpPurpose.EMAIL_VERIFICATION, this::activateUser
+    );
 
     @Override
     @Transactional
@@ -47,9 +51,11 @@ public class OtpServiceImplementation implements OtpService {
         otp.setUserId(user.getId());
         otp.setOtpPurpose(purpose);
         otp.setCodeHash(passwordEncoder.encode(code));
-        otp.setExpiresAt(LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES));
+        otp.setExpiresAt(LocalDateTime.now().plusMinutes(otpProperties.getExpiryMinutes()));
         otp.setConsumed(false);
         otp.setAttempts(0);
+
+        otpRepository.save(otp);
 
         emailService.sendEmail(user.getEmail(), user.getUsername(), code);
     }
@@ -57,14 +63,14 @@ public class OtpServiceImplementation implements OtpService {
     @Override
     @Transactional
     public void verifyOtp(Long userId, OtpPurpose purpose, String submittedCode) {
-        Otp otp = otpRepository.findTopByUserIdAndPurposeAndConsumedFalseOrderByCreatedAtDesc(userId, purpose)
+        Otp otp = otpRepository.findTopByUserIdAndOtpPurposeAndConsumedFalseOrderByCreatedAtDesc(userId, purpose)
                 .orElseThrow(() -> new InvalidOtpException("No active verification code found. Please request a new one."));
 
         if (otp.getExpiresAt().isBefore(LocalDateTime.now())) {
             throw new OtpExpiredException("This code has expired. Please request a new one.");
         }
 
-        if (otp.getAttempts() >= MAX_OTP_ATTEMPTS) {
+        if (otp.getAttempts() >= otpProperties.getMaxAttempts()) {
             throw new OtpAttemptsExceededException("Too many incorrect attempts. Please request a new code.");
         }
 
@@ -77,23 +83,48 @@ public class OtpServiceImplementation implements OtpService {
         otp.setConsumed(true);
         otpRepository.save(otp);
 
-        if (purpose == OtpPurpose.EMAIL_VERIFICATION) {
-            User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new InvalidOtpException("User not found"));
+        Optional.ofNullable(postVerificationActions.get(purpose))
+                .ifPresent(action -> action.accept(userId));
+    }
 
-            user.setEmailVerified(true);
-            user.setUserStatus(UserStatus.ACTIVE);
-            userRepository.save(user);
-        }
+    private void activateUser(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new InvalidOtpException("User not found"));
 
+        user.setEmailVerified(true);
+        user.setUserStatus(UserStatus.ACTIVE);
+        userRepository.save(user);
+    }
+
+    @Override
+    @Transactional
+    public void verifyOtpByNotarianId(String notarianId, OtpPurpose purpose, String submittedCode) {
+        User user = userRepository.findByNotarianId(notarianId)
+                .orElseThrow(() -> new InvalidOtpException("Invalid or expired code."));
+        verifyOtp(user.getId(), purpose, submittedCode);
+    }
+
+    @Override
+    public void resendOtp(ResendOtpRequest request) {
+        userRepository.findByNotarianId(request.getNotarianId())
+                .ifPresentOrElse(
+                        user -> generateAndSendOtp(user, OtpPurpose.EMAIL_VERIFICATION),
+                        () -> {});
+    }
+
+    @Override
+    public void sendOtp(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+        generateAndSendOtp(user, OtpPurpose.EMAIL_VERIFICATION);
     }
 
     private void enforceCoolDown(Long userId, OtpPurpose purpose) {
-        Optional<Otp> latest = otpRepository.findTopByUserIdAndPurposeAndConsumedFalseOrderByCreatedAtDesc(userId, purpose);
+        Optional<Otp> latest = otpRepository.findTopByUserIdAndOtpPurposeAndConsumedFalseOrderByCreatedAtDesc(userId, purpose);
 
         latest.ifPresent(otp -> {
             Duration sinceCreated = Duration.between(otp.getCreatedAt(), LocalDateTime.now());
-            if (sinceCreated.getSeconds() < RESEND_COOLDOWN_SECONDS) {
+            if (sinceCreated.getSeconds() < otpProperties.getResendCooldownSeconds()) {
                 throw new OtpResendCooldownException("Please wait before requesting another code.");
             }
         });
@@ -101,7 +132,10 @@ public class OtpServiceImplementation implements OtpService {
 
 
     private String generateNumericCode() {
-        int code = 100000 + random.nextInt(900000);
+        int length = otpProperties.getLength();
+        int lowerBound = (int) Math.pow(10, length - 1);
+        int range = (int) (9 * Math.pow(10, length - 1));
+        int code = lowerBound + random.nextInt(range);
         return String.valueOf(code);
     }
 }

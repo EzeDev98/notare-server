@@ -1,6 +1,6 @@
 package com.notare.feature.auth.dto.request;
 
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -9,6 +9,6 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 public class ResendOtpRequest {
-    @NotNull(message = "User ID is required.")
-    private Long userId;
+    @NotBlank(message = "Notarian ID is required.")
+    private String notarianId;
 }

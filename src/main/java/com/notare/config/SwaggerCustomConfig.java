@@ -1,4 +1,4 @@
-package com.sp.syncPoint.config;
+package com.notare.config;
 
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -23,16 +23,16 @@ public class SwaggerCustomConfig {
 
         return new OpenAPI()
                 .info(new Info()
-                        .title("Sync Point API")
-                        .description("REST APIs for the Sync Point Application")
+                        .title("Notare API")
+                        .description("REST APIs for the Notare Application")
                         .version("1.0")
                         .contact(new Contact()
-                                .name("COGNIFY")
+                                .name("NOTARE")
                                 .email("ezemosesjohn21997@gmail.com")
-                                .url("https://www.cognify.com"))
+                                .url("https://www.notare.com"))
                         .license(new License()
                                 .name("API License")
-                                .url("https://www.cognify.com")))
+                                .url("https://www.notare.com")))
                 .components(new Components()
                         .addSecuritySchemes("Bearer Authentication", bearerAuth))
                 .addSecurityItem(

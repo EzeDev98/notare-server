@@ -6,11 +6,13 @@ import com.notare.common.exception.UserAlreadyExistException;
 import com.notare.feature.user.dto.request.RegistrationRequest;
 import com.notare.feature.user.dto.response.RegistrationResponse;
 import com.notare.feature.user.enums.UserStatus;
+import com.notare.feature.user.event.UserRegisteredEvent;
 import com.notare.feature.user.model.User;
 import com.notare.feature.user.repository.UserRepository;
 import com.notare.feature.user.service.UserService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,7 @@ public class UserServiceImplementation implements UserService {
     private final NotarianIdGenerator notarianIdGenerator;
     private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
 
     @Override
@@ -47,6 +50,7 @@ public class UserServiceImplementation implements UserService {
 
         try {
             User user = createUser(request);
+            eventPublisher.publishEvent(new UserRegisteredEvent(user.getId()));
             return new RegistrationResponse(HttpServletResponse.SC_CREATED, "Account created. Please check your email to verify your account.", user.getNotarianId());
         } catch (DataIntegrityViolationException ex) {
             throw new UserAlreadyExistException("A user with this username or email is already registered");
