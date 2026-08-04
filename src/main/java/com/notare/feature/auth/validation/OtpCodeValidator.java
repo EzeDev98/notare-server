@@ -17,9 +17,7 @@ public class OtpCodeValidator implements ConstraintValidator<ValidOtpCode, Strin
 
         int expectedLength = otpProperties.getLength();
 
-        boolean valid = value != null
-                && value.length() == expectedLength
-                && value.chars().allMatch(Character::isDigit);
+        boolean valid = value != null && value.length() == expectedLength && value.chars().allMatch(Character::isDigit);
 
         if (!valid) {
             context.disableDefaultConstraintViolation();

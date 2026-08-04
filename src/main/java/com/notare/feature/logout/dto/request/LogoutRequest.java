@@ -1,0 +1,15 @@
+package com.notare.feature.logout.dto.request;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+public class LogoutRequest {
+    private String sessionId;
+    private Long userId;
+}

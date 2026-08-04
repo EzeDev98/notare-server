@@ -2,6 +2,7 @@ package com.notare.common.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
@@ -72,6 +73,24 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
+    @ExceptionHandler(NoteNotFoundException.class)
+    public ProblemDetail handleNoteNotFoundException(NoteNotFoundException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(NoteConflictException.class)
+    public ProblemDetail handleNoteConflictException(NoteConflictException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setProperty("currentVersion", ex.getCurrentVersion());
+        return problem;
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ProblemDetail handleOptimisticLockingFailure(ObjectOptimisticLockingFailureException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+                "This note was modified by another request. Please reload and try again.");
+    }
+
     @ExceptionHandler(EmailDeliveryException.class)
     public ProblemDetail handleEmailDeliveryException(EmailDeliveryException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
@@ -80,5 +99,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidResetTokenException.class)
     public ProblemDetail handleInvalidResetTokenException(InvalidResetTokenException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    public ProblemDetail handleInvalidRefreshTokenException(InvalidRefreshTokenException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    }
+
+    @ExceptionHandler(SessionNotFoundException.class)
+    public ProblemDetail handleSessionNotFoundException(SessionNotFoundException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 }

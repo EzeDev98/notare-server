@@ -1,26 +1,27 @@
 package com.notare.feature.auth.web;
 
-import com.notare.feature.auth.dto.request.LoginRequest;
-import com.notare.feature.auth.dto.response.LoginResponse;
-import com.notare.feature.auth.service.LoginService;
+import com.notare.common.web.ClientIp;
+import com.notare.common.web.UserAgent;
+
+import com.notare.feature.auth.dto.request.RefreshTokenRequest;
+import com.notare.feature.auth.dto.response.TokenResponse;
+import com.notare.feature.auth.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
 
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("${app.title}/auth")
 public class AuthController {
 
-    private final LoginService loginService;
+    private final AuthService authService;
 
-    @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        LoginResponse response = loginService.login(request);
+    @PostMapping("/refresh")
+    public ResponseEntity<TokenResponse> refresh(@Valid @RequestBody RefreshTokenRequest request, @ClientIp String ipAddress, @UserAgent String userAgent) {
+        TokenResponse response = authService.refreshToken(request, userAgent, ipAddress);
         return ResponseEntity.ok(response);
     }
 }

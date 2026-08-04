@@ -42,7 +42,7 @@ public class WebSecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(maliciousProbesMatcher()).denyAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/login/**", "/api/v1/auth/refresh").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/otp/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/user/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/password/**").permitAll()
@@ -82,7 +82,7 @@ public class WebSecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
 
         configuration.setAllowedOriginPatterns(List.of(
-                "https://sync-point-client.onrender.com",
+
                 "https://*.onrender.com",
                 "http://localhost:*"
         ));

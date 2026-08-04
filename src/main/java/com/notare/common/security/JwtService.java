@@ -13,8 +13,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
-import static com.notare.common.constant.GeneralConstant.RESET_PURPOSE_CLAIM;
-import static com.notare.common.constant.GeneralConstant.RESET_PURPOSE_VALUE;
+import static com.notare.common.constant.GeneralConstant.*;
 
 @Service
 public class JwtService {
@@ -53,6 +52,10 @@ public class JwtService {
 
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
+    }
+
+    public String extractSessionId(String token) {
+        return extractClaim(token, claims -> claims.get(SESSION_ID_CLAIM, String.class));
     }
 
     public boolean isTokenValid(String token, UserDetails userDetails) {
