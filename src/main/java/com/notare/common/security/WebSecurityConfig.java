@@ -44,7 +44,7 @@ public class WebSecurityConfig {
                         .requestMatchers(maliciousProbesMatcher()).denyAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/login/**", "/api/v1/auth/refresh").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/otp/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/user/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/user/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/password/**").permitAll()
                         .requestMatchers("/public/**").permitAll()
                         .requestMatchers(

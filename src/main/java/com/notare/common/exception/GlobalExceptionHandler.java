@@ -9,6 +9,7 @@ import org.springframework.security.authentication.LockedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -78,6 +79,21 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
+    @ExceptionHandler(VoiceNoteNotFoundException.class)
+    public ProblemDetail handleVoiceNoteNotFoundException(VoiceNoteNotFoundException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(TranscriptionNotFoundException.class)
+    public ProblemDetail handleTranscriptionNotFoundException(TranscriptionNotFoundException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(CollaborationNotFoundException.class)
+    public ProblemDetail handleCollaborationNotFoundException(CollaborationNotFoundException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
     @ExceptionHandler(NoteConflictException.class)
     public ProblemDetail handleNoteConflictException(NoteConflictException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
@@ -89,6 +105,75 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleOptimisticLockingFailure(ObjectOptimisticLockingFailureException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
                 "This note was modified by another request. Please reload and try again.");
+    }
+
+    @ExceptionHandler(CollaborationAlreadyExistsException.class)
+    public ProblemDetail handleCollaborationAlreadyExistsException(CollaborationAlreadyExistsException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidCollaborationException.class)
+    public ProblemDetail handleInvalidCollaborationException(InvalidCollaborationException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    @ExceptionHandler(NoteShareNotFoundException.class)
+    public ProblemDetail handleNoteShareNotFoundException(NoteShareNotFoundException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(NoteAlreadySharedException.class)
+    public ProblemDetail handleNoteAlreadySharedException(NoteAlreadySharedException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidNoteShareException.class)
+    public ProblemDetail handleInvalidNoteShareException(InvalidNoteShareException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    /**
+     * The only domain 403 in the application. Everything else that a caller has
+     * no business touching is answered with 404, which hides existence; this one
+     * fires only after a grant has been found, so the caller already knows the
+     * note is there and a 404 would just be confusing. See the exception's own
+     * javadoc for the full rule.
+     */
+    @ExceptionHandler(InsufficientNotePermissionException.class)
+    public ProblemDetail handleInsufficientNotePermissionException(InsufficientNotePermissionException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    @ExceptionHandler(UnsupportedAudioFormatException.class)
+    public ProblemDetail handleUnsupportedAudioFormatException(UnsupportedAudioFormatException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNSUPPORTED_MEDIA_TYPE, ex.getMessage());
+    }
+
+    @ExceptionHandler(VoiceFileTooLargeException.class)
+    public ProblemDetail handleVoiceFileTooLargeException(VoiceFileTooLargeException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.PAYLOAD_TOO_LARGE, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidVoiceUploadException.class)
+    public ProblemDetail handleInvalidVoiceUploadException(InvalidVoiceUploadException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    /**
+     * Spring throws this when an upload exceeds spring.servlet.multipart.max-file-size
+     * (the hard container limit) BEFORE our validator runs. Map it to the same
+     * 413 so the client sees a consistent "too large" response either way.
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ProblemDetail handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.PAYLOAD_TOO_LARGE,
+                "Upload exceeds the maximum allowed size.");
+    }
+
+    @ExceptionHandler(StorageException.class)
+    public ProblemDetail handleStorageException(StorageException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
+                "A storage error occurred. Please try again.");
     }
 
     @ExceptionHandler(EmailDeliveryException.class)

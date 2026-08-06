@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface NoteRepository extends JpaRepository<Note, Long> {
@@ -36,6 +38,35 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
      * Used by: permanent delete (works regardless of current deleted state).
      */
     Optional<Note> findByIdAndOwnerId(Long id, Long ownerId);
+
+    /**
+     * An active note by id, WITHOUT an owner filter.
+     *
+     * <p>Read the previous four signatures, then this one: every other finder
+     * here carries ownerId, because until Step 7 ownership was the only way to
+     * reach a note and that scoping WAS the authorization. This method has no
+     * such guard, so it is only safe behind a caller that has already proved
+     * access some other way — the share module, after it has found a grant row.
+     * Nothing in the note module's own endpoints uses it.
+     *
+     * <p>The deleted = false part is kept: a note in the trash is invisible to
+     * collaborators, exactly as it is to its owner.
+     */
+    Optional<Note> findByIdAndDeletedFalse(Long id);
+
+    /**
+     * Active notes for a batch of ids, WITHOUT an owner filter — same caution as
+     * above.
+     *
+     * <p>This exists so "notes shared with me" can resolve a page of grants into
+     * note titles with ONE query instead of one per row. Fetching in a loop
+     * would be the classic N+1: 20 shares, 21 queries.
+     *
+     * <p>The result may be smaller than the input (ids that are soft-deleted or
+     * gone simply don't come back) and its order is not guaranteed to match the
+     * ids, so callers index the results rather than zipping them positionally.
+     */
+    List<Note> findByIdInAndDeletedFalse(Collection<Long> ids);
 
     /**
      * Keyword search across the owner's active notes, matching a partial,
