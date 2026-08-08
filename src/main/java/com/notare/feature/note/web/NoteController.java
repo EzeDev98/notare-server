@@ -6,6 +6,7 @@ import com.notare.feature.note.dto.request.CreateNoteRequest;
 import com.notare.feature.note.dto.request.UpdateNoteRequest;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
+import com.notare.feature.note.dto.response.TrashedNoteResponse;
 import com.notare.feature.note.service.NoteService;
 import com.notare.feature.user.model.UserDetail;
 import jakarta.validation.Valid;
@@ -79,6 +80,35 @@ public class NoteController {
      * and case-insensitive, paginated. The literal path /notes/search takes
      * precedence over /notes/{noteId}, so there's no clash with get-by-id.
      */
+    /**
+     * The trash: notes this owner has soft-deleted.
+     *
+     * <p>Restore and permanent delete have existed since Step 1 and nothing
+     * could list what they act on, so a deleted note was unreachable through
+     * any client — indistinguishable, from the user's side, from a permanent
+     * one.
+     *
+     * <p>A literal sub-path alongside {@code /{noteId}}, like {@code /search}.
+     * Spring matches literal segments ahead of templates, so {@code /trash} is
+     * never mistaken for a note id and the two can be declared in any order.
+     *
+     * <p>Sorted newest-trashed-first by default, which is the order a user
+     * scans a trash in. The service appends id as a tiebreaker — see
+     * withStableOrder there for why a deletedAt sort alone is not safe to
+     * paginate.
+     */
+    @GetMapping("/trash")
+    public ResponseEntity<PagedResponse<TrashedNoteResponse>> listTrashedNotes(
+            @AuthenticationPrincipal UserDetail userDetail,
+            @ParameterObject
+            @PageableDefault(size = 20, sort = "deletedAt", direction = Sort.Direction.DESC)
+            Pageable pageable) {
+
+        PagedResponse<TrashedNoteResponse> response =
+                noteService.listTrashedNotes(userDetail.getUser().getId(), pageable);
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/search")
     public ResponseEntity<PagedResponse<NoteSummaryResponse>> searchNotes(
             @AuthenticationPrincipal UserDetail userDetail,

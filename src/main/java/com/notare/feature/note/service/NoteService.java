@@ -7,6 +7,7 @@ import com.notare.feature.note.dto.request.UpdateNoteRequest;
 import com.notare.feature.note.dto.response.NoteChange;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
+import com.notare.feature.note.dto.response.TrashedNoteResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -34,6 +35,16 @@ public interface NoteService {
     PagedResponse<NoteSummaryResponse> listNotes(Long ownerId, Pageable pageable);
 
     PagedResponse<NoteSummaryResponse> searchNotes(Long ownerId, String query, Pageable pageable);
+
+    /**
+     * This owner's trashed notes, so a client can offer restore and permanent
+     * delete on something the user can actually see.
+     *
+     * <p>Both of those operations existed from Step 1; nothing could list what
+     * they operate on, which made a soft delete indistinguishable from a
+     * permanent one from the user's side.
+     */
+    PagedResponse<TrashedNoteResponse> listTrashedNotes(Long ownerId, Pageable pageable);
 
     NoteResponse updateNote(Long ownerId, Long noteId, UpdateNoteRequest request);
 

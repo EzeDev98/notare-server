@@ -9,6 +9,7 @@ import com.notare.feature.note.dto.request.UpdateNoteRequest;
 import com.notare.feature.note.dto.response.NoteChange;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
+import com.notare.feature.note.dto.response.TrashedNoteResponse;
 import com.notare.feature.note.event.NotePermanentlyDeletedEvent;
 import com.notare.feature.note.mapper.NoteMapper;
 import com.notare.feature.note.model.Note;
@@ -63,6 +64,18 @@ public class NoteServiceImpl implements NoteService {
     public PagedResponse<NoteSummaryResponse> listNotes(Long ownerId, Pageable pageable) {
         Page<Note> page = noteRepository.findByOwnerIdAndDeletedFalse(ownerId, pageable);
         return toSummaryPage(page);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PagedResponse<TrashedNoteResponse> listTrashedNotes(Long ownerId, Pageable pageable) {
+        Page<Note> page = noteRepository.findByOwnerIdAndDeletedTrue(ownerId, withStableOrder(pageable));
+
+        List<TrashedNoteResponse> content = page.getContent().stream()
+                .map(note -> new TrashedNoteResponse(noteMapper.toSummary(note), note.getDeletedAt()))
+                .toList();
+
+        return PagedResponse.of(content, page);
     }
 
     @Override
@@ -248,6 +261,37 @@ public class NoteServiceImpl implements NoteService {
         return note.isDeleted()
                 ? new NoteChange(note.getId(), true, null, null)
                 : new NoteChange(note.getId(), false, noteMapper.toResponse(note), note.getClientId());
+    }
+
+    /**
+     * Appends id as a final tiebreaker to whatever sort the caller asked for.
+     *
+     * <p>The trash is sorted by deletedAt, and deletedAt ties constantly:
+     * MySQL DATETIME is second-precision unless fractional seconds are asked
+     * for, and deleting several notes in a row puts them all in the same
+     * second. A sort with ties is UNDEFINED between pages — the database is
+     * free to order tied rows differently on each query — so page 1 can show a
+     * note that page 2 shows again while a third is never returned at all.
+     *
+     * <p>This is the same failure Step 9 designed around when it rebuilt the
+     * sync sort as (updatedAt, id). The difference is that sync DISCARDS the
+     * caller's sort entirely, because its paging contract depends on one exact
+     * ordering. Here the caller may legitimately sort by title or updatedAt, so
+     * their choice is kept and only made deterministic.
+     *
+     * <p>An unsorted Pageable is left alone: without an ORDER BY there is no
+     * tie to break, and adding one would silently override the database's
+     * natural ordering for a caller who did not ask for any.
+     */
+    private Pageable withStableOrder(Pageable pageable) {
+        Sort sort = pageable.getSort();
+        if (sort.isUnsorted() || sort.getOrderFor("id") != null) {
+            return pageable;
+        }
+        return PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                sort.and(Sort.by(Sort.Order.desc("id"))));
     }
 
     // ---------------------------------------------------------------------

@@ -28,6 +28,17 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
     Page<Note> findByOwnerIdAndDeletedFalse(Long ownerId, Pageable pageable);
 
     /**
+     * The trash: this owner's soft-deleted notes.
+     *
+     * <p>The mirror of the finder above, and the reason soft delete was built
+     * as a plain boolean rather than Hibernate's @SoftDelete — that annotation
+     * hides deleted rows globally, which makes restore and permanent delete
+     * work by special case and makes a trash LISTING impossible without
+     * escaping the abstraction entirely.
+     */
+    Page<Note> findByOwnerIdAndDeletedTrue(Long ownerId, Pageable pageable);
+
+    /**
      * A soft-deleted note that belongs to the given owner.
      * Used by: restore deleted note (we must be able to find rows that the
      * "active" finders above deliberately hide).
