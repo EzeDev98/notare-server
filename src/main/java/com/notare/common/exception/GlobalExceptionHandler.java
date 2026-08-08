@@ -1,5 +1,7 @@
 package com.notare.common.exception;
 
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -7,12 +9,101 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.validation.FieldError;
+import org.springframework.validation.ObjectError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * Every error this application produces through Spring MVC, as RFC 9457
+ * ProblemDetail.
+ *
+ * <h2>Why the explicit @Order</h2>
+ *
+ * <p>{@code spring.mvc.problemdetails.enabled=true} registers Boot's own
+ * {@code ProblemDetailsExceptionHandler}, which converts the framework's
+ * exceptions — unreadable body, wrong media type, missing request parameter,
+ * unknown path — into ProblemDetail as well. That is exactly what we want for
+ * everything this class does NOT declare.
+ *
+ * <p>It also declares a handler for {@link MethodArgumentNotValidException},
+ * and so do we. When two advice beans can both handle an exception, the one
+ * with higher precedence wins, and an unordered {@code @RestControllerAdvice}
+ * sits at {@code LOWEST_PRECEDENCE} — behind Boot's. Without the annotation
+ * below, the validation handler at the bottom of this class would be dead code
+ * and every 400 would come back with Boot's generic wording and no field
+ * detail, exactly as if we had never written it. Nothing warns you.
+ *
+ * <p>Being first is safe because this class declares only specific exception
+ * types. There is no catch-all {@code Exception} handler here, and there should
+ * not be: an unhandled exception must reach the container as a 500 rather than
+ * be flattened into a tidy message that hides a bug.
+ */
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    /**
+     * Bean-validation failure on a {@code @Valid @RequestBody}.
+     *
+     * <p>Before this handler existed, these did not go through ProblemDetail at
+     * all: this advice did not declare the exception and did not extend
+     * {@code ResponseEntityExceptionHandler}, so a failed {@code @Valid} fell
+     * through to Boot's default error attributes — {@code {timestamp, status,
+     * error, path}} — with no per-field information, because
+     * {@code server.error.include-binding-errors} is unset.
+     *
+     * <p>The practical consequence was that <b>no client could show a
+     * field-level error on registration or password reset.</b> Every one of the
+     * constraints on RegistrationRequest — username length, the password
+     * pattern, a malformed email — arrived as an indistinguishable 400. The
+     * client's only option was to duplicate all of them and hope the two
+     * definitions never drifted.
+     *
+     * <p>The field map goes in a root-level {@code errors} extension member,
+     * per RFC 9457. Keys are field names as the client sent them, so a form can
+     * attach each message to its input without a translation table.
+     *
+     * <p>{@code merge} rather than {@code put}: one field can fail several
+     * constraints at once (a password can be too short AND miss a digit), and
+     * a plain put would silently keep whichever Hibernate Validator happened to
+     * report last.
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ProblemDetail handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
+        Map<String, String> errors = new LinkedHashMap<>();
+
+        for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
+            errors.merge(fieldError.getField(), messageOf(fieldError), (existing, addition) -> existing + " " + addition);
+        }
+
+        // Class-level constraints (a hypothetical @PasswordsMatch on the whole
+        // request) produce global errors with no field to attach to. Filed
+        // under the object name rather than dropped — an error the user cannot
+        // see is worse than one filed slightly awkwardly.
+        for (ObjectError globalError : ex.getBindingResult().getGlobalErrors()) {
+            errors.merge(globalError.getObjectName(), messageOf(globalError), (existing, addition) -> existing + " " + addition);
+        }
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "One or more fields are invalid.");
+        problem.setTitle("Validation Failed");
+        problem.setProperty("errors", errors);
+        return problem;
+    }
+
+    /**
+     * A constraint with no message configured would otherwise serialise as
+     * null, which a client cannot render.
+     */
+    private String messageOf(ObjectError error) {
+        String message = error.getDefaultMessage();
+        return (message == null || message.isBlank()) ? "Invalid value." : message;
+    }
 
     @ExceptionHandler(BadCredentialsException.class)
     public ProblemDetail handleBadCredentialsException(BadCredentialsException ex) {
@@ -103,8 +194,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     public ProblemDetail handleOptimisticLockingFailure(ObjectOptimisticLockingFailureException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
-                "This note was modified by another request. Please reload and try again.");
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "This note was modified by another request. Please reload and try again.");
     }
 
     @ExceptionHandler(CollaborationAlreadyExistsException.class)
@@ -171,14 +261,12 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ProblemDetail handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.PAYLOAD_TOO_LARGE,
-                "Upload exceeds the maximum allowed size.");
+        return ProblemDetail.forStatusAndDetail(HttpStatus.PAYLOAD_TOO_LARGE, "Upload exceeds the maximum allowed size.");
     }
 
     @ExceptionHandler(StorageException.class)
     public ProblemDetail handleStorageException(StorageException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
-                "A storage error occurred. Please try again.");
+        return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "A storage error occurred. Please try again.");
     }
 
     @ExceptionHandler(EmailDeliveryException.class)

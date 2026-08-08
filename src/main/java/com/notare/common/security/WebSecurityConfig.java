@@ -32,6 +32,8 @@ public class WebSecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CustomUserDetailsService userDetailsService;
+    private final ProblemDetailAuthenticationEntryPoint authenticationEntryPoint;
+    private final ProblemDetailAccessDeniedHandler accessDeniedHandler;
 
 
     @Bean
@@ -71,6 +73,15 @@ public class WebSecurityConfig {
 
                         .anyRequest().authenticated()
                 )
+                // WITHOUT THIS BLOCK the chain falls back to
+                // Http403ForbiddenEntryPoint, and an expired access token comes
+                // back as an EMPTY 403 rather than a 401 — indistinguishable
+                // from a genuine permission denial, and impossible for a client
+                // to build a refresh loop on. See
+                // ProblemDetailAuthenticationEntryPoint for the full reasoning.
+                .exceptionHandling(handling -> handling
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler))
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
@@ -102,11 +113,30 @@ public class WebSecurityConfig {
 
         configuration.setAllowedHeaders(List.of("*"));
 
+        // Headers a BROWSER client is allowed to read. Anything not listed here
+        // is present on the wire and invisible to fetch() — silently, with no
+        // error, which is why this list is easy to get wrong and hard to debug.
+        //
+        // Location matters: every 201 in this API sets it (notes,
+        // collaborations, shares) and so does the 202 on transcription submit.
+        // Each of those also returns the resource in the body, so nothing is
+        // broken without it — but a client following the Location header on
+        // transcription submit, which is the documented way to poll, could not
+        // read the URL it was told to poll.
+        //
+        // X-Total-Count is set by nothing in this application; pagination
+        // totals travel inside PagedResponse. Dropped rather than left as a
+        // header that promises something the server never sends.
         configuration.setExposedHeaders(List.of(
                 "Content-Disposition",
-                "X-Total-Count"
+                "Location"
         ));
 
+        // Retained, though nothing currently needs it: this API authenticates
+        // with a Bearer header, not cookies, and credentialed CORS is what
+        // makes the wildcard origin illegal (hence allowedOriginPatterns above
+        // rather than allowedOrigins). It becomes load-bearing only if the
+        // refresh token ever moves to an httpOnly cookie.
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 

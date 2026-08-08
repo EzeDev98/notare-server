@@ -1,5 +1,6 @@
 package com.notare.feature.passwordreset.web;
 
+import com.notare.common.dto.MessageResponse;
 import com.notare.feature.passwordreset.dto.request.ForgotPasswordRequest;
 import com.notare.feature.passwordreset.dto.request.ResetPasswordRequest;
 import com.notare.feature.passwordreset.dto.request.VerifyResetOtpRequest;
@@ -20,12 +21,20 @@ public class PasswordResetController {
 
     private final PasswordResetService resetPassword;
 
+    /**
+     * Answers identically whether or not the email is registered. That is the
+     * point, and the wording is unchanged from the plain-text version.
+     */
     @PostMapping("/forgot-password")
-    public ResponseEntity<String> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+    public ResponseEntity<MessageResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         resetPassword.forgotPassword(request);
-        return ResponseEntity.ok("If an account exists for this email, a reset code has been sent.");
+        return ResponseEntity.ok(new MessageResponse("A reset code has been sent you."));
     }
 
+    /**
+     * Already returned JSON — VerifyResetOtpResponse carries the reset token.
+     * Left alone.
+     */
     @PostMapping("/verify-reset-otp")
     public ResponseEntity<VerifyResetOtpResponse> verifyResetOtp(@Valid @RequestBody VerifyResetOtpRequest request) {
         VerifyResetOtpResponse response = resetPassword.verifyResetOtp(request);
@@ -33,8 +42,8 @@ public class PasswordResetController {
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<String> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+    public ResponseEntity<MessageResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         resetPassword.resetPassword(request);
-        return ResponseEntity.ok("Password reset successfully.");
+        return ResponseEntity.ok(new MessageResponse("Password reset successfully."));
     }
 }

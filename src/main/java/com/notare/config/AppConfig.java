@@ -6,7 +6,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
- * Application-wide feature toggles.
+ * Application-wide feature toggles. One place, on purpose.
  *
  * <p>auditorAwareRef names the bean that answers "who is doing this". Without
  * it, @EnableJpaAuditing still populates @CreatedDate and @LastModifiedDate —
@@ -18,14 +18,23 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * SecurityAuditorAware is its uncapitalised class name. Renaming that class
  * without updating this string compiles cleanly and fails at startup.
  *
- * <p>@EnableScheduling moved here in Step 10. The SchedulingConfig class added
- * in 9F is now redundant and should be DELETED — @EnableAsync was already on
- * this class, so putting its sibling anywhere else was a mistake.
+ * <h2>Why both @EnableAsync and @EnableScheduling live here</h2>
  *
- * <p>While you're here: AsyncConfig (Step 5) also carries @EnableAsync, which
- * has always been redundant with the one below. Harmless — the annotation is
- * idempotent — but worth removing so there's one obvious place these live.
- * AsyncConfig's transcriptionExecutor bean must stay.
+ * <p>They used to be spread across three classes: this one, a SchedulingConfig
+ * that did nothing else, and AsyncConfig in the transcription module, which
+ * repeated @EnableAsync alongside the bean it actually exists for.
+ *
+ * <p>The duplication was harmless — these annotations are idempotent, so
+ * nothing misbehaved — but that is exactly what made it worth removing.
+ * A duplicated enable-switch costs nothing today and misleads tomorrow:
+ * someone deleting AsyncConfig along with the transcription feature would have
+ * had no way to know whether @Async elsewhere in the application still worked,
+ * because the answer depended on a second declaration in a file they were not
+ * reading.
+ *
+ * <p>A single home makes the question answerable by looking in one place, and
+ * makes "what does this application enable?" a file you can open rather than a
+ * grep you have to remember to run.
  */
 @Configuration
 @EnableJpaAuditing(auditorAwareRef = "securityAuditorAware")

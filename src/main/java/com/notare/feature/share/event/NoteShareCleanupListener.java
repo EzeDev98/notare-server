@@ -1,5 +1,7 @@
 package com.notare.feature.share.event;
 
+import com.notare.feature.collaboration.event.CollaborationRemovedEvent;
+import com.notare.feature.note.event.NotePermanentlyDeletedEvent;
 import com.notare.feature.share.repository.NoteShareRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +37,22 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * <p>No @Async here for the same reason — an async listener runs on another
  * thread with its own transaction, which throws away the atomicity this whole
  * design is buying.
+ *
+ * <h2>Why both event types are imported explicitly</h2>
+ *
+ * <p>Both handler parameters name a type from ANOTHER module, and both imports
+ * above are load-bearing. This class previously carried neither, because
+ * same-package copies of both events existed in {@code feature.share.event} —
+ * so the unqualified names resolved to those local copies instead. One of them
+ * ({@code NotePermanentlyDeletedEvent}) was an obsolete two-field version that
+ * nothing published, which meant this listener silently never fired and
+ * permanently-deleted notes left their grants behind. It compiled, started, and
+ * logged nothing.
+ *
+ * <p>Java's same-package resolution wins over intent, with no compiler
+ * complaint. The defence is that an event now lives in the module that
+ * publishes it, so there is no local copy for a name to bind to by accident.
+ * If a duplicate ever reappears, {@code ShareCleanupIntegrationTest} fails.
  */
 @Slf4j
 @Component
@@ -65,6 +83,12 @@ public class NoteShareCleanupListener {
      * but can be after a table reset or restore, an orphan grant is a latent
      * access bug rather than merely untidy data. Cheap to prevent, awkward to
      * diagnose later.
+     *
+     * <p>The event carries {@code ownerId} as well, which this handler doesn't
+     * need: every grant on a permanently deleted note goes, regardless of who
+     * granted it. Scoping the delete by owner as well would be a no-op today
+     * (a note has exactly one owner and it is immutable) and would silently
+     * leak grants the day that stops being true.
      */
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onNotePermanentlyDeleted(NotePermanentlyDeletedEvent event) {
