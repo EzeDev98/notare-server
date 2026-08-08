@@ -61,14 +61,21 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * invite yourself). The CONCAT(firstName, ' ', lastName) clause is what lets
      * "Jane Doe" match — searching the two name columns separately would miss a
      * full name typed with a space.
+     *
+     * <p>ESCAPE '!' on all three, pairing with LikeEscaper. This query is the
+     * one where unescaped wildcards actually mattered: searchUsers returns an
+     * empty page for a blank term SPECIFICALLY so the endpoint cannot be used
+     * to list the directory. A term of "%" is not blank, so it passed that
+     * check and then matched every row — walking around the privacy decision
+     * with one character.
      */
     @Query("""
             SELECT u FROM User u
             WHERE u.id <> :excludeUserId
               AND (
-                    LOWER(u.username) LIKE LOWER(CONCAT('%', :term, '%'))
-                 OR LOWER(u.email) LIKE LOWER(CONCAT('%', :term, '%'))
-                 OR LOWER(CONCAT(u.firstName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', :term, '%'))
+                    LOWER(u.username) LIKE LOWER(CONCAT('%', :term, '%')) ESCAPE '!'
+                 OR LOWER(u.email) LIKE LOWER(CONCAT('%', :term, '%')) ESCAPE '!'
+                 OR LOWER(CONCAT(u.firstName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', :term, '%')) ESCAPE '!'
               )
             """)
     Page<User> searchUsers(@Param("excludeUserId") Long excludeUserId,

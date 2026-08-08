@@ -6,6 +6,7 @@ import com.notare.common.exception.NotarianIdGenerationException;
 import com.notare.common.exception.PasswordMisMatchException;
 import com.notare.common.exception.UserAlreadyExistException;
 import com.notare.common.exception.UserNotFoundException;
+import com.notare.common.util.LikeEscaper;
 import com.notare.feature.user.dto.request.RegistrationRequest;
 import com.notare.feature.user.dto.response.CurrentUserResponse;
 import com.notare.feature.user.dto.response.RegistrationResponse;
@@ -139,7 +140,11 @@ public class UserServiceImplementation implements UserService {
             return PagedResponse.of(List.of(), Page.empty(pageable));
         }
 
-        Page<User> page = userRepository.searchUsers(currentUserId, term, pageable);
+        // Escaped only after the blank check above. The two guards work
+        // together: the blank check stops an empty term from listing the
+        // directory, and escaping stops a term of "%" — which is not blank —
+        // from doing the same thing by another route.
+        Page<User> page = userRepository.searchUsers(currentUserId, LikeEscaper.escape(term), pageable);
         List<UserSummaryResponse> content = page.getContent().stream()
                 .map(this::toSummary)
                 .toList();

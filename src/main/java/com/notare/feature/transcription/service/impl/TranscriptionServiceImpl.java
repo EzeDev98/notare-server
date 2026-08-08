@@ -2,6 +2,7 @@ package com.notare.feature.transcription.service.impl;
 
 import com.notare.common.dto.PagedResponse;
 import com.notare.common.exception.TranscriptionNotFoundException;
+import com.notare.common.util.LikeEscaper;
 import com.notare.feature.transcription.dto.response.TranscriptionResponse;
 import com.notare.feature.transcription.enums.TranscriptionStatus;
 import com.notare.feature.transcription.event.TranscriptionRequestedEvent;
@@ -79,7 +80,8 @@ public class TranscriptionServiceImpl implements TranscriptionService {
         // Same normalization as note search: null-safe, trimmed; blank term
         // matches all completed transcripts.
         String term = query == null ? "" : query.strip();
-        Page<Transcription> page = transcriptionRepository.searchByOwnerAndStatus(ownerId, TranscriptionStatus.COMPLETED, term, pageable);
+        Page<Transcription> page = transcriptionRepository.searchByOwnerAndStatus(
+                ownerId, TranscriptionStatus.COMPLETED, LikeEscaper.escape(term), pageable);
         List<TranscriptionResponse> content = page.getContent().stream()
                 .map(transcriptionMapper::toResponse)
                 .toList();

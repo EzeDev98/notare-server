@@ -32,7 +32,7 @@ public interface TranscriptionRepository extends JpaRepository<Transcription, Lo
             SELECT transcription FROM Transcription transcription
             WHERE transcription.ownerId = :ownerId
               AND transcription.status = :status
-              AND LOWER(transcription.transcript) LIKE LOWER(CONCAT('%', :term, '%'))
+              AND LOWER(transcription.transcript) LIKE LOWER(CONCAT('%', :term, '%')) ESCAPE '!'
             """)
     Page<Transcription> searchByOwnerAndStatus(@Param("ownerId") Long ownerId,
                                                @Param("status") TranscriptionStatus status,

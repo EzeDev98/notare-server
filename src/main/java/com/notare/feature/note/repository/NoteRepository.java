@@ -142,13 +142,25 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
      * bind the AND/OR the wrong way, applying the owner/deleted filters to only
      * one side of the OR. The parentheses here are the whole point.
      */
+    /**
+     * Keyword search over the owner's active notes.
+     *
+     * <p>Written as explicit JPQL because a derived method name cannot express
+     * this grouping — it would bind the AND/OR wrong and apply the owner filter
+     * to only one side of the OR. The parentheses are the whole point.
+     *
+     * <p>ESCAPE '!' pairs with LikeEscaper, which neutralises % and _ in the
+     * term before it arrives. Both LIKEs need the clause: adding it to one and
+     * not the other leaves half the search wildcard-injectable, and nothing
+     * about the query's behaviour would reveal which half.
+     */
     @Query("""
             SELECT n FROM Note n
             WHERE n.ownerId = :ownerId
               AND n.deleted = false
               AND (
-                    LOWER(n.title)   LIKE LOWER(CONCAT('%', :term, '%'))
-                 OR LOWER(n.content) LIKE LOWER(CONCAT('%', :term, '%'))
+                    LOWER(n.title)   LIKE LOWER(CONCAT('%', :term, '%')) ESCAPE '!'
+                 OR LOWER(n.content) LIKE LOWER(CONCAT('%', :term, '%')) ESCAPE '!'
               )
             """)
     Page<Note> searchByOwner(@Param("ownerId") Long ownerId,

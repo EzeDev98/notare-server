@@ -3,6 +3,7 @@ package com.notare.feature.note.service.impl;
 import com.notare.common.dto.PagedResponse;
 import com.notare.common.exception.NoteConflictException;
 import com.notare.common.exception.NoteNotFoundException;
+import com.notare.common.util.LikeEscaper;
 import com.notare.feature.note.dto.request.AutoSaveNoteRequest;
 import com.notare.feature.note.dto.request.CreateNoteRequest;
 import com.notare.feature.note.dto.request.UpdateNoteRequest;
@@ -150,7 +151,13 @@ public class NoteServiceImpl implements NoteService {
         // Normalize the term: null-safe and trimmed. An empty term makes the
         // LIKE '%%' match everything, so a blank search behaves like "list all".
         String term = query == null ? "" : query.strip();
-        Page<Note> page = noteRepository.searchByOwner(ownerId, term, pageable);
+
+        // Neutralise wildcards AFTER trimming and BEFORE the query. Searching
+        // for "%" should find notes containing a percent sign, not every note
+        // the user owns; "snake_case" should not also match "snakeXcase".
+        // Escaping earlier would let strip() see characters that are no longer
+        // what the user typed.
+        Page<Note> page = noteRepository.searchByOwner(ownerId, LikeEscaper.escape(term), pageable);
         return toSummaryPage(page);
     }
 
