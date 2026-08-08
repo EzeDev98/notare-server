@@ -32,7 +32,40 @@ public interface NoteService {
 
     NoteResponse getNote(Long ownerId, Long noteId);
 
-    PagedResponse<NoteSummaryResponse> listNotes(Long ownerId, Pageable pageable);
+    /**
+     * The owner's notes, filtered by archive state.
+     *
+     * <p><b>Contract change.</b> This used to return every non-deleted note,
+     * archived ones included, because nothing could set archived and the flag
+     * was therefore always false. Now that it can be set, the default list
+     * excludes archived notes — otherwise archiving would be a flag with no
+     * observable effect.
+     *
+     * <p>There is deliberately no "both" option. A client that wants everything
+     * makes two calls, and in practice does not want to: the point of two lists
+     * is that they are two screens.
+     *
+     * @param archived false for the main list, true for the archive
+     */
+    PagedResponse<NoteSummaryResponse> listNotes(Long ownerId, boolean archived, Pageable pageable);
+
+    /**
+     * Pin or unpin a note. Idempotent: setting the state it already has is a
+     * no-op that returns the note unchanged.
+     *
+     * <p>Takes no version and performs no conflict check, unlike every content
+     * write. A version gate exists to stop one person's edit silently
+     * overwriting another's prose; two devices both pinning the same note are
+     * not in conflict, they agree. Requiring a version here would make pinning
+     * from a list loaded thirty seconds ago fail for no benefit to anyone.
+     */
+    NoteResponse setPinned(Long ownerId, Long noteId, boolean pinned);
+
+    /**
+     * Archive or unarchive a note. Same idempotency and same absence of a
+     * version gate as {@link #setPinned}.
+     */
+    NoteResponse setArchived(Long ownerId, Long noteId, boolean archived);
 
     PagedResponse<NoteSummaryResponse> searchNotes(Long ownerId, String query, Pageable pageable);
 

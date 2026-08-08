@@ -61,9 +61,75 @@ public class NoteServiceImpl implements NoteService {
 
     @Override
     @Transactional(readOnly = true)
-    public PagedResponse<NoteSummaryResponse> listNotes(Long ownerId, Pageable pageable) {
-        Page<Note> page = noteRepository.findByOwnerIdAndDeletedFalse(ownerId, pageable);
+    public PagedResponse<NoteSummaryResponse> listNotes(Long ownerId, boolean archived, Pageable pageable) {
+        Page<Note> page = archived
+                ? noteRepository.findByOwnerIdAndDeletedFalseAndArchivedTrue(ownerId, withStableOrder(pageable))
+                : noteRepository.findByOwnerIdAndDeletedFalseAndArchivedFalse(ownerId, withStableOrder(pageable));
         return toSummaryPage(page);
+    }
+
+    @Override
+    @Transactional
+    public NoteResponse setPinned(Long ownerId, Long noteId, boolean pinned) {
+        Note note = requireOwnActiveNote(ownerId, noteId);
+        note.setPinned(pinned);
+        return saveOrganisationChange(note);
+    }
+
+    @Override
+    @Transactional
+    public NoteResponse setArchived(Long ownerId, Long noteId, boolean archived) {
+        Note note = requireOwnActiveNote(ownerId, noteId);
+        note.setArchived(archived);
+        return saveOrganisationChange(note);
+    }
+
+    /**
+     * Shared tail of the two toggles above.
+     *
+     * <p><b>These writes DO bump the version, and that is deliberate.</b> The
+     * tempting alternative is a @Modifying UPDATE that sets the column without
+     * touching @Version or updatedAt, on the grounds that pinning is not really
+     * an edit. It would be a mistake twice over: the note would stop appearing
+     * in the delta feed, so a second device would never learn it had been
+     * pinned, and no client could ever detect that it holds stale organisation
+     * state. Sync exists because absence is not a synchronizable fact — a
+     * change deliberately made invisible is the same problem wearing a
+     * different hat.
+     *
+     * <p>The cost is real and the client has to handle it: a user who pins a
+     * note from the list while its editor is open leaves that editor holding a
+     * stale version, and its next auto-save conflicts. This endpoint returns
+     * the full note precisely so a client routing every note response through
+     * one store adopts the new version without a refetch.
+     *
+     * <p>No requireMatchingVersion, so there is no application-level conflict
+     * check — but Hibernate's own @Version guard still applies at flush, so a
+     * genuinely simultaneous write surfaces as a 409. Rare enough to be worth
+     * a retry rather than a design.
+     *
+     * <p>Idempotent for free: if the flag already held the requested value,
+     * Hibernate's dirty checking issues no UPDATE, so @Version does not
+     * increment and re-sending returns the same version. Same property
+     * auto-save gets, for the same reason.
+     */
+    private NoteResponse saveOrganisationChange(Note note) {
+        Note saved = noteRepository.saveAndFlush(note);
+        return noteMapper.toResponse(saved);
+    }
+
+    /**
+     * Ownership-scoped, trash-excluding lookup for the organisation toggles.
+     *
+     * <p>Excluding trashed notes is the point: pinning something in the bin is
+     * meaningless, and allowing it would let a note sit in the trash carrying
+     * organisation state that reappears unexpectedly on restore. A trashed note
+     * answers 404 here, which is also what a note belonging to someone else
+     * answers — the two are indistinguishable on purpose.
+     */
+    private Note requireOwnActiveNote(Long ownerId, Long noteId) {
+        return noteRepository.findByIdAndOwnerIdAndDeletedFalse(noteId, ownerId)
+                .orElseThrow(() -> new NoteNotFoundException("Note not found."));
     }
 
     @Override

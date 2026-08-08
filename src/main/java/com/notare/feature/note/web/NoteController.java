@@ -63,15 +63,32 @@ public class NoteController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * The owner's notes.
+     *
+     * <p>The default sort has always been {@code pinned,updatedAt} DESC, which
+     * only started meaning anything once pinning could be set — before this
+     * change it ordered every row by a column permanently false. Pinned notes
+     * now rise to the top, which is the entire user-visible point of the
+     * feature.
+     *
+     * <p><b>Contract change:</b> {@code archived=false} is the default and
+     * archived notes are now EXCLUDED. Previously every non-deleted note came
+     * back regardless. Nothing could set the flag before, so no existing row is
+     * affected — but a client written against the old behaviour would silently
+     * start seeing fewer notes, which is worth stating rather than leaving to
+     * be discovered.
+     */
     @GetMapping
     public ResponseEntity<PagedResponse<NoteSummaryResponse>> listNotes(
             @AuthenticationPrincipal UserDetail userDetail,
+            @RequestParam(name = "archived", defaultValue = "false") boolean archived,
             @ParameterObject
             @PageableDefault(size = 20, sort = {"pinned", "updatedAt"}, direction = Sort.Direction.DESC)
             Pageable pageable) {
 
         PagedResponse<NoteSummaryResponse> response =
-                noteService.listNotes(userDetail.getUser().getId(), pageable);
+                noteService.listNotes(userDetail.getUser().getId(), archived, pageable);
         return ResponseEntity.ok(response);
     }
 
@@ -163,6 +180,69 @@ public class NoteController {
 
         NoteResponse response = noteService.restoreNote(userDetail.getUser().getId(), noteId);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Pin and archive: POST to set, DELETE to clear.
+     *
+     * <h2>Why four action endpoints and not a field on PATCH</h2>
+     *
+     * <p>PATCH /notes/{id} is auto-save. It carries title and content, requires
+     * a version, and fires on a debounce while someone is typing. Putting
+     * organisation flags in that body would mean every keystroke's save also
+     * asserts a pin state — so an editor opened before the user pinned the note
+     * from the list would silently un-pin it on the next save. A write nobody
+     * asked for, arriving as a side effect of typing something unrelated.
+     *
+     * <p>Separate verbs also make the operations idempotent in the HTTP sense
+     * rather than only by accident: POST /pin twice leaves the note pinned, and
+     * DELETE /pin on an unpinned note is a no-op that returns the note as-is.
+     * Same reasoning as /collaborations/{id}/accept — an action sub-path rather
+     * than a general-purpose write to a status field, because the general write
+     * hands clients the ability to set anything.
+     *
+     * <p>All four return the full note, including its new version, so a client
+     * can adopt it without a refetch. See saveOrganisationChange in the service
+     * for why these bump the version at all.
+     *
+     * <p><b>Owner only, and there is deliberately no /shared-notes
+     * counterpart.</b> Step 7 scoped WRITE to title and content: pin and
+     * archive are the owner's private view of their own note, and a
+     * collaborator reorganising someone else's sidebar is not a feature. No
+     * check is needed to enforce that — these paths live under the
+     * owner-scoped /notes collection and the service looks the note up by
+     * owner.
+     */
+    @PostMapping("/{noteId}/pin")
+    public ResponseEntity<NoteResponse> pinNote(
+            @AuthenticationPrincipal UserDetail userDetail,
+            @PathVariable Long noteId) {
+
+        return ResponseEntity.ok(noteService.setPinned(userDetail.getUser().getId(), noteId, true));
+    }
+
+    @DeleteMapping("/{noteId}/pin")
+    public ResponseEntity<NoteResponse> unpinNote(
+            @AuthenticationPrincipal UserDetail userDetail,
+            @PathVariable Long noteId) {
+
+        return ResponseEntity.ok(noteService.setPinned(userDetail.getUser().getId(), noteId, false));
+    }
+
+    @PostMapping("/{noteId}/archive")
+    public ResponseEntity<NoteResponse> archiveNote(
+            @AuthenticationPrincipal UserDetail userDetail,
+            @PathVariable Long noteId) {
+
+        return ResponseEntity.ok(noteService.setArchived(userDetail.getUser().getId(), noteId, true));
+    }
+
+    @DeleteMapping("/{noteId}/archive")
+    public ResponseEntity<NoteResponse> unarchiveNote(
+            @AuthenticationPrincipal UserDetail userDetail,
+            @PathVariable Long noteId) {
+
+        return ResponseEntity.ok(noteService.setArchived(userDetail.getUser().getId(), noteId, false));
     }
 
     @DeleteMapping("/{noteId}/permanent")
