@@ -3,6 +3,7 @@ package com.notare.feature.share.service.impl;
 import com.notare.common.dto.PagedResponse;
 import com.notare.common.exception.InsufficientNotePermissionException;
 import com.notare.common.exception.NoteShareNotFoundException;
+import com.notare.feature.note.dto.request.AutoSaveNoteRequest;
 import com.notare.feature.note.dto.request.UpdateNoteRequest;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
@@ -98,6 +99,20 @@ public class SharedNoteServiceImpl implements SharedNoteService {
         // and one of them gets a 409 carrying the current version. That race is
         // no longer hypothetical — this method is what makes it real.
         return noteService.updateAuthorizedNote(noteId, request);
+    }
+
+    @Override
+    @Transactional
+    public NoteResponse autoSaveSharedNote(Long userId, Long noteId, AutoSaveNoteRequest request) {
+        // WRITE, same as the full update. The size of the write is not the
+        // question the permission answers.
+        requireGrant(userId, noteId, SharePermission.WRITE);
+
+        // Routes into the same version-checked partial write the owner's PATCH
+        // uses, so a collaborator's auto-save and an owner's auto-save race
+        // against each other through one optimistic lock rather than two
+        // implementations that agree today.
+        return noteService.autoSaveAuthorizedNote(noteId, request);
     }
 
     /**

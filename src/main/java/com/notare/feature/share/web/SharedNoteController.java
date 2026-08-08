@@ -1,6 +1,7 @@
 package com.notare.feature.share.web;
 
 import com.notare.common.dto.PagedResponse;
+import com.notare.feature.note.dto.request.AutoSaveNoteRequest;
 import com.notare.feature.note.dto.request.UpdateNoteRequest;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.share.dto.response.SharedNoteSummaryResponse;
@@ -15,6 +16,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -91,11 +93,9 @@ public class SharedNoteController {
      * lost reloads and retries. Reusing the owner's DTO here is the point: one
      * request shape, one conflict protocol, one thing for the client to learn.
      *
-     * <p>Not offered: PATCH auto-save. The owner has it, collaborators don't
-     * yet — it would need an autoSaveAuthorizedNote accessor alongside the two
-     * from 7B-i. Straightforward to add, and probably wanted before this is
-     * genuinely usable for collaborative editing, but it's additive rather than
-     * part of the permission model, so it isn't in Step 7's scope.
+     * <p>PATCH below is the partial counterpart, and the one a real editor
+     * uses; this stays for an explicit save and for a client that wants full
+     * replacement semantics.
      */
     @PutMapping("/{noteId}")
     public ResponseEntity<NoteResponse> updateSharedNote(
@@ -104,6 +104,39 @@ public class SharedNoteController {
             @Valid @RequestBody UpdateNoteRequest request) {
 
         NoteResponse response = sharedNoteService.updateSharedNote(
+                userDetail.getUser().getId(), noteId, request);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Auto-save a shared note. Requires WRITE; a READ recipient gets 403.
+     *
+     * <h2>Why this endpoint matters more than it looks</h2>
+     *
+     * <p>Without it, a WRITE collaborator had PUT and nothing else — meaning
+     * their editor could only save on an explicit action or on blur, while the
+     * owner's editor saved continuously. Two people editing the same note with
+     * different save cadences is not a smaller version of collaborative
+     * editing; it is a conflict generator. The collaborator accumulates minutes
+     * of unsaved work, then sends it all at once against a version the owner
+     * has moved past six times, and loses the race every time.
+     *
+     * <p>Partial semantics also matter here specifically. PUT sends the whole
+     * note, so a collaborator saving a title change ships the entire content
+     * body too — and if their view of that body is stale in any way, the full
+     * replacement writes the stale copy back. PATCH sends only what changed.
+     *
+     * <p>Same AutoSaveNoteRequest as the owner's PATCH, same version field,
+     * same conflict protocol. One request shape and one thing for the client to
+     * learn, whichever collection the note came from.
+     */
+    @PatchMapping("/{noteId}")
+    public ResponseEntity<NoteResponse> autoSaveSharedNote(
+            @AuthenticationPrincipal UserDetail userDetail,
+            @PathVariable Long noteId,
+            @Valid @RequestBody AutoSaveNoteRequest request) {
+
+        NoteResponse response = sharedNoteService.autoSaveSharedNote(
                 userDetail.getUser().getId(), noteId, request);
         return ResponseEntity.ok(response);
     }

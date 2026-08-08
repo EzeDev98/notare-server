@@ -1,6 +1,7 @@
 package com.notare.feature.share.service;
 
 import com.notare.common.dto.PagedResponse;
+import com.notare.feature.note.dto.request.AutoSaveNoteRequest;
 import com.notare.feature.note.dto.request.UpdateNoteRequest;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.share.dto.response.SharedNoteSummaryResponse;
@@ -31,4 +32,13 @@ public interface SharedNoteService {
 
     /** Edit a shared note's title and content. Requires WRITE. */
     NoteResponse updateSharedNote(Long userId, Long noteId, UpdateNoteRequest request);
+
+    /**
+     * Auto-save a shared note. Requires WRITE, exactly as the full update does.
+     *
+     * <p>The permission model does not change here and must not: PATCH is a
+     * smaller write than PUT, not a weaker one. A READ recipient gets the same
+     * 403 either way.
+     */
+    NoteResponse autoSaveSharedNote(Long userId, Long noteId, AutoSaveNoteRequest request);
 }

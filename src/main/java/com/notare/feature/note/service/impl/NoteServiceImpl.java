@@ -160,23 +160,7 @@ public class NoteServiceImpl implements NoteService {
         Note note = noteRepository.findByIdAndOwnerIdAndDeletedFalse(noteId, ownerId)
                 .orElseThrow(() -> new NoteNotFoundException("Note not found."));
 
-        // Layer 1: application-level optimistic check. Detects the common case
-        // where the client is editing from a version the server has already
-        // moved past, and lets us return a clean 409 with the current version.
-        requireMatchingVersion(request.getVersion(), note);
-
-        // Full replacement of the editable fields (PUT-like). A null title or
-        // content clears it. Partial, skip-null semantics live in auto-save.
-        note.setTitle(request.getTitle());
-        note.setContent(request.getContent());
-
-        // Layer 2: saveAndFlush forces the UPDATE now, so @Version increments and
-        // @LastModifiedDate is set before we map the response. It also means a
-        // truly concurrent write (two requests that both passed layer 1) triggers
-        // Hibernate's own optimistic-lock check here, surfacing as
-        // ObjectOptimisticLockingFailureException -> 409.
-        Note saved = noteRepository.saveAndFlush(note);
-        return noteMapper.toResponse(saved);
+        return applyFullUpdate(note, request);
     }
 
     @Override
@@ -185,26 +169,7 @@ public class NoteServiceImpl implements NoteService {
         Note note = noteRepository.findByIdAndOwnerIdAndDeletedFalse(noteId, ownerId)
                 .orElseThrow(() -> new NoteNotFoundException("Note not found."));
 
-        // Same version guard as the full update (shared helper below).
-        requireMatchingVersion(request.getVersion(), note);
-
-        // Partial (PATCH) semantics: a null field means "the client didn't touch
-        // this, leave it as-is". Only non-null fields are applied. To CLEAR a
-        // field the client sends an empty string, not null.
-        if (request.getTitle() != null) {
-            note.setTitle(request.getTitle());
-        }
-        if (request.getContent() != null) {
-            note.setContent(request.getContent());
-        }
-
-        // Idempotency for free: if the applied values equal what's already
-        // stored, Hibernate's dirty-checking sees no change and issues no UPDATE,
-        // so @Version does NOT increment. Re-sending the same auto-save is a
-        // no-op that returns the same version. A genuine change bumps the
-        // version, and the client must use the returned version for its next save.
-        Note saved = noteRepository.saveAndFlush(note);
-        return noteMapper.toResponse(saved);
+        return applyAutoSave(note, request);
     }
 
     @Override
@@ -330,6 +295,77 @@ public class NoteServiceImpl implements NoteService {
     }
 
     /**
+     * Full replacement of a note's editable fields (PUT semantics), version
+     * gate included.
+     *
+     * <p>Shared by the owner's updateNote and the collaborator's
+     * updateAuthorizedNote. Both writers MUST pass the same version gate or
+     * Step 2's optimistic locking silently breaks now that a two-writer race is
+     * possible — and the surest way to guarantee that is for there to be one
+     * gate, not two identical ones.
+     *
+     * <p>Layer 1 is requireMatchingVersion: it catches the common case, a
+     * client editing from a version the server has already moved past, and
+     * returns a clean 409 carrying the current version.
+     *
+     * <p>Layer 2 is saveAndFlush, which forces the UPDATE now so @Version
+     * increments and @LastModifiedDate is set before the response is mapped. It
+     * also means a genuinely concurrent write — two requests that both passed
+     * layer 1 — trips Hibernate's own optimistic-lock check here and surfaces
+     * as ObjectOptimisticLockingFailureException, also a 409.
+     *
+     * <p>A null title or content CLEARS it. That is the difference from
+     * auto-save, and the reason the two request DTOs stay separate types
+     * despite currently having identical fields.
+     *
+     * <p>Note what is never touched here: pinned, archived, deleted. WRITE
+     * covers the note's shared substance, not the owner's private organisation
+     * of it.
+     */
+    private NoteResponse applyFullUpdate(Note note, UpdateNoteRequest request) {
+        requireMatchingVersion(request.getVersion(), note);
+
+        note.setTitle(request.getTitle());
+        note.setContent(request.getContent());
+
+        Note saved = noteRepository.saveAndFlush(note);
+        return noteMapper.toResponse(saved);
+    }
+
+    /**
+     * Partial update (PATCH semantics), version gate included.
+     *
+     * <p>Shared by the owner's autoSave and the collaborator's
+     * autoSaveAuthorizedNote, for the same reason as applyFullUpdate above.
+     *
+     * <p>A null field means "the client didn't touch this, leave it as-is" —
+     * only non-null fields are applied. To CLEAR a field the client sends an
+     * empty string, not null. Getting this backwards wipes a note, which is why
+     * AutoSaveNoteRequest and UpdateNoteRequest are separate types even though
+     * their fields match today.
+     *
+     * <p>Idempotent for free: if the applied values equal what is already
+     * stored, Hibernate's dirty checking sees no change and issues no UPDATE,
+     * so @Version does not increment and re-sending returns the same version.
+     * That property is what makes a retried auto-save safe — and it is what
+     * stops a flaky connection from turning one save into a version drift the
+     * client can never catch up with.
+     */
+    private NoteResponse applyAutoSave(Note note, AutoSaveNoteRequest request) {
+        requireMatchingVersion(request.getVersion(), note);
+
+        if (request.getTitle() != null) {
+            note.setTitle(request.getTitle());
+        }
+        if (request.getContent() != null) {
+            note.setContent(request.getContent());
+        }
+
+        Note saved = noteRepository.saveAndFlush(note);
+        return noteMapper.toResponse(saved);
+    }
+
+    /**
      * Appends id as a final tiebreaker to whatever sort the caller asked for.
      *
      * <p>The trash is sorted by deletedAt, and deletedAt ties constantly:
@@ -380,20 +416,27 @@ public class NoteServiceImpl implements NoteService {
         Note note = noteRepository.findByIdAndDeletedFalse(noteId)
                 .orElseThrow(() -> new NoteNotFoundException("Note not found."));
 
-        // Identical to updateNote from here down, deliberately. A collaborator's
-        // write is an ordinary note write once authorization has happened — same
-        // version guard, same two-layer conflict detection, same saveAndFlush.
-        // The ONLY difference between the two paths is how the caller earned the
-        // right to be here.
-        requireMatchingVersion(request.getVersion(), note);
+        // Identical to updateNote from here down — now structurally rather than
+        // by discipline. This body used to be a character-for-character copy,
+        // kept in step by a comment asking future editors to change both. That
+        // was fine while there was one pair; adding auto-save would have made it
+        // two pairs, and a rule enforced by a comment fails quietly the first
+        // time someone reads only one of the four methods.
+        //
+        // A collaborator's write IS an ordinary note write once authorization
+        // has happened. The only difference between the two paths is how the
+        // caller earned the right to be here, and that difference is entirely
+        // above this line.
+        return applyFullUpdate(note, request);
+    }
 
-        note.setTitle(request.getTitle());
-        note.setContent(request.getContent());
+    @Override
+    @Transactional
+    public NoteResponse autoSaveAuthorizedNote(Long noteId, AutoSaveNoteRequest request) {
+        Note note = noteRepository.findByIdAndDeletedFalse(noteId)
+                .orElseThrow(() -> new NoteNotFoundException("Note not found."));
 
-        // Note what is NOT touched: pinned, archived, deleted. WRITE covers the
-        // note's shared substance, not the owner's private organisation of it.
-        Note saved = noteRepository.saveAndFlush(note);
-        return noteMapper.toResponse(saved);
+        return applyAutoSave(note, request);
     }
 
     @Override

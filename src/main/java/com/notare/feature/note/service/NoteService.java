@@ -167,6 +167,17 @@ public interface NoteService {
     NoteResponse updateAuthorizedNote(Long noteId, UpdateNoteRequest request);
 
     /**
+     * Pre-authorized partial update — the auto-save counterpart to
+     * {@link #updateAuthorizedNote}.
+     *
+     * <p>Same contract and same warning as the other two accessors: this takes
+     * no user id and checks nothing. "Authorized" is a claim the CALLER makes.
+     * SharedNoteServiceImpl remains the only class permitted to call it, having
+     * already resolved a WRITE grant.
+     */
+    NoteResponse autoSaveAuthorizedNote(Long noteId, AutoSaveNoteRequest request);
+
+    /**
      * Resolves a batch of note ids to summaries in one query, ownership
      * unchecked. Keyed by note id, so callers can look up each row's note
      * without depending on result order.
