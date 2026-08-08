@@ -1,10 +1,13 @@
 package com.notare.feature.user.service.impl;
 
 import com.notare.common.dto.PagedResponse;
+import com.notare.common.exception.InvalidUserLookupException;
 import com.notare.common.exception.NotarianIdGenerationException;
 import com.notare.common.exception.PasswordMisMatchException;
 import com.notare.common.exception.UserAlreadyExistException;
+import com.notare.common.exception.UserNotFoundException;
 import com.notare.feature.user.dto.request.RegistrationRequest;
+import com.notare.feature.user.dto.response.CurrentUserResponse;
 import com.notare.feature.user.dto.response.RegistrationResponse;
 import com.notare.feature.user.dto.response.UserSummaryResponse;
 import com.notare.feature.user.enums.UserStatus;
@@ -22,10 +25,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static com.notare.common.constant.GeneralConstant.MAX_ID_GENERATION_ATTEMPTS;
+import static com.notare.common.constant.GeneralConstant.MAX_USER_LOOKUP_IDS;
 
 @RequiredArgsConstructor
 @Service
@@ -59,6 +66,65 @@ public class UserServiceImplementation implements UserService {
         } catch (DataIntegrityViolationException ex) {
             throw new UserAlreadyExistException("A user with this username or email is already registered");
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CurrentUserResponse getCurrentUser(Long userId) {
+        // The id comes from the authenticated principal, so a miss here means
+        // the account was deleted while its token was still valid rather than
+        // that someone asked for a stranger. 404 either way; there is nothing
+        // to protect, since the caller already proved they are this user.
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found."));
+
+        return new CurrentUserResponse(
+                user.getId(),
+                user.getNotarianId(),
+                user.getUsername(),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getEmail(),
+                user.getGender(),
+                user.getCreatedAt());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserSummaryResponse> lookupUsers(Collection<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            throw new InvalidUserLookupException("At least one id is required.");
+        }
+
+        // Deduplicate BEFORE the size check, and keep insertion order so the
+        // response is stable for a client that requested a stable list.
+        // Checking the raw count first would reject a legitimate request that
+        // happened to repeat an id — a page of twenty notifications from the
+        // same actor is twenty identical ids and one distinct user.
+        Set<Long> distinctIds = new LinkedHashSet<>(ids);
+
+        // Nulls in a query parameter list are possible (a client sending
+        // "?ids=1,,3" binds an empty element) and would produce a broken IN
+        // clause. Dropped rather than rejected: a stray comma is not worth a
+        // 400 when the intent is unambiguous.
+        distinctIds.remove(null);
+
+        if (distinctIds.isEmpty()) {
+            throw new InvalidUserLookupException("At least one id is required.");
+        }
+        if (distinctIds.size() > MAX_USER_LOOKUP_IDS) {
+            throw new InvalidUserLookupException(
+                    "At most " + MAX_USER_LOOKUP_IDS + " ids may be looked up in one request.");
+        }
+
+        // Ids with no row are simply absent from the response. That includes
+        // the reserved system auditor id 0, which appears in lastModifiedBy for
+        // rows written by the transcription worker or the retention job and is
+        // never a real user — a client must render those as the system rather
+        // than as "user 0", and getting nothing back is the correct signal.
+        return userRepository.findByIdIn(distinctIds).stream()
+                .map(this::toSummary)
+                .toList();
     }
 
     @Override

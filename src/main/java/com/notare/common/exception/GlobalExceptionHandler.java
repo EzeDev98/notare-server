@@ -79,7 +79,10 @@ public class GlobalExceptionHandler {
         Map<String, String> errors = new LinkedHashMap<>();
 
         for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
-            errors.merge(fieldError.getField(), messageOf(fieldError), (existing, addition) -> existing + " " + addition);
+            errors.merge(
+                    fieldError.getField(),
+                    messageOf(fieldError),
+                    (existing, addition) -> existing + " " + addition);
         }
 
         // Class-level constraints (a hypothetical @PasswordsMatch on the whole
@@ -87,10 +90,14 @@ public class GlobalExceptionHandler {
         // under the object name rather than dropped — an error the user cannot
         // see is worse than one filed slightly awkwardly.
         for (ObjectError globalError : ex.getBindingResult().getGlobalErrors()) {
-            errors.merge(globalError.getObjectName(), messageOf(globalError), (existing, addition) -> existing + " " + addition);
+            errors.merge(
+                    globalError.getObjectName(),
+                    messageOf(globalError),
+                    (existing, addition) -> existing + " " + addition);
         }
 
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "One or more fields are invalid.");
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, "One or more fields are invalid.");
         problem.setTitle("Validation Failed");
         problem.setProperty("errors", errors);
         return problem;
@@ -133,6 +140,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UserAlreadyExistException.class)
     public ProblemDetail handleUserAlreadyExistException(UserAlreadyExistException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidUserLookupException.class)
+    public ProblemDetail handleInvalidUserLookupException(InvalidUserLookupException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
     @ExceptionHandler(NotarianIdGenerationException.class)
@@ -194,7 +206,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     public ProblemDetail handleOptimisticLockingFailure(ObjectOptimisticLockingFailureException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "This note was modified by another request. Please reload and try again.");
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+                "This note was modified by another request. Please reload and try again.");
     }
 
     @ExceptionHandler(CollaborationAlreadyExistsException.class)
@@ -261,12 +274,14 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ProblemDetail handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.PAYLOAD_TOO_LARGE, "Upload exceeds the maximum allowed size.");
+        return ProblemDetail.forStatusAndDetail(HttpStatus.PAYLOAD_TOO_LARGE,
+                "Upload exceeds the maximum allowed size.");
     }
 
     @ExceptionHandler(StorageException.class)
     public ProblemDetail handleStorageException(StorageException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "A storage error occurred. Please try again.");
+        return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
+                "A storage error occurred. Please try again.");
     }
 
     @ExceptionHandler(EmailDeliveryException.class)
