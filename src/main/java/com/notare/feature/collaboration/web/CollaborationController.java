@@ -7,6 +7,7 @@ import com.notare.feature.collaboration.service.CollaborationService;
 import com.notare.feature.user.model.UserDetail;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -132,6 +133,7 @@ public class CollaborationController {
     @GetMapping("/sent")
     public ResponseEntity<PagedResponse<CollaborationResponse>> listSent(
             @AuthenticationPrincipal UserDetail userDetail,
+            @ParameterObject
             @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC)
             Pageable pageable) {
 
@@ -150,6 +152,7 @@ public class CollaborationController {
     @GetMapping("/received")
     public ResponseEntity<PagedResponse<CollaborationResponse>> listReceived(
             @AuthenticationPrincipal UserDetail userDetail,
+            @ParameterObject
             @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC)
             Pageable pageable) {
 

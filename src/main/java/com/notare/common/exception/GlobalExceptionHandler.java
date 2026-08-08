@@ -144,6 +144,11 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
+    @ExceptionHandler(NotificationNotFoundException.class)
+    public ProblemDetail handleNotificationNotFoundException(NotificationNotFoundException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
     @ExceptionHandler(UnsupportedAudioFormatException.class)
     public ProblemDetail handleUnsupportedAudioFormatException(UnsupportedAudioFormatException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNSUPPORTED_MEDIA_TYPE, ex.getMessage());

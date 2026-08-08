@@ -5,6 +5,7 @@ import com.notare.feature.transcription.dto.response.TranscriptionResponse;
 import com.notare.feature.transcription.service.TranscriptionService;
 import com.notare.feature.user.model.UserDetail;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -32,7 +33,8 @@ public class TranscriptionSearchController {
     @GetMapping("/search")
     public ResponseEntity<PagedResponse<TranscriptionResponse>> search(
             @AuthenticationPrincipal UserDetail userDetail,
-            @RequestParam("q") String query,
+            @RequestParam("query") String query,
+            @ParameterObject
             @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC)
             Pageable pageable) {
 

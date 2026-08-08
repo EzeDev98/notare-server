@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.1.0</version>
+		<version>3.2.5</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.notare</groupId>
@@ -28,8 +28,16 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
-		<spring-modulith.version>2.1.0</spring-modulith.version>
-		<springdoc.version>3.1.0</springdoc.version>
+		<!--
+			Spring Modulith tracks the Boot release train: 1.1.x is the line built
+			for Boot 3.2.x. 2.x targets Boot 4 and will not resolve here.
+		-->
+		<spring-modulith.version>1.1.12</spring-modulith.version>
+		<!--
+			springdoc 2.5.x is the correct pairing for Boot 3.2.x — this is now
+			consistent, which is the point of the downgrade.
+		-->
+		<springdoc.version>2.5.0</springdoc.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -48,9 +56,18 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-jdbc</artifactId>
 		</dependency>
+		<!--
+			WAS spring-boot-starter-webmvc. That artifact only exists in Boot 4 —
+			it is the renamed form of this one. Boot 3.x calls it starter-web.
+
+			ALSO ABSORBED: spring-boot-starter-restclient, which likewise only
+			exists in Boot 4. RestClient itself shipped in Spring Framework 6.1
+			(Boot 3.2), inside spring-web, so it arrives with this starter and
+			your existing RestClient code needs no change.
+		-->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-restclient</artifactId>
+			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>com.mailjet</groupId>
@@ -60,10 +77,6 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.modulith</groupId>
@@ -118,34 +131,43 @@
 			<artifactId>lombok</artifactId>
 			<optional>true</optional>
 		</dependency>
+		<!--
+			UserDetail imports org.jspecify.annotations.Nullable. JSpecify is not a
+			dependency of Spring Framework 6.1, so that import will NOT resolve on
+			Boot 3.2 unless it is declared explicitly. Two options:
+			  1. keep this dependency, or
+			  2. delete it and change the import to org.springframework.lang.Nullable
+			Option 2 is the more idiomatic choice on 3.2 and costs one line.
+		-->
+		<dependency>
+			<groupId>org.jspecify</groupId>
+			<artifactId>jspecify</artifactId>
+			<version>1.0.0</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springdoc</groupId>
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>${springdoc.version}</version>
 		</dependency>
+		<!--
+			Boot 4 split testing into per-technology starters
+			(spring-boot-starter-{data-jpa,jdbc,restclient,security,webmvc}-test).
+			None of those artifacts exist in Boot 3.x — there is ONE
+			spring-boot-starter-test covering JUnit 5, AssertJ, Mockito,
+			JSONassert, Hamcrest, spring-test and the Boot test slices.
+
+			Security test support is the one piece that is NOT in it, so
+			spring-security-test is declared separately (version managed by the
+			Boot parent).
+		-->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-jpa-test</artifactId>
+			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-jdbc-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-restclient-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-security-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-webmvc-test</artifactId>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
@@ -180,41 +202,36 @@
 					</excludes>
 				</configuration>
 			</plugin>
+			<!--
+				The Lombok <path> entries previously carried NO <version>. Resolving
+				an annotationProcessorPath version from dependencyManagement only
+				works on newer maven-compiler-plugin releases; the one pinned by the
+				Boot 3.2.5 parent is older, so the path could not resolve and Lombok
+				stopped running. Because declaring annotationProcessorPaths REPLACES
+				classpath-based processor discovery, that failure is silent — javac
+				just reports "cannot find symbol" for every generated getter.
+
+				${lombok.version} is defined by spring-boot-dependencies, so this
+				stays in step with whatever Boot manages.
+
+				Worth knowing: this whole plugin block is optional. Lombok is already
+				declared as a dependency, and javac discovers processors on the
+				classpath by itself, so deleting the block entirely also works and is
+				one less thing to keep in sync. It's kept here only because it was
+				already in your build.
+			-->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>default-compile</id>
-						<phase>compile</phase>
-						<goals>
-							<goal>compile</goal>
-						</goals>
-						<configuration>
-							<annotationProcessorPaths>
-								<path>
-									<groupId>org.projectlombok</groupId>
-									<artifactId>lombok</artifactId>
-								</path>
-							</annotationProcessorPaths>
-						</configuration>
-					</execution>
-					<execution>
-						<id>default-testCompile</id>
-						<phase>test-compile</phase>
-						<goals>
-							<goal>testCompile</goal>
-						</goals>
-						<configuration>
-							<annotationProcessorPaths>
-								<path>
-									<groupId>org.projectlombok</groupId>
-									<artifactId>lombok</artifactId>
-								</path>
-							</annotationProcessorPaths>
-						</configuration>
-					</execution>
-				</executions>
+				<configuration>
+					<annotationProcessorPaths>
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+							<version>${lombok.version}</version>
+						</path>
+					</annotationProcessorPaths>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>

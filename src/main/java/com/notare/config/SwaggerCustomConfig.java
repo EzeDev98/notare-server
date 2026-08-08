@@ -27,7 +27,7 @@ public class SwaggerCustomConfig {
                         .description("REST APIs for the Notare Application")
                         .version("1.0")
                         .contact(new Contact()
-                                .name("NOTARE")
+                                .name("Notare")
                                 .email("ezemosesjohn21997@gmail.com")
                                 .url("https://www.notare.com"))
                         .license(new License()

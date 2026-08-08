@@ -39,6 +39,7 @@ public class NoteMapper {
                 note.isPinned(),
                 note.isArchived(),
                 note.getVersion(),
+                note.getLastModifiedBy(),
                 note.getCreatedAt(),
                 note.getUpdatedAt()
         );

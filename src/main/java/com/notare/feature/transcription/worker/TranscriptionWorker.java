@@ -3,6 +3,8 @@ package com.notare.feature.transcription.worker;
 import com.notare.feature.transcription.dto.response.TranscriptionResult;
 import com.notare.feature.transcription.engine.TranscriptionEngine;
 import com.notare.feature.transcription.enums.TranscriptionStatus;
+import com.notare.feature.transcription.event.TranscriptionCompletedEvent;
+import com.notare.feature.transcription.event.TranscriptionFailedEvent;
 import com.notare.feature.transcription.event.TranscriptionRequestedEvent;
 import com.notare.feature.transcription.model.Transcription;
 import com.notare.feature.transcription.repository.TranscriptionRepository;
@@ -10,6 +12,7 @@ import com.notare.feature.voicenote.dto.request.VoiceNoteContent;
 import com.notare.feature.voicenote.service.VoiceNoteService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -23,6 +26,7 @@ public class TranscriptionWorker {
     private final TranscriptionRepository transcriptionRepository;
     private final VoiceNoteService voiceNoteService;
     private final TranscriptionEngine transcriptionEngine;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Runs the job. Three annotations, each doing one job:
@@ -65,6 +69,25 @@ public class TranscriptionWorker {
             transcription.setStatus(TranscriptionStatus.COMPLETED);
             transcriptionRepository.save(transcription);
 
+            // Tell the owner their transcript is ready.
+            //
+            // IMPORTANT, and easy to get wrong: this publish happens with NO
+            // surrounding transaction. The save above runs in its own short
+            // transaction (Spring Data opens one per repository call) and has
+            // already committed by the time we get here. A consumer annotated
+            // with a plain @TransactionalEventListener would therefore never
+            // fire — the event has no transaction to attach to, and Spring
+            // silently drops it rather than failing. The listener in 8D sets
+            // fallbackExecution = true so it also runs outside a transaction.
+            //
+            // Wrapping this method in @Transactional is NOT the fix: the worker
+            // would then hold a connection across the engine call, which is
+            // exactly what the short-transaction design above avoids.
+            eventPublisher.publishEvent(new TranscriptionCompletedEvent(
+                    transcription.getId(),
+                    transcription.getVoiceNoteId(),
+                    transcription.getOwnerId()));
+
         } catch (Exception ex) {
             log.warn("Transcription {} failed", transcriptionId, ex);
             markFailed(transcriptionId, ex);
@@ -78,6 +101,13 @@ public class TranscriptionWorker {
             transcription.setStatus(TranscriptionStatus.FAILED);
             transcription.setErrorMessage(ex.getMessage());
             transcriptionRepository.save(transcription);
+
+            // Same no-transaction caveat as the completion event above.
+            eventPublisher.publishEvent(new TranscriptionFailedEvent(
+                    transcription.getId(),
+                    transcription.getVoiceNoteId(),
+                    transcription.getOwnerId(),
+                    ex.getMessage()));
         });
     }
 }

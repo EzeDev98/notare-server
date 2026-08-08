@@ -17,6 +17,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -70,4 +71,29 @@ public class Collaboration {
     @LastModifiedDate
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    /**
+     * Who last changed the status.
+     *
+     * <p>This row is written by TWO different people, which is what earns the
+     * column: the owner creates it, and the invitee is the only one who can
+     * accept or reject. So after any transition this is collaboratorId, not
+     * ownerId.
+     *
+     * <p>Worth being honest that it's currently DERIVABLE — status != PENDING
+     * implies the invitee acted, because that's the only transition the state
+     * machine allows. It's recorded anyway because that inference depends on
+     * the state machine never gaining another transition, and an audit trail
+     * that silently becomes wrong when someone adds a case is a poor audit
+     * trail. The whole point of these columns is to state a fact rather than
+     * leave it to be reconstructed from assumptions elsewhere in the code.
+     *
+     * <p>No createdBy here either: a collaboration is only ever created by its
+     * owner, so it would restate ownerId. Nullable for the same reason as
+     * Note.lastModifiedBy — rows written before Step 10 have no value, and
+     * ddl-auto cannot add a NOT NULL column to a populated table.
+     */
+    @LastModifiedBy
+    @Column(name = "last_modified_by")
+    private Long lastModifiedBy;
 }

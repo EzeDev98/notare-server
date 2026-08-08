@@ -7,6 +7,7 @@ import com.notare.feature.voicenote.dto.request.VoiceNoteContent;
 import com.notare.feature.voicenote.dto.response.VoiceNoteResponse;
 import com.notare.feature.voicenote.service.VoiceNoteService;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.ResourceRegion;
 import org.springframework.data.domain.Pageable;
@@ -76,6 +77,7 @@ public class VoiceNoteController {
     @GetMapping
     public ResponseEntity<PagedResponse<VoiceNoteResponse>> listVoiceNotes(
             @AuthenticationPrincipal UserDetail userDetail,
+            @ParameterObject
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
             Pageable pageable) {
 

@@ -6,17 +6,21 @@ import com.notare.common.exception.NoteNotFoundException;
 import com.notare.feature.note.dto.request.AutoSaveNoteRequest;
 import com.notare.feature.note.dto.request.CreateNoteRequest;
 import com.notare.feature.note.dto.request.UpdateNoteRequest;
+import com.notare.feature.note.dto.response.NoteChange;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
+import com.notare.feature.note.event.NotePermanentlyDeletedEvent;
 import com.notare.feature.note.mapper.NoteMapper;
 import com.notare.feature.note.model.Note;
 import com.notare.feature.note.repository.NoteRepository;
 import com.notare.feature.note.service.NoteService;
-import com.notare.feature.share.event.NotePermanentlyDeletedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +28,7 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -163,7 +168,86 @@ public class NoteServiceImpl implements NoteService {
         // trashed note can be restored and its collaborators should still be
         // there when it comes back — they simply can't see it meanwhile, since
         // every shared-note query already filters on deleted = false.
-        eventPublisher.publishEvent(new NotePermanentlyDeletedEvent(noteId));
+        eventPublisher.publishEvent(new NotePermanentlyDeletedEvent(noteId, ownerId));
+    }
+
+    @Override
+    @Transactional
+    public NoteResponse createWithClientId(Long ownerId, CreateNoteRequest request, String clientId) {
+        // Idempotency check first: this operation may well have been applied on
+        // an earlier attempt whose response the client never received.
+        Optional<Note> existing = noteRepository.findByOwnerIdAndClientId(ownerId, clientId);
+        if (existing.isPresent()) {
+            return noteMapper.toResponse(existing.get());
+        }
+
+        Note note = noteMapper.toEntity(ownerId, request);
+        note.setClientId(clientId);
+
+        try {
+            return noteMapper.toResponse(noteRepository.save(note));
+        } catch (DataIntegrityViolationException ex) {
+            // Lost a race with a concurrent replay of the same operation —
+            // uq_notes_owner_client_id fired. The other attempt succeeded, so
+            // return ITS note. The constraint is the real guarantee here; the
+            // lookup above just avoids the exception in the common case.
+            return noteRepository.findByOwnerIdAndClientId(ownerId, clientId)
+                    .map(noteMapper::toResponse)
+                    .orElseThrow(() -> ex);
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<NoteResponse> findAnyNote(Long ownerId, Long noteId) {
+        // findByIdAndOwnerId has no deleted filter, so this sees trashed notes
+        // too — which is exactly what a replayed DELETE needs to report on.
+        return noteRepository.findByIdAndOwnerId(noteId, ownerId).map(noteMapper::toResponse);
+    }
+
+    /**
+     * The delta query behind sync pull.
+     *
+     * <p><b>The sort is rebuilt here and the caller's sort is discarded.</b>
+     * That is not tidiness — it is the difference between correct and subtly
+     * broken. Paging over a result set sorted only by updatedAt is undefined
+     * whenever timestamps tie, and they tie constantly: MySQL DATETIME has
+     * second precision unless you ask for fractional seconds, so a bulk edit
+     * or an import puts dozens of rows on the same instant. With no
+     * tiebreaker the database may return them in any order per page, so a
+     * client paging through can see one note twice and never see another at
+     * all. Adding id ASC makes the order total and therefore stable.
+     *
+     * <p>Leaving that to the caller would mean any endpoint that forgets it
+     * silently corrupts a client's cache, with nothing failing and nothing
+     * logged. The query owns its own correctness.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<NoteChange> findChangesSince(Long ownerId, LocalDateTime since, Pageable pageable) {
+        Pageable stable = PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                Sort.by(Sort.Order.asc("updatedAt"), Sort.Order.asc("id")));
+
+        // No cursor = first sync: active notes only. Tombstones would be noise
+        // for a client that has nothing cached to evict.
+        Page<Note> page = (since == null)
+                ? noteRepository.findByOwnerIdAndDeletedFalse(ownerId, stable)
+                : noteRepository.findByOwnerIdAndUpdatedAtGreaterThanEqual(ownerId, since, stable);
+
+        return page.map(this::toChange);
+    }
+
+    /**
+     * A trashed note becomes a bare tombstone: id only, no title or content.
+     * Shipping the body of something the user just deleted would be wasted
+     * payload on every sync, and mildly surprising if it ever surfaced in a UI.
+     */
+    private NoteChange toChange(Note note) {
+        return note.isDeleted()
+                ? new NoteChange(note.getId(), true, null, null)
+                : new NoteChange(note.getId(), false, noteMapper.toResponse(note), note.getClientId());
     }
 
     // ---------------------------------------------------------------------

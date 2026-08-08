@@ -10,6 +10,7 @@ import com.notare.feature.note.service.NoteService;
 import com.notare.feature.user.model.UserDetail;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -64,6 +65,7 @@ public class NoteController {
     @GetMapping
     public ResponseEntity<PagedResponse<NoteSummaryResponse>> listNotes(
             @AuthenticationPrincipal UserDetail userDetail,
+            @ParameterObject
             @PageableDefault(size = 20, sort = {"pinned", "updatedAt"}, direction = Sort.Direction.DESC)
             Pageable pageable) {
 
@@ -80,7 +82,8 @@ public class NoteController {
     @GetMapping("/search")
     public ResponseEntity<PagedResponse<NoteSummaryResponse>> searchNotes(
             @AuthenticationPrincipal UserDetail userDetail,
-            @RequestParam("q") String query,
+            @RequestParam("query") String query,
+            @ParameterObject
             @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC)
             Pageable pageable) {
 

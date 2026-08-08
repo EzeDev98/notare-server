@@ -47,6 +47,15 @@ public class WebSecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/user/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/password/**").permitAll()
                         .requestMatchers("/public/**").permitAll()
+                        // Spring Boot forwards any unhandled 404/500 to /error, and that
+                        // forward goes through this filter chain as an ERROR dispatch. If
+                        // /error isn't permitted it falls to anyRequest().authenticated(),
+                        // gets denied, and — since no formLogin/httpBasic is configured,
+                        // making Http403ForbiddenEntryPoint the default — comes back as a
+                        // 403. The real 404 or 500 is never seen. Every "mysterious 403 on
+                        // a path I definitely permitted" in a stateless API traces back to
+                        // this line being missing.
+                        .requestMatchers("/error").permitAll()
                         .requestMatchers(
                                 "/v3/api-docs",
                                 "/v3/api-docs/**",
@@ -111,9 +120,16 @@ public class WebSecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
+    /**
+     * NOTE for the Boot 3.2 downgrade: the DaoAuthenticationProvider constructor
+     * that takes a UserDetailsService was only added in Spring Security 6.4.
+     * Boot 3.2.5 ships Security 6.2, where the service is set after
+     * construction. Reverted accordingly — this will not compile otherwise.
+     */
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService);
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        provider.setUserDetailsService(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder());
         return provider;
     }

@@ -5,16 +5,21 @@ import com.notare.common.exception.InvalidNoteShareException;
 import com.notare.common.exception.NoteAlreadySharedException;
 import com.notare.common.exception.NoteShareNotFoundException;
 import com.notare.feature.collaboration.service.CollaborationService;
+import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.service.NoteService;
 import com.notare.feature.share.dto.request.ShareNoteRequest;
 import com.notare.feature.share.dto.request.UpdateSharePermissionRequest;
 import com.notare.feature.share.dto.response.NoteShareResponse;
 import com.notare.feature.share.enums.SharePermission;
+import com.notare.feature.share.event.NoteSharePermissionChangedEvent;
+import com.notare.feature.share.event.NoteShareRevokedEvent;
+import com.notare.feature.share.event.NoteSharedEvent;
 import com.notare.feature.share.mapper.NoteShareMapper;
 import com.notare.feature.share.model.NoteShare;
 import com.notare.feature.share.repository.NoteShareRepository;
 import com.notare.feature.share.service.NoteShareService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -33,6 +38,8 @@ public class NoteShareServiceImpl implements NoteShareService {
     /** Cross-module dependencies, both PUBLIC service APIs — never the other modules' repositories. */
     private final NoteService noteService;
     private final CollaborationService collaborationService;
+
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Four gates, in a deliberate order. Each is cheaper than the one after it,
@@ -62,7 +69,11 @@ public class NoteShareServiceImpl implements NoteShareService {
         // Ownership check through the note module's PUBLIC API. Throws 404 if the
         // note isn't mine or is in the trash — the same answer either way, so
         // nothing is revealed about other people's notes.
-        noteService.getNote(ownerId, noteId);
+        //
+        // The result is now KEPT rather than discarded: the title it carries is
+        // the one the notification will snapshot, and this is the only moment
+        // it's guaranteed to be the title the owner was actually looking at.
+        NoteResponse note = noteService.getNote(ownerId, noteId);
 
         // Step 6's relationship is the prerequisite. Note this asks for ACCEPTED
         // specifically: a pending invitation isn't consent, and a rejected one is
@@ -84,7 +95,10 @@ public class NoteShareServiceImpl implements NoteShareService {
         share.setPermission(request.getPermission());
 
         try {
-            return noteShareMapper.toResponse(noteShareRepository.save(share));
+            NoteShare saved = noteShareRepository.save(share);
+            eventPublisher.publishEvent(new NoteSharedEvent(
+                    saved.getId(), noteId, note.title(), ownerId, recipientId, saved.getPermission()));
+            return noteShareMapper.toResponse(saved);
         } catch (DataIntegrityViolationException ex) {
             // Lost a race with a concurrent identical share; uq_note_shares_note_user
             // fired. Same 409 the pre-check would have given. The constraint is the
@@ -111,15 +125,28 @@ public class NoteShareServiceImpl implements NoteShareService {
         NoteShare share = requireOwnedShare(ownerId, noteId, sharedWithUserId);
         SharePermission target = request.getPermission();
 
-        if (share.getPermission() == target) {
+        SharePermission previous = share.getPermission();
+
+        if (previous == target) {
             // Idempotent: setting the level it already has is a no-op, and
-            // skipping the write avoids a pointless updatedAt bump.
+            // skipping the write avoids a pointless updatedAt bump. No event
+            // either — nothing changed, so there is nothing to announce.
             return noteShareMapper.toResponse(share);
         }
 
         share.setPermission(target);
         // saveAndFlush so updatedAt is refreshed before mapping the response.
-        return noteShareMapper.toResponse(noteShareRepository.saveAndFlush(share));
+        NoteShare saved = noteShareRepository.saveAndFlush(share);
+
+        // One extra read to get the title for the notification snapshot. It also
+        // re-confirms ownership, so it isn't purely overhead — and changing a
+        // permission is a rare, deliberate action, not a hot path.
+        NoteResponse note = noteService.getNote(ownerId, noteId);
+
+        eventPublisher.publishEvent(new NoteSharePermissionChangedEvent(
+                saved.getId(), noteId, note.title(), ownerId, sharedWithUserId, previous, target));
+
+        return noteShareMapper.toResponse(saved);
     }
 
     /**
@@ -132,7 +159,16 @@ public class NoteShareServiceImpl implements NoteShareService {
     @Transactional
     public void revoke(Long ownerId, Long noteId, Long sharedWithUserId) {
         NoteShare share = requireOwnedShare(ownerId, noteId, sharedWithUserId);
+
+        // Read the title BEFORE deleting. Once the grant is gone the recipient
+        // can no longer fetch this note at all, so the snapshot in their
+        // notification is the only way they'll know which note they lost.
+        NoteResponse note = noteService.getNote(ownerId, noteId);
+
         noteShareRepository.delete(share);
+
+        eventPublisher.publishEvent(
+                new NoteShareRevokedEvent(noteId, note.title(), ownerId, sharedWithUserId));
     }
 
     @Override

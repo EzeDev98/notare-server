@@ -7,6 +7,9 @@ import com.notare.common.exception.InvalidCollaborationException;
 import com.notare.common.exception.UserNotFoundException;
 import com.notare.feature.collaboration.dto.response.CollaborationResponse;
 import com.notare.feature.collaboration.enums.CollaborationStatus;
+import com.notare.feature.collaboration.event.CollaborationAcceptedEvent;
+import com.notare.feature.collaboration.event.CollaborationInvitedEvent;
+import com.notare.feature.collaboration.event.CollaborationRejectedEvent;
 import com.notare.feature.collaboration.mapper.CollaborationMapper;
 import com.notare.feature.collaboration.model.Collaboration;
 import com.notare.feature.collaboration.repository.CollaborationRepository;
@@ -54,6 +57,10 @@ public class CollaborationServiceImpl implements CollaborationService {
 
         try {
             Collaboration saved = collaborationRepository.save(collaboration);
+            // Tell the invitee. Published inside this transaction; the listener
+            // consumes it AFTER_COMMIT, so no notification exists for an invite
+            // that ends up rolling back.
+            eventPublisher.publishEvent(new CollaborationInvitedEvent(saved.getId(), ownerId, collaboratorId));
             return collaborationMapper.toResponse(saved);
         } catch (DataIntegrityViolationException ex) {
             // Lost a race with a concurrent identical invite: the unique
@@ -66,14 +73,36 @@ public class CollaborationServiceImpl implements CollaborationService {
     @Transactional
     public CollaborationResponse accept(Long currentUserId, Long collaborationId) {
         Collaboration collaboration = requireInviteeInvitation(currentUserId, collaborationId);
-        return collaborationMapper.toResponse(transition(collaboration, CollaborationStatus.ACCEPTED));
+
+        // Capture BEFORE the transition: accept is idempotent, so a second call
+        // on an already-ACCEPTED invitation changes nothing and must not notify
+        // again. Publishing unconditionally would let a client retry — or a user
+        // double-tap — into a duplicate notification for a single real event.
+        boolean wasPending = collaboration.getStatus() == CollaborationStatus.PENDING;
+
+        Collaboration updated = transition(collaboration, CollaborationStatus.ACCEPTED);
+
+        if (wasPending) {
+            // The OWNER is the one waiting on this answer, so they're the recipient.
+            eventPublisher.publishEvent(new CollaborationAcceptedEvent(updated.getId(), updated.getOwnerId(), updated.getCollaboratorId()));
+        }
+        return collaborationMapper.toResponse(updated);
     }
 
     @Override
     @Transactional
     public CollaborationResponse reject(Long currentUserId, Long collaborationId) {
         Collaboration collaboration = requireInviteeInvitation(currentUserId, collaborationId);
-        return collaborationMapper.toResponse(transition(collaboration, CollaborationStatus.REJECTED));
+
+        boolean wasPending = collaboration.getStatus() == CollaborationStatus.PENDING;
+
+        Collaboration updated = transition(collaboration, CollaborationStatus.REJECTED);
+
+        if (wasPending) {
+            eventPublisher.publishEvent(new CollaborationRejectedEvent(
+                    updated.getId(), updated.getOwnerId(), updated.getCollaboratorId()));
+        }
+        return collaborationMapper.toResponse(updated);
     }
 
     @Override

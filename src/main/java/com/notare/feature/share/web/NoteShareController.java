@@ -8,6 +8,7 @@ import com.notare.feature.share.service.NoteShareService;
 import com.notare.feature.user.model.UserDetail;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -84,6 +85,7 @@ public class NoteShareController {
     public ResponseEntity<PagedResponse<NoteShareResponse>> listShares(
             @AuthenticationPrincipal UserDetail userDetail,
             @PathVariable Long noteId,
+            @ParameterObject
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
             Pageable pageable) {
 

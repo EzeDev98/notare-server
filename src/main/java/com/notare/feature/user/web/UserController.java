@@ -8,6 +8,7 @@ import com.notare.feature.user.model.UserDetail;
 import com.notare.feature.user.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
@@ -40,7 +41,8 @@ public class UserController {
     @GetMapping("/search")
     public ResponseEntity<PagedResponse<UserSummaryResponse>> searchUsers(
             @AuthenticationPrincipal UserDetail userDetail,
-            @RequestParam("q") String query,
+            @RequestParam("query") String query,
+            @ParameterObject
             @PageableDefault(size = 20, sort = "username") Pageable pageable) {
 
         return ResponseEntity.ok(

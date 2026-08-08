@@ -4,12 +4,16 @@ import com.notare.common.dto.PagedResponse;
 import com.notare.feature.note.dto.request.AutoSaveNoteRequest;
 import com.notare.feature.note.dto.request.CreateNoteRequest;
 import com.notare.feature.note.dto.request.UpdateNoteRequest;
+import com.notare.feature.note.dto.response.NoteChange;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Every OWNER-facing method takes ownerId (a plain Long) rather than a User or
@@ -40,6 +44,55 @@ public interface NoteService {
     NoteResponse restoreNote(Long ownerId, Long noteId);
 
     void permanentlyDeleteNote(Long ownerId, Long noteId);
+
+    /**
+     * Creates a note that a client already created offline, carrying the id it
+     * gave the note locally.
+     *
+     * <p>IDEMPOTENT by (owner, clientId): if that pair already has a note, the
+     * existing one is returned untouched rather than a second note being made.
+     * That is the whole reason clientId exists — a replayed offline queue must
+     * not multiply the user's notes.
+     *
+     * <p>Separate from {@link #createNote} rather than an extra parameter on
+     * it, because the two have different contracts: createNote always creates,
+     * this one may not. Hiding "sometimes this is a no-op" behind an optional
+     * argument on the ordinary create is the kind of surprise that gets found
+     * in production.
+     */
+    NoteResponse createWithClientId(Long ownerId, CreateNoteRequest request, String clientId);
+
+    /**
+     * Finds one of the owner's notes whether it is active OR trashed, without
+     * throwing when it's absent.
+     *
+     * <p>Both halves matter to sync. Trashed rows are included because a
+     * replayed DELETE needs to report on a note that is, correctly, in the
+     * trash. Optional rather than an exception because in the batch path
+     * "missing" is an ordinary per-operation outcome, not an error — and
+     * building a result object out of a caught exception is worse than asking a
+     * question that can answer "no".
+     */
+    Optional<NoteResponse> findAnyNote(Long ownerId, Long noteId);
+
+    /**
+     * Everything of this owner's that changed at or after {@code since},
+     * INCLUDING notes that were trashed — the caller needs tombstones, not just
+     * live rows.
+     *
+     * <p>Owner-scoped like every other method here, so this is NOT one of the
+     * pre-authorized accessors below; it's ordinary, safe API. The sync module
+     * calls it rather than touching NoteRepository, keeping cross-module access
+     * on the service boundary.
+     *
+     * <p>{@code since == null} means "first sync": active notes only, no
+     * tombstones. A client with no cursor has no cache to evict, so sending it
+     * a list of things to delete would be noise.
+     *
+     * <p>The sort is imposed by the implementation and any sort on the incoming
+     * Pageable is ignored — see the impl for why that isn't merely tidiness.
+     */
+    Page<NoteChange> findChangesSince(Long ownerId, LocalDateTime since, Pageable pageable);
 
     // ---------------------------------------------------------------------
     // Pre-authorized access (share module only).
