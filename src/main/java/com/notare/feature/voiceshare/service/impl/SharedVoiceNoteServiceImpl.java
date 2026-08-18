@@ -10,6 +10,7 @@ import com.notare.feature.voicenote.service.VoiceNoteService;
 import com.notare.feature.voiceshare.dto.response.SharedVoiceNoteSummaryResponse;
 import com.notare.feature.voiceshare.mapper.VoiceShareMapper;
 import com.notare.feature.voiceshare.model.VoiceShare;
+import com.notare.feature.voiceshare.repository.VoiceShareRepository;
 import com.notare.feature.voiceshare.service.SharedVoiceNoteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;

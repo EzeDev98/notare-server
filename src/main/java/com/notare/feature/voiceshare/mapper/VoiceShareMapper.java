@@ -37,6 +37,7 @@ public class VoiceShareMapper {
         return new SharedVoiceNoteSummaryResponse(
                 share.getId(),
                 voiceNote.id(),
+                voiceNote.noteId(),
                 share.getOwnerId(),
                 share.getPermission(),
                 voiceNote.originalFilename(),

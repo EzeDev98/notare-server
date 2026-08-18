@@ -86,7 +86,7 @@ class SharedVoiceNoteServiceImplTest {
                 .thenReturn(Map.of(VOICE_NOTE_ID, voiceNote));
 
         SharedVoiceNoteSummaryResponse summary = new SharedVoiceNoteSummaryResponse(
-                grant.getId(), VOICE_NOTE_ID, OWNER_ID, SharePermission.READ,
+                grant.getId(), VOICE_NOTE_ID, null, OWNER_ID, SharePermission.READ,
                 "memo.m4a", "audio/mp4", 1024L, 30, LocalDateTime.now(), grant.getCreatedAt());
         when(voiceShareMapper.toSharedVoiceNote(grant, voiceNote)).thenReturn(summary);
 
@@ -159,7 +159,7 @@ class SharedVoiceNoteServiceImplTest {
         when(voiceNoteService.getAuthorizedVoiceNote(VOICE_NOTE_ID)).thenReturn(voiceNote);
 
         SharedVoiceNoteSummaryResponse summary = new SharedVoiceNoteSummaryResponse(
-                grant.getId(), VOICE_NOTE_ID, OWNER_ID, SharePermission.READ,
+                grant.getId(), VOICE_NOTE_ID, null, OWNER_ID, SharePermission.READ,
                 "memo.m4a", "audio/mp4", 1024L, 30, LocalDateTime.now(), grant.getCreatedAt());
         when(voiceShareMapper.toSharedVoiceNote(grant, voiceNote)).thenReturn(summary);
 

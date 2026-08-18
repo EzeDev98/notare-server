@@ -6,7 +6,9 @@ import com.notare.feature.voicenote.dto.response.VoiceNoteResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Like NoteService, every method takes ownerId and threads it into ownership-

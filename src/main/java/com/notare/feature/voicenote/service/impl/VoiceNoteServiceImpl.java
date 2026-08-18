@@ -12,6 +12,7 @@ import com.notare.feature.voicenote.dto.response.VoiceNoteResponse;
 import com.notare.feature.voicenote.service.VoiceNoteService;
 import com.notare.feature.voicenote.validation.VoiceUploadValidator;
 import lombok.RequiredArgsConstructor;
+import com.notare.feature.voicenote.event.VoiceNoteCreatedEvent;
 import com.notare.feature.voicenote.event.VoiceNoteDeletedEvent;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.io.Resource;
@@ -60,6 +61,15 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
                     file.getOriginalFilename(), file.getContentType(),
                     storageKey, file.getSize(), durationSeconds);
             VoiceNote saved = voiceNoteRepository.save(entity);
+
+            // Announce the creation only after the metadata row exists.
+            // Consumers such as the sharing module can now grant access to
+            // this recording when its parent note is already shared.
+            eventPublisher.publishEvent(new VoiceNoteCreatedEvent(
+                    saved.getId(),
+                    saved.getOwnerId(),
+                    saved.getNoteId()));
+
             return voiceNoteMapper.toResponse(saved);
         } catch (RuntimeException e) {
             fileStorageService.delete(storageKey);

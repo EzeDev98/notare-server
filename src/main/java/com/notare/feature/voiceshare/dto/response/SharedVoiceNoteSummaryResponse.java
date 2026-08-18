@@ -29,6 +29,15 @@ public record SharedVoiceNoteSummaryResponse(
         /** The voice note being shared. */
         Long voiceNoteId,
 
+        /**
+         * The optional parent text note.
+         *
+         * <p>Null means this is a standalone voice note. When present,
+         * the recording belongs to this text note and should appear with
+         * that note in the recipient's shared-note view.
+         */
+        Long noteId,
+
         /** Who owns it — the person who shared it with me. */
         Long ownerId,
 
