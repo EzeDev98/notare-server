@@ -185,4 +185,11 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
         return voiceNoteRepository.findByIdAndOwnerId(voiceNoteId, ownerId)
                 .orElseThrow(() -> new VoiceNoteNotFoundException("Voice note not found."));
     }
+    @Override
+    @Transactional(readOnly = true)
+    public List<VoiceNoteResponse> getAuthorizedVoiceNotesByNote(Long noteId) {
+        return voiceNoteRepository.findByNoteId(noteId).stream()
+                .map(voiceNoteMapper::toResponse)
+                .toList();
+    }
 }

@@ -7,21 +7,38 @@ import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.share.dto.response.SharedNoteSummaryResponse;
 import com.notare.feature.share.service.SharedNoteService;
 import com.notare.feature.user.model.UserDetail;
+import com.notare.feature.voicenote.dto.request.VoiceNoteContent;
+import com.notare.feature.voicenote.dto.response.VoiceNoteResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.ResourceRegion;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpRange;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+
+import java.net.URI;
+import java.util.List;
 
 /**
  * "Shared with me" — the recipient's view. This is the separate collection the
@@ -45,6 +62,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class SharedNoteController {
 
     private final SharedNoteService sharedNoteService;
+
+    /**
+     * Injected rather than hardcoded, so the upload endpoint's Location
+     * header stays correct if app.title (the API's base path) ever changes
+     * in application.yml/properties — same value every other endpoint's
+     * @RequestMapping resolves at startup, just fetched by hand here since
+     * this one Location has to be built manually rather than declared on
+     * an annotation.
+     */
+    @org.springframework.beans.factory.annotation.Value("${app.title}")
+    private String appTitle;
 
     /**
      * Notes other people have shared with me.
@@ -139,5 +167,117 @@ public class SharedNoteController {
         NoteResponse response = sharedNoteService.autoSaveSharedNote(
                 userDetail.getUser().getId(), noteId, request);
         return ResponseEntity.ok(response);
+    }
+
+    /** Max bytes returned per streamed range response (1 MB), same as VoiceNoteController and SharedVoiceNoteController. */
+    private static final long CHUNK_SIZE = 1024 * 1024;
+
+    /**
+     * Every voice note attached to this shared note, regardless of which
+     * collaborator recorded it. Requires at least READ.
+     */
+    @GetMapping("/{noteId}/voice-notes")
+    public ResponseEntity<List<VoiceNoteResponse>> listAttachedVoiceNotes(
+            @AuthenticationPrincipal UserDetail userDetail,
+            @PathVariable Long noteId) {
+
+        List<VoiceNoteResponse> response =
+                sharedNoteService.listAttachedVoiceNotes(userDetail.getUser().getId(), noteId);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Record a new voice note directly onto this shared note. Requires WRITE;
+     * a READ recipient gets 403 — same as any other edit to the note.
+     */
+    @PostMapping(value = "/{noteId}/voice-notes", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<VoiceNoteResponse> uploadVoiceNote(
+            @AuthenticationPrincipal UserDetail userDetail,
+            @PathVariable Long noteId,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds) {
+
+        VoiceNoteResponse response = sharedNoteService.uploadVoiceNote(
+                userDetail.getUser().getId(), noteId, file, durationSeconds);
+
+        // fromCurrentContextPath + the injected app.title, not
+        // fromCurrentRequest + a literal "${app.title}" placeholder — Spring
+        // only resolves ${...} property placeholders in @RequestMapping/@Value,
+        // never inside a string handed to UriComponentsBuilder at runtime. The
+        // earlier version would have shipped a Location header containing the
+        // literal, unresolved text "${app.title}".
+        URI location = ServletUriComponentsBuilder.fromCurrentContextPath()
+                .path(appTitle)
+                .path("/shared-voice-notes/{voiceNoteId}")
+                .buildAndExpand(response.id())
+                .toUri();
+
+        return ResponseEntity.created(location).body(response);
+    }
+
+    /**
+     * Download an attached voice note's audio. Gated by the PARENT NOTE's
+     * grant (see SharedNoteService#getAttachedVoiceNoteAudio) — deliberately
+     * NOT the same authorization path as SharedVoiceNoteController, which
+     * gates on a VoiceShare grant for a directly-shared voice note.
+     */
+    @GetMapping("/{noteId}/voice-notes/{voiceNoteId}/download")
+    public ResponseEntity<Resource> downloadAttachedVoiceNote(
+            @AuthenticationPrincipal UserDetail userDetail,
+            @PathVariable Long noteId,
+            @PathVariable Long voiceNoteId) {
+
+        VoiceNoteContent content = sharedNoteService.getAttachedVoiceNoteAudio(
+                userDetail.getUser().getId(), noteId, voiceNoteId);
+        String filename = content.originalFilename() != null
+                ? content.originalFilename()
+                : "voice-note-" + voiceNoteId;
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(content.contentType()))
+                .contentLength(content.sizeBytes())
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(filename).build().toString())
+                .body(content.resource());
+    }
+
+    /**
+     * Stream an attached voice note with HTTP Range support. Identical Range
+     * logic to VoiceNoteController#stream and SharedVoiceNoteController#stream
+     * — only the authorization path differs.
+     */
+    @GetMapping("/{noteId}/voice-notes/{voiceNoteId}/stream")
+    public ResponseEntity<ResourceRegion> streamAttachedVoiceNote(
+            @AuthenticationPrincipal UserDetail userDetail,
+            @PathVariable Long noteId,
+            @PathVariable Long voiceNoteId,
+            @RequestHeader HttpHeaders headers) {
+
+        VoiceNoteContent content = sharedNoteService.getAttachedVoiceNoteAudio(
+                userDetail.getUser().getId(), noteId, voiceNoteId);
+        Resource audio = content.resource();
+        long contentLength = content.sizeBytes();
+        MediaType mediaType = MediaType.parseMediaType(content.contentType());
+
+        List<HttpRange> ranges = headers.getRange();
+
+        if (ranges.isEmpty()) {
+            ResourceRegion whole = new ResourceRegion(audio, 0, contentLength);
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                    .contentType(mediaType)
+                    .body(whole);
+        }
+
+        HttpRange range = ranges.get(0);
+        long start = range.getRangeStart(contentLength);
+        long end = range.getRangeEnd(contentLength);
+        long sliceLength = Math.min(CHUNK_SIZE, end - start + 1);
+        ResourceRegion region = new ResourceRegion(audio, start, sliceLength);
+
+        return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
+                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                .contentType(mediaType)
+                .body(region);
     }
 }

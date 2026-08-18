@@ -14,16 +14,24 @@ import com.notare.feature.share.mapper.NoteShareMapper;
 import com.notare.feature.share.model.NoteShare;
 import com.notare.feature.share.repository.NoteShareRepository;
 import com.notare.feature.share.service.SharedNoteService;
+import com.notare.feature.voiceshare.dto.request.ShareVoiceNoteRequest;
+import com.notare.feature.voiceshare.service.VoiceShareService;
+import com.notare.feature.voicenote.dto.request.VoiceNoteContent;
+import com.notare.feature.voicenote.dto.response.VoiceNoteResponse;
+import com.notare.feature.voicenote.service.VoiceNoteService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SharedNoteServiceImpl implements SharedNoteService {
@@ -33,6 +41,21 @@ public class SharedNoteServiceImpl implements SharedNoteService {
 
     /** Cross-module, PUBLIC API. This is the only class that calls the pre-authorized accessors. */
     private final NoteService noteService;
+
+    /**
+     * Cross-module, PUBLIC API. Added for the note-attached-voice-notes
+     * capability: listing a note's attachments and letting a WRITE
+     * collaborator record a new one directly onto a shared note.
+     */
+    private final VoiceNoteService voiceNoteService;
+
+    /**
+     * Also cross-module, PUBLIC API. Used ONLY to create the courtesy grant
+     * back to the note's owner after a collaborator's upload — never to
+     * gate access to an EXISTING voice note, which stays this class's own
+     * job via requireGrant on the parent note.
+     */
+    private final VoiceShareService voiceShareService;
 
     /**
      * Resolves a page of grants into a page of notes with ONE extra query, not
@@ -144,5 +167,71 @@ public class SharedNoteServiceImpl implements SharedNoteService {
                     "You have read-only access to this note.");
         }
         return share;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VoiceNoteResponse> listAttachedVoiceNotes(Long userId, Long noteId) {
+        requireGrant(userId, noteId, SharePermission.READ);
+        return voiceNoteService.getAuthorizedVoiceNotesByNote(noteId);
+    }
+
+    /**
+     * Deliberately NOT @Transactional at this level, same reasoning as
+     * VoiceNoteService#upload itself: file storage I/O must not happen while
+     * holding a database connection open. The two writes this method makes —
+     * the voice note row (inside voiceNoteService.upload, its own boundary)
+     * and the courtesy VoiceShare grant (inside voiceShareService.shareVoiceNote,
+     * its own @Transactional boundary) — are two separate, sequential
+     * transactions, not one atomic unit. That is an accepted tradeoff, not an
+     * oversight: seeing the tradeoff explained below.
+     */
+    @Override
+    public VoiceNoteResponse uploadVoiceNote(Long userId, Long noteId, MultipartFile file, Integer durationSeconds) {
+        NoteShare share = requireGrant(userId, noteId, SharePermission.WRITE);
+
+        VoiceNoteResponse uploaded = voiceNoteService.upload(userId, file, noteId, durationSeconds);
+
+        // Courtesy grant back to the note's owner, best-effort. The recording
+        // itself has already succeeded and stored bytes on disk by this point;
+        // failing the whole request over a grant-creation hiccup would leave
+        // the recipient thinking their reply was lost when it wasn't. Worst
+        // case on failure here: the note owner has to be re-shared this one
+        // voice note by hand, or simply re-open the note (the note-attachment
+        // listing above finds it regardless of any VoiceShare grant — the
+        // grant only matters for the voice note's OWN direct endpoints).
+        try {
+            ShareVoiceNoteRequest grantRequest = new ShareVoiceNoteRequest();
+            grantRequest.setSharedWithUserId(share.getOwnerId());
+            grantRequest.setPermission(SharePermission.READ);
+            voiceShareService.shareVoiceNote(userId, uploaded.id(), grantRequest);
+        } catch (RuntimeException ex) {
+            log.warn("Could not auto-share voice note {} back to note owner {}: {}",
+                    uploaded.id(), share.getOwnerId(), ex.getMessage());
+        }
+
+        return uploaded;
+    }
+
+    /**
+     * Gated by the PARENT NOTE's grant, then a belt-and-suspenders check that
+     * the voice note ACTUALLY belongs to that note — without it, a caller
+     * with READ on note A could pass note A's id alongside note B's
+     * voiceNoteId and stream note B's audio, so long as they could guess or
+     * enumerate a valid voice note id. The path noteId must not be trusted
+     * just because it FORMS a valid URL; it has to match the voice note's own
+     * record of which note it's attached to.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public VoiceNoteContent getAttachedVoiceNoteAudio(Long userId, Long noteId, Long voiceNoteId) {
+        requireGrant(userId, noteId, SharePermission.READ);
+
+        VoiceNoteResponse voiceNote = voiceNoteService.getAuthorizedVoiceNote(voiceNoteId);
+        if (!noteId.equals(voiceNote.noteId())) {
+            throw new NoteShareNotFoundException("Note not found.");
+        }
+
+        return voiceNoteService.getAuthorizedAudio(voiceNoteId);
     }
 }

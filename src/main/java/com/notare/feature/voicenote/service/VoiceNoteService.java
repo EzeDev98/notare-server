@@ -77,4 +77,17 @@ public interface VoiceNoteService {
      * NoteService#getAuthorizedNoteSummaries.
      */
     Map<Long, VoiceNoteResponse> getAuthorizedVoiceNoteSummaries(Collection<Long> voiceNoteIds);
+    /**
+     * Every voice note attached to a note, ownership of each individual
+     * recording unchecked — only whether the CALLER may see the note at all
+     * is the caller's job to verify first (SharedNoteService's requireGrant,
+     * or NoteService's own ownership check for the note's owner).
+     *
+     * <p>Unlike {@link #getAuthorizedVoiceNoteSummaries}, which resolves a
+     * caller-supplied batch of ids the caller already knows about, this
+     * DISCOVERS the ids — it answers "what's attached to this note", not
+     * "resolve these specific ids". That's why it takes a single noteId
+     * rather than a Collection of voiceNoteIds.
+     */
+    List<VoiceNoteResponse> getAuthorizedVoiceNotesByNote(Long noteId);
 }

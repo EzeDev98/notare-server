@@ -32,4 +32,18 @@ public interface VoiceNoteRepository extends JpaRepository<VoiceNote, Long> {
      * every id passed in.
      */
     List<VoiceNote> findByIdIn(Collection<Long> ids);
+    /**
+     * Every voice note attached to a note, regardless of who among the note's
+     * collaborators recorded each one. Unscoped by owner on purpose: a note's
+     * attachments can now come from more than one contributor (the note owner
+     * and any WRITE collaborator), so a listing scoped to a single owner id
+     * would silently hide the others' recordings.
+     *
+     * <p>Ownership of NOTE ACCESS (does this caller have a NoteShare grant, or
+     * do they own the note?) is checked by the caller — SharedNoteService for
+     * recipients, NoteService's own ownership check for the note owner's own
+     * NoteDetail view. This method itself performs no authorization, same
+     * "authorized" naming convention as findByIdIn.
+     */
+    List<VoiceNote> findByNoteId(Long noteId);
 }

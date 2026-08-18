@@ -5,7 +5,12 @@ import com.notare.feature.note.dto.request.AutoSaveNoteRequest;
 import com.notare.feature.note.dto.request.UpdateNoteRequest;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.share.dto.response.SharedNoteSummaryResponse;
+import com.notare.feature.voicenote.dto.request.VoiceNoteContent;
+import com.notare.feature.voicenote.dto.response.VoiceNoteResponse;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 /**
  * The RECIPIENT's side of sharing: what I can see and do with notes other
@@ -41,4 +46,36 @@ public interface SharedNoteService {
      * 403 either way.
      */
     NoteResponse autoSaveSharedNote(Long userId, Long noteId, AutoSaveNoteRequest request);
+
+    /**
+     * Every voice note attached to a shared note, regardless of which
+     * collaborator recorded each one. Requires at least READ — same grant a
+     * recipient needs to open the note at all, since attachments are part of
+     * the note's content, not a separately-permissioned thing.
+     */
+    List<VoiceNoteResponse> listAttachedVoiceNotes(Long userId, Long noteId);
+
+    /**
+     * Record a new voice note directly onto a shared note. Requires WRITE —
+     * same bar as editing the note's text, since a voice reply is a form of
+     * editing the note's content.
+     *
+     * <p>The resulting voice note is owned by the RECIPIENT who recorded it,
+     * not the note's owner — same ownership model VoiceNoteService already
+     * uses for the note owner's own recordings. A VoiceShare grant back to
+     * the note's owner is created automatically, so the owner can hear it
+     * the same way any other voice share works, without the recipient having
+     * to separately share it back by hand.
+     */
+    VoiceNoteResponse uploadVoiceNote(Long userId, Long noteId, MultipartFile file, Integer durationSeconds);
+
+    /**
+     * A note-attachment's audio bytes, for stream/download. Requires at least
+     * READ on the PARENT NOTE — not a VoiceShare grant on the voice note
+     * itself. This is the deliberate distinction from
+     * SharedVoiceNoteService#getAudio: that one gates a voice note shared
+     * directly; this one gates a voice note reachable only because the note
+     * it's attached to was shared.
+     */
+    VoiceNoteContent getAttachedVoiceNoteAudio(Long userId, Long noteId, Long voiceNoteId);
 }
