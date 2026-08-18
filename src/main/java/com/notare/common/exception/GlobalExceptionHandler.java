@@ -247,6 +247,30 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
+    @ExceptionHandler(VoiceShareNotFoundException.class)
+    public ProblemDetail handleVoiceShareNotFoundException(VoiceShareNotFoundException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(VoiceAlreadySharedException.class)
+    public ProblemDetail handleVoiceAlreadySharedException(VoiceAlreadySharedException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidVoiceShareException.class)
+    public ProblemDetail handleInvalidVoiceShareException(InvalidVoiceShareException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    /**
+     * Mirrors InsufficientNotePermissionException's handler: the only other
+     * domain 403, fired only after a grant has been found for the voice note.
+     */
+    @ExceptionHandler(InsufficientVoiceNotePermissionException.class)
+    public ProblemDetail handleInsufficientVoiceNotePermissionException(InsufficientVoiceNotePermissionException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
     @ExceptionHandler(NotificationNotFoundException.class)
     public ProblemDetail handleNotificationNotFoundException(NotificationNotFoundException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());

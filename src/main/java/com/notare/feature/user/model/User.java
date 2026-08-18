@@ -1,6 +1,5 @@
 package com.notare.feature.user.model;
 
-import com.notare.feature.user.enums.Gender;
 import com.notare.feature.user.enums.UserStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -43,9 +42,6 @@ public class User {
 
     @Column(nullable = false)
     private String password;
-
-    @Enumerated(EnumType.STRING)
-    private Gender gender;
 
     @Enumerated(EnumType.STRING)
     private UserStatus userStatus;

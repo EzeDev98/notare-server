@@ -12,6 +12,8 @@ import com.notare.feature.voicenote.dto.response.VoiceNoteResponse;
 import com.notare.feature.voicenote.service.VoiceNoteService;
 import com.notare.feature.voicenote.validation.VoiceUploadValidator;
 import lombok.RequiredArgsConstructor;
+import com.notare.feature.voicenote.event.VoiceNoteDeletedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,7 +23,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +36,7 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
     private final VoiceNoteMapper voiceNoteMapper;
     private final VoiceUploadValidator voiceUploadValidator;
     private final FileStorageService fileStorageService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public VoiceNoteResponse upload(Long ownerId, MultipartFile file, Long noteId, Integer durationSeconds) {
@@ -98,11 +104,24 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
         VoiceNote vn = requireOwned(ownerId, voiceNoteId);
         String storageKey = vn.getStorageKey();
 
+        // Snapshot before the row is gone — same reasoning as every
+        // share/voiceshare event: this is the only record of what it was
+        // called once the delete below runs.
+        Long deletedVoiceNoteId = vn.getId();
+        String voiceNoteTitle = vn.getOriginalFilename();
+
         // Remove the metadata row first (Spring Data's delete is its own
         // transaction). Once that commits, nothing references the file, so
         // deleting the bytes second means a failure here leaves at most a
         // harmless orphaned file — never a row pointing at missing bytes.
         voiceNoteRepository.delete(vn);
+
+        // Published here, right after the row is confirmed gone — deliberately
+        // NOT wrapped in the storage cleanup's best-effort try/catch below. A
+        // storage hiccup must not stop grant cleanup from firing; the voice
+        // note IS gone as far as the rest of the app is concerned regardless
+        // of whether the orphaned file gets swept up.
+        eventPublisher.publishEvent(new VoiceNoteDeletedEvent(deletedVoiceNoteId, voiceNoteTitle, ownerId));
 
         // Best-effort: the logical delete already succeeded, so a storage hiccup
         // must not fail the request. Worst case is a leftover file for a later
@@ -121,6 +140,35 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
         } catch (IOException e) {
             throw new StorageException("Failed to read the uploaded file.", e);
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VoiceNoteResponse getAuthorizedVoiceNote(Long voiceNoteId) {
+        VoiceNote voiceNote = voiceNoteRepository.findById(voiceNoteId)
+                .orElseThrow(() -> new VoiceNoteNotFoundException("Voice note not found."));
+        return voiceNoteMapper.toResponse(voiceNote);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VoiceNoteContent getAuthorizedAudio(Long voiceNoteId) {
+        VoiceNote voiceNote = voiceNoteRepository.findById(voiceNoteId)
+                .orElseThrow(() -> new VoiceNoteNotFoundException("Voice note not found."));
+        Resource resource = fileStorageService.load(voiceNote.getStorageKey());
+        return new VoiceNoteContent(resource, voiceNote.getContentType(), voiceNote.getOriginalFilename(), voiceNote.getSizeBytes());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, VoiceNoteResponse> getAuthorizedVoiceNoteSummaries(Collection<Long> voiceNoteIds) {
+        if (voiceNoteIds == null || voiceNoteIds.isEmpty()) {
+            // Guard the empty case explicitly: an IN () clause is invalid SQL on
+            // some databases, and there's nothing to ask for anyway.
+            return Map.of();
+        }
+        return voiceNoteRepository.findByIdIn(voiceNoteIds).stream()
+                .collect(Collectors.toMap(VoiceNote::getId, voiceNoteMapper::toResponse));
     }
 
     private VoiceNote requireOwned(Long ownerId, Long voiceNoteId) {

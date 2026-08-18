@@ -42,5 +42,14 @@ public enum NotificationType {
     TRANSCRIPTION_COMPLETED,
 
     /** My voice note failed to transcribe. No actor. */
-    TRANSCRIPTION_FAILED
+    TRANSCRIPTION_FAILED,
+
+    /** A voice note was shared with me. Actor: the voice note's owner. */
+    VOICE_NOTE_SHARED,
+
+    /** My access level on a shared voice note changed. Actor: the voice note's owner. */
+    VOICE_NOTE_SHARE_PERMISSION_CHANGED,
+
+    /** My access to a shared voice note was withdrawn. Actor: the voice note's owner. */
+    VOICE_NOTE_SHARE_REVOKED
 }

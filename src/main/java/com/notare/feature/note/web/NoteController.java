@@ -129,7 +129,7 @@ public class NoteController {
     @GetMapping("/search")
     public ResponseEntity<PagedResponse<NoteSummaryResponse>> searchNotes(
             @AuthenticationPrincipal UserDetail userDetail,
-            @RequestParam("query") String query,
+            @RequestParam("q") String query,
             @ParameterObject
             @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC)
             Pageable pageable) {

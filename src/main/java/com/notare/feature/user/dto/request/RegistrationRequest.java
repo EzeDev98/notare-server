@@ -1,6 +1,5 @@
 package com.notare.feature.user.dto.request;
 
-import com.notare.feature.user.enums.Gender;
 import jakarta.validation.constraints.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -26,9 +25,6 @@ public class RegistrationRequest {
     @NotBlank(message = "Email address is required.")
     @Email(message = "Please provide a valid email address.")
     private String email;
-
-    @NotNull(message = "Please select a gender.")
-    private Gender gender;
 
     @NotBlank(message = "Password is required.")
     @Size(min = 8, max = 64, message = "Password must be between 8 and 64 characters.")

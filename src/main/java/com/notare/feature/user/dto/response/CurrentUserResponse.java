@@ -1,7 +1,5 @@
 package com.notare.feature.user.dto.response;
 
-import com.notare.feature.user.enums.Gender;
-
 import java.time.LocalDateTime;
 
 /**
@@ -49,7 +47,6 @@ public record CurrentUserResponse(
         String firstName,
         String lastName,
         String email,
-        Gender gender,
         LocalDateTime createdAt
 ) {
 }

@@ -105,7 +105,7 @@ public class UserController {
     @GetMapping("/search")
     public ResponseEntity<PagedResponse<UserSummaryResponse>> searchUsers(
             @AuthenticationPrincipal UserDetail userDetail,
-            @RequestParam("query") String query,
+            @RequestParam("q") String query,
             @ParameterObject
             @PageableDefault(size = 20, sort = "username") Pageable pageable) {
 

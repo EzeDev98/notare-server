@@ -33,7 +33,7 @@ public class TranscriptionSearchController {
     @GetMapping("/search")
     public ResponseEntity<PagedResponse<TranscriptionResponse>> search(
             @AuthenticationPrincipal UserDetail userDetail,
-            @RequestParam("query") String query,
+            @RequestParam("q") String query,
             @ParameterObject
             @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC)
             Pageable pageable) {

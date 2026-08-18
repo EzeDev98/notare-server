@@ -86,7 +86,6 @@ public class UserServiceImplementation implements UserService {
                 user.getFirstName(),
                 user.getLastName(),
                 user.getEmail(),
-                user.getGender(),
                 user.getCreatedAt());
     }
 
@@ -174,7 +173,6 @@ public class UserServiceImplementation implements UserService {
         user.setUsername(request.getUsername().trim());
         user.setEmail(request.getEmail().trim().toLowerCase());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setGender(request.getGender());
         user.setUserStatus(UserStatus.PENDING_VERIFICATION);
         user.setEmailVerified(false);
 
