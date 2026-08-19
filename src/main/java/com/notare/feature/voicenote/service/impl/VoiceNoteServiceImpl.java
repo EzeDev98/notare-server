@@ -4,6 +4,7 @@ import com.notare.common.dto.PagedResponse;
 import com.notare.common.exception.StorageException;
 import com.notare.common.exception.VoiceNoteNotFoundException;
 import com.notare.common.storage.FileStorageService;
+import com.notare.feature.note.service.NoteService;
 import com.notare.feature.voicenote.dto.request.VoiceNoteContent;
 import com.notare.feature.voicenote.mapper.VoiceNoteMapper;
 import com.notare.feature.voicenote.model.VoiceNote;
@@ -38,6 +39,14 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
     private final VoiceUploadValidator voiceUploadValidator;
     private final FileStorageService fileStorageService;
     private final ApplicationEventPublisher eventPublisher;
+
+    /**
+     * Cross-module, PUBLIC API. Used ONLY as an ownership gate in
+     * {@link #listVoiceNotesForNote} — confirming the caller owns the NOTE,
+     * not confirming anything about individual voice notes. See that
+     * method's own doc comment for why this became necessary.
+     */
+    private final NoteService noteService;
 
     @Override
     public VoiceNoteResponse upload(Long ownerId, MultipartFile file, Long noteId, Integer durationSeconds) {
@@ -93,10 +102,43 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
         return PagedResponse.of(content, page);
     }
 
+    /**
+     * Voice notes attached to a specific text note — the OWNER'S OWN view
+     * of a note's recordings (`GET /voice-notes/by-note/{noteId}`, what
+     * NoteDetailPage calls when the note's owner opens it).
+     *
+     * <p>PREVIOUSLY filtered {@code findByOwnerIdAndNoteId(ownerId, noteId)}
+     * — "voice notes I personally own, attached to this note." That was
+     * correct back when every recording on a note was necessarily the
+     * note owner's own, but it silently excluded a WRITE collaborator's
+     * reply once note-attached recordings could come from someone else:
+     * the recording's OWN {@code ownerId} is the collaborator who made it,
+     * not the note's owner, so the old filter's second half never matched
+     * it. The owner would see a collaborator's TEXT edits arrive (those
+     * route through the note itself, not per-row ownership) but never
+     * their voice replies — a correctness gap, not a deliberate
+     * permission boundary.
+     *
+     * <p>Fixed to mirror {@link #getAuthorizedVoiceNotesByNote}, which
+     * already gets this right on the RECIPIENT'S side (SharedNoteService
+     * calls it after confirming a grant on the note, returning every
+     * attachment regardless of who recorded it). {@code ownerId} here
+     * still matters — it is now what proves the caller may see this
+     * note's attachments AT ALL ({@link NoteService#getNote} throws 404
+     * for a note the caller doesn't own), rather than filtering rows by
+     * it. Once that ownership gate passes, every voice note on the note
+     * comes back, owner's and every collaborator's alike.
+     */
     @Override
     @Transactional(readOnly = true)
     public List<VoiceNoteResponse> listVoiceNotesForNote(Long ownerId, Long noteId) {
-        return voiceNoteRepository.findByOwnerIdAndNoteId(ownerId, noteId).stream()
+        // Ownership check only — the returned NoteResponse itself is
+        // unused here; NoteService#getNote throws 404 if noteId is not
+        // this caller's own active note, which is the only thing this
+        // call is for.
+        noteService.getNote(ownerId, noteId);
+
+        return voiceNoteRepository.findByNoteId(noteId).stream()
                 .map(voiceNoteMapper::toResponse)
                 .toList();
     }

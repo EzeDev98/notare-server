@@ -19,6 +19,17 @@ import java.util.List;
  * <p>A voice note attached to a shared note inherits the same recipient and
  * permission. The note-share module publishes the fact that access changed;
  * this listener owns the corresponding VoiceShare rows.
+ *
+ * <p>Both lookups below key on {@code voiceNote.ownerId()} — the RECORDING'S
+ * own owner — not {@code event.ownerId()} (the note's owner). A VoiceShare
+ * row's own {@code ownerId} column always records who actually owns the
+ * voice note it grants access to (see {@code VoiceShareServiceImpl}, and the
+ * courtesy grant in {@code SharedNoteServiceImpl#uploadVoiceNote}, both of
+ * which set it that way). Those two only coincide when the note owner made
+ * the recording themselves; a WRITE collaborator's own reply is owned by
+ * that collaborator, so looking it up under the note owner's id here would
+ * always miss it — every collaborator-recorded attachment would silently
+ * stop tracking permission changes and revocations on the parent note.
  */
 @Slf4j
 @Component
@@ -43,17 +54,24 @@ public class NoteShareVoiceAccessSyncListener {
             VoiceShare share = voiceShareRepository
                     .findByVoiceNoteIdAndOwnerIdAndSharedWithUserId(
                             voiceNote.id(),
-                            event.ownerId(),
+                            voiceNote.ownerId(),
                             event.sharedWithUserId())
                     .orElse(null);
 
             if (share == null) {
+                // Expected, not an error, whenever this recording was never
+                // individually propagated to this recipient in the first
+                // place — e.g. NoteShareVoicePropagationListener's own
+                // best-effort grant failed for this one recording (its
+                // owner and the recipient aren't accepted collaborators of
+                // each other). The recipient still reaches the recording
+                // through the note itself either way.
                 log.debug(
                         "No voice share found while synchronizing note permission: " +
-                        "noteId={}, voiceNoteId={}, ownerId={}, recipientId={}",
+                        "noteId={}, voiceNoteId={}, recordingOwnerId={}, recipientId={}",
                         event.noteId(),
                         voiceNote.id(),
-                        event.ownerId(),
+                        voiceNote.ownerId(),
                         event.sharedWithUserId()
                 );
                 continue;
@@ -83,7 +101,7 @@ public class NoteShareVoiceAccessSyncListener {
             voiceShareRepository
                     .findByVoiceNoteIdAndOwnerIdAndSharedWithUserId(
                             voiceNote.id(),
-                            event.ownerId(),
+                            voiceNote.ownerId(),
                             event.sharedWithUserId())
                     .ifPresent(voiceShareRepository::delete);
         }
