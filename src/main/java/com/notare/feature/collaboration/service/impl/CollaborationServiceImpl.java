@@ -41,31 +41,99 @@ public class CollaborationServiceImpl implements CollaborationService {
         if (ownerId.equals(collaboratorId)) {
             throw new InvalidCollaborationException("You cannot invite yourself.");
         }
+
         // Existence check through the user module's PUBLIC API, not its repository.
         if (!userService.existsById(collaboratorId)) {
-            throw new UserNotFoundException("The user you are trying to invite does not exist.");
-        }
-        // Friendly pre-check; the unique constraint below is the real guard.
-        if (collaborationRepository.existsByOwnerIdAndCollaboratorId(ownerId, collaboratorId)) {
-            throw new CollaborationAlreadyExistsException("You have already invited this user.");
+            throw new UserNotFoundException(
+                    "The user you are trying to invite does not exist."
+            );
         }
 
+        /*
+         * There is one collaboration row per owner/collaborator pair.
+         *
+         * The important distinction is the STATUS of an existing row:
+         *
+         *   PENDING  -> cannot send another invitation
+         *   ACCEPTED -> they are already a collaborator
+         *   REJECTED -> this is allowed; reuse the row and send a new invitation
+         *
+         * We deliberately reuse REJECTED instead of inserting a new row because
+         * the database has a unique(owner_id, collaborator_id) constraint.
+         */
+        Collaboration existing = collaborationRepository
+                .findByOwnerIdAndCollaboratorId(ownerId, collaboratorId)
+                .orElse(null);
+
+        if (existing != null) {
+            if (existing.getStatus() == CollaborationStatus.PENDING) {
+                throw new CollaborationAlreadyExistsException(
+                        "You already have a pending invitation to this user."
+                );
+            }
+
+            if (existing.getStatus() == CollaborationStatus.ACCEPTED) {
+                throw new CollaborationAlreadyExistsException(
+                        "You are already collaborating with this user."
+                );
+            }
+
+            /*
+             * REJECTED:
+             *
+             * Re-open the existing relationship as a fresh invitation.
+             * The same row is retained, preserving its identity while the
+             * status moves back to PENDING.
+             */
+            existing.setStatus(CollaborationStatus.PENDING);
+
+            try {
+                Collaboration saved = collaborationRepository.saveAndFlush(existing);
+
+                eventPublisher.publishEvent(
+                        new CollaborationInvitedEvent(
+                                saved.getId(),
+                                ownerId,
+                                collaboratorId
+                        )
+                );
+
+                return collaborationMapper.toResponse(saved);
+            } catch (DataIntegrityViolationException ex) {
+                throw new CollaborationAlreadyExistsException(
+                        "Could not send the collaboration invitation."
+                );
+            }
+        }
+
+        /*
+         * No previous relationship exists, so create the first row.
+         */
         Collaboration collaboration = new Collaboration();
         collaboration.setOwnerId(ownerId);
         collaboration.setCollaboratorId(collaboratorId);
         collaboration.setStatus(CollaborationStatus.PENDING);
 
         try {
-            Collaboration saved = collaborationRepository.save(collaboration);
-            // Tell the invitee. Published inside this transaction; the listener
-            // consumes it AFTER_COMMIT, so no notification exists for an invite
-            // that ends up rolling back.
-            eventPublisher.publishEvent(new CollaborationInvitedEvent(saved.getId(), ownerId, collaboratorId));
+            Collaboration saved = collaborationRepository.saveAndFlush(collaboration);
+
+            eventPublisher.publishEvent(
+                    new CollaborationInvitedEvent(
+                            saved.getId(),
+                            ownerId,
+                            collaboratorId
+                    )
+            );
+
             return collaborationMapper.toResponse(saved);
         } catch (DataIntegrityViolationException ex) {
-            // Lost a race with a concurrent identical invite: the unique
-            // constraint fired. Same friendly 409 as the pre-check.
-            throw new CollaborationAlreadyExistsException("You have already invited this user.");
+            /*
+             * Protect against a concurrent invitation creating the same
+             * owner/collaborator pair between our lookup and insert.
+             */
+            throw new CollaborationAlreadyExistsException(
+                    "A collaboration invitation already exists for this user."
+            );
         }
     }
 

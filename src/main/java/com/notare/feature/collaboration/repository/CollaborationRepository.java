@@ -11,42 +11,55 @@ import java.util.Optional;
 
 public interface CollaborationRepository extends JpaRepository<Collaboration, Long> {
 
-    /** Pre-check for a friendly 409 before the unique constraint would fire. */
-    boolean existsByOwnerIdAndCollaboratorId(Long ownerId, Long collaboratorId);
+    /**
+     * Finds the existing relationship between an owner and collaborator,
+     * regardless of its current status.
+     *
+     * This is intentionally different from an exists check because a
+     * REJECTED relationship can be reused for a new invitation.
+     */
+    Optional<Collaboration> findByOwnerIdAndCollaboratorId(
+            Long ownerId,
+            Long collaboratorId
+    );
 
     /**
-     * "Is this person an ACCEPTED collaborator of mine?" — the gate Step 7 puts
-     * in front of every share.
-     *
-     * <p>Separate from existsByOwnerIdAndCollaboratorId above, which is true for
-     * PENDING and REJECTED rows too. Reusing that one here would let an owner
-     * share notes with someone who never accepted, or who explicitly declined.
-     * The status has to be part of the query, not an afterthought.
+     * "Is this person an ACCEPTED collaborator of mine?"
      */
     boolean existsByOwnerIdAndCollaboratorIdAndStatus(
-            Long ownerId, Long collaboratorId, CollaborationStatus status);
+            Long ownerId,
+            Long collaboratorId,
+            CollaborationStatus status
+    );
 
     /**
-     * An invitation scoped to its INVITEE — used for accept/reject, so only the
-     * person the invitation was sent to can act on it.
+     * An invitation scoped to its INVITEE.
      */
-    Optional<Collaboration> findByIdAndCollaboratorId(Long id, Long collaboratorId);
+    Optional<Collaboration> findByIdAndCollaboratorId(
+            Long id,
+            Long collaboratorId
+    );
 
     /**
-     * An invitation scoped to its OWNER — used for cancel/remove, so only the
-     * person who sent it can withdraw it.
+     * An invitation scoped to its OWNER.
      */
-    Optional<Collaboration> findByIdAndOwnerId(Long id, Long ownerId);
+    Optional<Collaboration> findByIdAndOwnerId(
+            Long id,
+            Long ownerId
+    );
 
-    /** Invitations I sent (I'm the owner). */
+    /** Invitations I sent. */
     Page<Collaboration> findByOwnerId(Long ownerId, Pageable pageable);
 
-    /** Invitations I received (I'm the collaborator). */
-    Page<Collaboration> findByCollaboratorId(Long collaboratorId, Pageable pageable);
+    /** Invitations I received. */
+    Page<Collaboration> findByCollaboratorId(
+            Long collaboratorId,
+            Pageable pageable
+    );
 
-    /**
-     * My accepted collaborators, by status. Step 7 uses this (with ACCEPTED) to
-     * answer "who am I allowed to share a note with?".
-     */
-    List<Collaboration> findByOwnerIdAndStatus(Long ownerId, CollaborationStatus status);
+    /** My accepted collaborators. */
+    List<Collaboration> findByOwnerIdAndStatus(
+            Long ownerId,
+            CollaborationStatus status
+    );
 }

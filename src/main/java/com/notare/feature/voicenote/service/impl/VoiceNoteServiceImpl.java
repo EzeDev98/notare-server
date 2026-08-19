@@ -41,10 +41,11 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
     private final ApplicationEventPublisher eventPublisher;
 
     /**
-     * Cross-module, PUBLIC API. Used ONLY as an ownership gate in
-     * {@link #listVoiceNotesForNote} — confirming the caller owns the NOTE,
-     * not confirming anything about individual voice notes. See that
-     * method's own doc comment for why this became necessary.
+     * Cross-module, PUBLIC API. Used ONLY as an ownership gate — confirming
+     * the caller owns the NOTE, not confirming anything about individual
+     * voice notes — in {@link #listVoiceNotesForNote} and (as a fallback,
+     * after direct ownership fails) in {@link #loadAudio}. See those
+     * methods' own doc comments for why each needed it.
      */
     private final NoteService noteService;
 
@@ -143,10 +144,42 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
                 .toList();
     }
 
+    /**
+     * Loads the audio bytes for `/download` and `/stream` alike (both
+     * controller methods call this).
+     *
+     * <p>PREVIOUSLY strict {@link #requireOwned}: the caller had to be this
+     * specific recording's own uploader. That was correct back when every
+     * recording on a note was necessarily the note owner's own — the same
+     * assumption {@link #listVoiceNotesForNote}'s own doc comment describes
+     * going stale. Once a WRITE collaborator's reply could be attached to
+     * someone else's note, the note owner could SEE that attachment (that
+     * method was fixed already) but not PLAY it: this method still 404'd
+     * because the owner is not that recording's uploader. Playback silently
+     * regressed behind a passing list.
+     *
+     * <p>Fixed the same way: try direct ownership first (the common case,
+     * and the only case for a standalone voice note — {@code noteId ==
+     * null} short-circuits straight to not-found rather than asking
+     * {@link NoteService} about a note that doesn't exist). Failing that,
+     * fall back to "does the caller own the NOTE this recording is attached
+     * to" — {@link NoteService#getNote} throws 404 if not, matching
+     * {@link #listVoiceNotesForNote}'s exact authorization.
+     */
     @Override
     @Transactional(readOnly = true)
     public VoiceNoteContent loadAudio(Long ownerId, Long voiceNoteId) {
-        VoiceNote voiceNote = requireOwned(ownerId, voiceNoteId);
+        VoiceNote voiceNote = voiceNoteRepository.findById(voiceNoteId)
+                .orElseThrow(() -> new VoiceNoteNotFoundException("Voice note not found."));
+
+        if (!voiceNote.getOwnerId().equals(ownerId)) {
+            if (voiceNote.getNoteId() == null) {
+                throw new VoiceNoteNotFoundException("Voice note not found.");
+            }
+            // Throws (404-equivalent) if ownerId doesn't own this note either.
+            noteService.getNote(ownerId, voiceNote.getNoteId());
+        }
+
         Resource resource = fileStorageService.load(voiceNote.getStorageKey());
         return new VoiceNoteContent(resource, voiceNote.getContentType(), voiceNote.getOriginalFilename(), voiceNote.getSizeBytes());
     }

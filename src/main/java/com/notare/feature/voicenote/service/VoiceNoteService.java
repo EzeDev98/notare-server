@@ -27,8 +27,13 @@ public interface VoiceNoteService {
     List<VoiceNoteResponse> listVoiceNotesForNote(Long ownerId, Long noteId);
 
     /**
-     * Loads the audio bytes (ownership-scoped) plus the metadata needed to serve
-     * them. Backs both the download and stream endpoints.
+     * Loads the audio bytes plus the metadata needed to serve them. Backs
+     * both the download and stream endpoints.
+     *
+     * <p>Authorized by direct ownership OR by owning the note this
+     * recording is attached to — see the implementation's own doc comment
+     * for why "ownership-scoped" alone stopped being accurate once a
+     * recording's uploader and its parent note's owner can differ.
      */
     VoiceNoteContent loadAudio(Long ownerId, Long voiceNoteId);
 
