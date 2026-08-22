@@ -9,7 +9,6 @@ import java.time.LocalDateTime;
  */
 public record NoteSummaryResponse(
         Long id,
-        String title,
         String contentPreview,
         boolean pinned,
         boolean archived,

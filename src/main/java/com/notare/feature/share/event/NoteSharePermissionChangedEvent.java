@@ -16,7 +16,7 @@ import com.notare.feature.share.enums.SharePermission;
 public record NoteSharePermissionChangedEvent(
         Long shareId,
         Long noteId,
-        String noteTitle,
+        String noteLabel,
         Long ownerId,
         Long sharedWithUserId,
         SharePermission previousPermission,

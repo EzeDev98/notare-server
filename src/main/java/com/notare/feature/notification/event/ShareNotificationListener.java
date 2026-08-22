@@ -32,9 +32,9 @@ public class ShareNotificationListener {
                 event.ownerId(),
                 NotificationTargetType.NOTE,
                 event.noteId(),
-                // The title as it was at the moment of sharing — see the
+                // The label as it was at the moment of sharing — see the
                 // Notification entity for why this is stored rather than joined.
-                event.noteTitle()));
+                event.noteLabel()));
     }
 
     /**
@@ -57,7 +57,7 @@ public class ShareNotificationListener {
                 event.ownerId(),
                 NotificationTargetType.NOTE,
                 event.noteId(),
-                event.noteTitle()));
+                event.noteLabel()));
     }
 
     /**
@@ -80,6 +80,6 @@ public class ShareNotificationListener {
                 event.ownerId(),
                 null,
                 null,
-                event.noteTitle()));
+                event.noteLabel()));
     }
 }

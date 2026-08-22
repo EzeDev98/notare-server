@@ -93,8 +93,8 @@ public class NoteController {
     }
 
     /**
-     * Keyword search over the owner's active notes (title + content), partial
-     * and case-insensitive, paginated. The literal path /notes/search takes
+     * Keyword search over the owner's active notes' content, partial and
+     * case-insensitive, paginated. The literal path /notes/search takes
      * precedence over /notes/{noteId}, so there's no clash with get-by-id.
      */
     /**
@@ -187,7 +187,7 @@ public class NoteController {
      *
      * <h2>Why four action endpoints and not a field on PATCH</h2>
      *
-     * <p>PATCH /notes/{id} is auto-save. It carries title and content, requires
+     * <p>PATCH /notes/{id} is auto-save. It carries content, requires
      * a version, and fires on a debounce while someone is typing. Putting
      * organisation flags in that body would mean every keystroke's save also
      * asserts a pin state — so an editor opened before the user pinned the note
@@ -206,7 +206,7 @@ public class NoteController {
      * for why these bump the version at all.
      *
      * <p><b>Owner only, and there is deliberately no /shared-notes
-     * counterpart.</b> Step 7 scoped WRITE to title and content: pin and
+     * counterpart.</b> Step 7 scoped WRITE to content: pin and
      * archive are the owner's private view of their own note, and a
      * collaborator reorganising someone else's sidebar is not a feature. No
      * check is needed to enforce that — these paths live under the

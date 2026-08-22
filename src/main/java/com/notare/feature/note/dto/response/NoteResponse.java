@@ -23,7 +23,6 @@ import java.time.LocalDateTime;
 public record NoteResponse(
         Long id,
         Long ownerId,
-        String title,
         String content,
         boolean pinned,
         boolean archived,

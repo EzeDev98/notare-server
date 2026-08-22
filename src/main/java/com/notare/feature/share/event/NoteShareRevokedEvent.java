@@ -3,7 +3,7 @@ package com.notare.feature.share.event;
 /**
  * Access to a shared note was withdrawn. Notify the RECIPIENT.
  *
- * <p>The title is captured before the grant is deleted, for the same
+ * <p>The label is captured before the grant is deleted, for the same
  * snapshot reason as NoteSharedEvent — and here it's the ONLY way the recipient
  * can be told which note they lost, since by the time they read the
  * notification they can no longer fetch it.
@@ -14,7 +14,7 @@ package com.notare.feature.share.event;
  */
 public record NoteShareRevokedEvent(
         Long noteId,
-        String noteTitle,
+        String noteLabel,
         Long ownerId,
         Long sharedWithUserId
 ) {

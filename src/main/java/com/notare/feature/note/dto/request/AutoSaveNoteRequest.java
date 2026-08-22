@@ -21,9 +21,6 @@ import lombok.Setter;
 @NoArgsConstructor
 public class AutoSaveNoteRequest {
 
-    @Size(max = 255, message = "Title must not exceed 255 characters.")
-    private String title;
-
     @Size(max = 20_000, message = "Content must not exceed 20,000 characters.")
     private String content;
 

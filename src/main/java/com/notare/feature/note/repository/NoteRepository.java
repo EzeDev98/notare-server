@@ -90,8 +90,8 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
      * above.
      *
      * <p>This exists so "notes shared with me" can resolve a page of grants into
-     * note titles with ONE query instead of one per row. Fetching in a loop
-     * would be the classic N+1: 20 shares, 21 queries.
+     * notes with ONE query instead of one per row. Fetching in a loop would be
+     * the classic N+1: 20 shares, 21 queries.
      *
      * <p>The result may be smaller than the input (ids that are soft-deleted or
      * gone simply don't come back) and its order is not guaranteed to match the
@@ -133,35 +133,19 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
     Optional<Note> findByOwnerIdAndClientId(Long ownerId, String clientId);
 
     /**
-     * Keyword search across the owner's active notes, matching a partial,
-     * case-insensitive term against title OR content.
+     * Keyword search over the owner's active notes' content, case-insensitive
+     * and partial.
      *
-     * This is written as an explicit JPQL @Query rather than a derived method
-     * name because the logic is "(title matches OR content matches) AND owner
-     * AND not-deleted". A derived name can't express that grouping — it would
-     * bind the AND/OR the wrong way, applying the owner/deleted filters to only
-     * one side of the OR. The parentheses here are the whole point.
-     */
-    /**
-     * Keyword search over the owner's active notes.
-     *
-     * <p>Written as explicit JPQL because a derived method name cannot express
-     * this grouping — it would bind the AND/OR wrong and apply the owner filter
-     * to only one side of the OR. The parentheses are the whole point.
-     *
-     * <p>ESCAPE '!' pairs with LikeEscaper, which neutralises % and _ in the
-     * term before it arrives. Both LIKEs need the clause: adding it to one and
-     * not the other leaves half the search wildcard-injectable, and nothing
-     * about the query's behaviour would reveal which half.
+     * <p>Written as explicit JPQL rather than a derived method name so the
+     * escaping is visible at the call site: ESCAPE '!' pairs with
+     * LikeEscaper, which neutralises % and _ in the term before it ever
+     * reaches this query.
      */
     @Query("""
             SELECT n FROM Note n
             WHERE n.ownerId = :ownerId
               AND n.deleted = false
-              AND (
-                    LOWER(n.title)   LIKE LOWER(CONCAT('%', :term, '%')) ESCAPE '!'
-                 OR LOWER(n.content) LIKE LOWER(CONCAT('%', :term, '%')) ESCAPE '!'
-              )
+              AND LOWER(n.content) LIKE LOWER(CONCAT('%', :term, '%')) ESCAPE '!'
             """)
     Page<Note> searchByOwner(@Param("ownerId") Long ownerId,
                              @Param("term") String term,

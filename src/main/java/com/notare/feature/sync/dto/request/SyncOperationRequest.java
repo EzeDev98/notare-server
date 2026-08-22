@@ -58,10 +58,6 @@ public class SyncOperationRequest {
     /** UPDATE and DELETE: which note. Null for CREATE — the note doesn't exist server-side yet. */
     private Long noteId;
 
-    /** CREATE and UPDATE. Null is legitimate here: an empty note has no title. */
-    @Size(max = 255, message = "title must be at most 255 characters.")
-    private String title;
-
     /** CREATE and UPDATE. */
     private String content;
 

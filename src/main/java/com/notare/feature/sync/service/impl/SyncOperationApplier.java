@@ -90,7 +90,6 @@ public class SyncOperationApplier {
 
     private NoteResponse create(Long ownerId, SyncOperationRequest request) {
         CreateNoteRequest createRequest = new CreateNoteRequest();
-        createRequest.setTitle(request.getTitle());
         createRequest.setContent(request.getContent());
         // createWithClientId is itself idempotent on (owner, clientId), so a
         // create is protected twice over: by the ledger above and by the unique
@@ -101,7 +100,6 @@ public class SyncOperationApplier {
 
     private NoteResponse update(Long ownerId, SyncOperationRequest request) {
         UpdateNoteRequest updateRequest = new UpdateNoteRequest();
-        updateRequest.setTitle(request.getTitle());
         updateRequest.setContent(request.getContent());
         updateRequest.setVersion(request.getVersion());
         // The ORDINARY owner-facing update: same requireMatchingVersion, same

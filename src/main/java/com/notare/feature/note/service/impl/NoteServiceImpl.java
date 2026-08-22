@@ -291,7 +291,7 @@ public class NoteServiceImpl implements NoteService {
     }
 
     /**
-     * A trashed note becomes a bare tombstone: id only, no title or content.
+     * A trashed note becomes a bare tombstone: id only, no content.
      * Shipping the body of something the user just deleted would be wasted
      * payload on every sync, and mildly surprising if it ever surfaced in a UI.
      */
@@ -321,7 +321,7 @@ public class NoteServiceImpl implements NoteService {
      * layer 1 — trips Hibernate's own optimistic-lock check here and surfaces
      * as ObjectOptimisticLockingFailureException, also a 409.
      *
-     * <p>A null title or content CLEARS it. That is the difference from
+     * <p>A null content CLEARS it. That is the difference from
      * auto-save, and the reason the two request DTOs stay separate types
      * despite currently having identical fields.
      *
@@ -332,7 +332,6 @@ public class NoteServiceImpl implements NoteService {
     private NoteResponse applyFullUpdate(Note note, UpdateNoteRequest request) {
         requireMatchingVersion(request.getVersion(), note);
 
-        note.setTitle(request.getTitle());
         note.setContent(request.getContent());
 
         Note saved = noteRepository.saveAndFlush(note);
@@ -361,9 +360,6 @@ public class NoteServiceImpl implements NoteService {
     private NoteResponse applyAutoSave(Note note, AutoSaveNoteRequest request) {
         requireMatchingVersion(request.getVersion(), note);
 
-        if (request.getTitle() != null) {
-            note.setTitle(request.getTitle());
-        }
         if (request.getContent() != null) {
             note.setContent(request.getContent());
         }
@@ -385,8 +381,8 @@ public class NoteServiceImpl implements NoteService {
      * <p>This is the same failure Step 9 designed around when it rebuilt the
      * sync sort as (updatedAt, id). The difference is that sync DISCARDS the
      * caller's sort entirely, because its paging contract depends on one exact
-     * ordering. Here the caller may legitimately sort by title or updatedAt, so
-     * their choice is kept and only made deterministic.
+     * ordering. Here the caller may legitimately sort by updatedAt or another
+     * note field, so their choice is kept and only made deterministic.
      *
      * <p>An unsorted Pageable is left alone: without an ORDER BY there is no
      * tie to break, and adding one would silently override the database's

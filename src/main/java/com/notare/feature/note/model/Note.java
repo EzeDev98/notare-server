@@ -78,14 +78,6 @@ public class Note {
     private String clientId;
 
     /**
-     * Nullable on purpose: the spec allows creating an "empty note",
-     * so a note may exist before the user has typed a title.
-     * Length ceiling is enforced again at the DTO layer in step 1C.
-     */
-    @Column(length = 255)
-    private String title;
-
-    /**
      * TEXT rather than VARCHAR so long notes are not truncated.
      * TEXT is understood by MySQL (dev), PostgreSQL (prod) and H2 (test).
      */

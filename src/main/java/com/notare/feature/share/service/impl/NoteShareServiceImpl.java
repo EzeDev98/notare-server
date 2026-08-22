@@ -4,6 +4,7 @@ import com.notare.common.dto.PagedResponse;
 import com.notare.common.exception.InvalidNoteShareException;
 import com.notare.common.exception.NoteAlreadySharedException;
 import com.notare.common.exception.NoteShareNotFoundException;
+import com.notare.common.util.NoteLabeler;
 import com.notare.feature.collaboration.service.CollaborationService;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.service.NoteService;
@@ -70,9 +71,9 @@ public class NoteShareServiceImpl implements NoteShareService {
         // note isn't mine or is in the trash — the same answer either way, so
         // nothing is revealed about other people's notes.
         //
-        // The result is now KEPT rather than discarded: the title it carries is
-        // the one the notification will snapshot, and this is the only moment
-        // it's guaranteed to be the title the owner was actually looking at.
+        // The result is now KEPT rather than discarded: its content is what the
+        // notification's label will be derived from, and this is the only moment
+        // it's guaranteed to be the content the owner was actually looking at.
         NoteResponse note = noteService.getNote(ownerId, noteId);
 
         // Step 6's relationship is the prerequisite. Note this asks for ACCEPTED
@@ -97,7 +98,7 @@ public class NoteShareServiceImpl implements NoteShareService {
         try {
             NoteShare saved = noteShareRepository.save(share);
             eventPublisher.publishEvent(new NoteSharedEvent(
-                    saved.getId(), noteId, note.title(), ownerId, recipientId, saved.getPermission()));
+                    saved.getId(), noteId, NoteLabeler.deriveLabel(note.content()), ownerId, recipientId, saved.getPermission()));
             return noteShareMapper.toResponse(saved);
         } catch (DataIntegrityViolationException ex) {
             // Lost a race with a concurrent identical share; uq_note_shares_note_user
@@ -138,13 +139,13 @@ public class NoteShareServiceImpl implements NoteShareService {
         // saveAndFlush so updatedAt is refreshed before mapping the response.
         NoteShare saved = noteShareRepository.saveAndFlush(share);
 
-        // One extra read to get the title for the notification snapshot. It also
-        // re-confirms ownership, so it isn't purely overhead — and changing a
-        // permission is a rare, deliberate action, not a hot path.
+        // One extra read to get the content the notification's label is derived
+        // from. It also re-confirms ownership, so it isn't purely overhead — and
+        // changing a permission is a rare, deliberate action, not a hot path.
         NoteResponse note = noteService.getNote(ownerId, noteId);
 
         eventPublisher.publishEvent(new NoteSharePermissionChangedEvent(
-                saved.getId(), noteId, note.title(), ownerId, sharedWithUserId, previous, target));
+                saved.getId(), noteId, NoteLabeler.deriveLabel(note.content()), ownerId, sharedWithUserId, previous, target));
 
         return noteShareMapper.toResponse(saved);
     }
@@ -160,15 +161,15 @@ public class NoteShareServiceImpl implements NoteShareService {
     public void revoke(Long ownerId, Long noteId, Long sharedWithUserId) {
         NoteShare share = requireOwnedShare(ownerId, noteId, sharedWithUserId);
 
-        // Read the title BEFORE deleting. Once the grant is gone the recipient
-        // can no longer fetch this note at all, so the snapshot in their
-        // notification is the only way they'll know which note they lost.
+        // Read the content BEFORE deleting. Once the grant is gone the recipient
+        // can no longer fetch this note at all, so the label snapshotted into
+        // their notification is the only way they'll know which note they lost.
         NoteResponse note = noteService.getNote(ownerId, noteId);
 
         noteShareRepository.delete(share);
 
         eventPublisher.publishEvent(
-                new NoteShareRevokedEvent(noteId, note.title(), ownerId, sharedWithUserId));
+                new NoteShareRevokedEvent(noteId, NoteLabeler.deriveLabel(note.content()), ownerId, sharedWithUserId));
     }
 
     @Override
