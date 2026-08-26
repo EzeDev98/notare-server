@@ -2,21 +2,28 @@ package com.notare.feature.transcription.engine.impl;
 
 import com.notare.feature.transcription.dto.response.TranscriptionResult;
 import com.notare.feature.transcription.engine.TranscriptionEngine;
-import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
 /**
- * Development/test engine. It doesn't call any real speech-to-text service — it
- * simulates a short processing delay and returns placeholder text, so the ENTIRE
- * async pipeline (submit -> PROCESSING -> COMPLETED, status polling) works and
+ * It doesn't call any real speech-to-text service — it simulates a short
+ * processing delay and returns placeholder text, so the ENTIRE async
+ * pipeline (submit -> PROCESSING -> COMPLETED, status polling) works and
  * can be learned end-to-end without an API key or per-minute cost.
  *
- * @Profile("!prod") mirrors the storage backend: this stub is active everywhere
- * except prod; a real @Profile("prod") engine is a later drop-in.
+ * TEMPORARILY active in every profile, including prod: no real
+ * TranscriptionEngine implementation exists yet, and TranscriptionWorker's
+ * constructor requires SOME bean of this type to be present or the whole
+ * app fails to boot (this is what took prod down — zero qualifying beans
+ * under the old @Profile("!prod")). Same "stand-in until the real thing is
+ * built" reasoning as PostgresFileStorageService for storage, except here
+ * there's no second implementation yet to gate behind a flag — until one
+ * exists, prod voice notes will get real audio storage but only
+ * PLACEHOLDER transcripts. Swap back to @Profile("!prod") the moment a
+ * real engine (e.g. Whisper API) lands, so this stub stops being reachable
+ * in prod by accident.
  */
 @Component
-@Profile("!prod")
 public class StubTranscriptionEngine implements TranscriptionEngine {
 
     @Override
