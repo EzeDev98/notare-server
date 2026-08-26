@@ -107,7 +107,6 @@ public class WebSecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
 
         configuration.setAllowedOriginPatterns(List.of(
-
                 "https://*.onrender.com",
                 "http://localhost:*"
         ));
