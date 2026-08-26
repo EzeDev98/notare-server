@@ -57,6 +57,24 @@
 			<artifactId>spring-boot-starter-jdbc</artifactId>
 		</dependency>
 		<!--
+			Schema migrations (step 2). No <version> — managed by the
+			spring-boot-starter-parent 3.2.5 BOM, which pins Flyway 9.22.x.
+			Under Flyway 9, flyway-core bundles Postgres (and MySQL) support
+			directly, so nothing else is needed here.
+
+			IMPORTANT if this project ever bumps to Boot 3.3+: Flyway 10 split
+			per-database support out of flyway-core into separate artifacts for
+			licensing reasons, so upgrading Boot without also adding
+			flyway-database-postgresql as a dependency will fail at runtime with
+			"Unsupported Database: PostgreSQL" even though the build succeeds.
+			Same class of trap the Boot/Modulith/springdoc note above already
+			warns about — check this dependency specifically when Boot moves.
+		-->
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<!--
 			WAS spring-boot-starter-webmvc. That artifact only exists in Boot 4 —
 			it is the renamed form of this one. Boot 3.x calls it starter-web.
 
@@ -69,10 +87,35 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
+		<!--
+			Render's health check needs a path that returns 200 without
+			authentication. Everything else in this API requires a JWT
+			(WebSecurityConfig's anyRequest().authenticated()), so without this,
+			Render's check would hit an authenticated path and see 401/403
+			instead of a healthy 200. /actuator/health is permitted explicitly
+			in WebSecurityConfig; nothing else under /actuator is exposed.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>com.mailjet</groupId>
 			<artifactId>mailjet-client</artifactId>
 			<version>6.0.0</version>
+		</dependency>
+		<!--
+			Prod voice-note storage (R2FileStorageService, @Profile("prod")).
+			R2 is Cloudflare's S3-compatible object store — this is the plain AWS
+			SDK v2 S3 client, pointed at R2's endpoint instead of AWS's, not an
+			R2-specific library. No BOM: this is the only AWS SDK module the app
+			uses, so one pinned version is simpler than importing the whole BOM
+			for a single artifact.
+		-->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+			<version>2.54.2</version>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

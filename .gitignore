@@ -39,3 +39,8 @@ application-dev.properties
 application-prod.properties
 application-test.properties
 
+## Locally-stored voice notes (dev/test only — prod writes to a Render
+## persistent disk instead, see StorageProperties/notare.storage.local.location).
+## LocalFileStorageService creates this directory itself on startup, so
+## nothing here needs a tracked placeholder file.
+uploads/

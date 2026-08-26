@@ -58,6 +58,11 @@ public class WebSecurityConfig {
                         // a path I definitely permitted" in a stateless API traces back to
                         // this line being missing.
                         .requestMatchers("/error").permitAll()
+                        // Render's health check hits this path unauthenticated. Only
+                        // /actuator/health itself is exposed — no other /actuator/**
+                        // endpoint is permitted, so nothing else in Actuator (env,
+                        // beans, etc.) is reachable without a token.
+                        .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers(
                                 "/v3/api-docs",
                                 "/v3/api-docs/**",

@@ -16,13 +16,17 @@ import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
 /**
- * Disk-backed storage for dev and test.
+ * Disk-backed storage for dev and test only.
  *
- * @Profile("!prod") is the profile-based Strategy selection: this bean is active
- * in every profile EXCEPT prod. The prod backend (S3) will carry @Profile("prod"),
- * so exactly one FileStorageService exists per environment. (Until the S3 bean is
- * added, running the prod profile will have no storage bean — which is fine, since
- * prod also needs real S3 credentials before it can serve uploads.)
+ * @Profile("!prod") — prod runs {@link R2FileStorageService} instead. We
+ * deliberately did NOT put this behind a Render persistent disk: a disk
+ * requires a paid Starter-or-above instance type, and Render's free web
+ * service tier has no durable local filesystem at all (wiped on every
+ * deploy/restart) — so local disk was never viable for a free-tier prod
+ * deployment. R2 (an S3-compatible object store, not the container
+ * filesystem) is the actual durable backend now; this class stays exactly
+ * as it was for local dev/test, where the ephemeral-disk problem doesn't
+ * apply.
  */
 @Service
 @Profile("!prod")
