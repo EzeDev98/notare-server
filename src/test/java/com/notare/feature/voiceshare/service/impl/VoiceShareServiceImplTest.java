@@ -25,8 +25,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -305,5 +310,53 @@ class VoiceShareServiceImplTest {
 
         verify(voiceShareRepository, never()).delete(any());
         verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    // -------------------------------------------------------------------
+    // Step 9b — listShares. Previously uncovered: the ownership gate (this
+    // module re-verifies ownership itself, deliberately not trusting an
+    // empty page from the scoped query alone — see the method's own doc
+    // comment) and that a fetched page maps 1:1 into a PagedResponse.
+    // -------------------------------------------------------------------
+
+    @Test
+    void listShares_ownerSeesTheirVoiceNotesShares() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(voiceNoteService.getVoiceNote(OWNER_ID, VOICE_NOTE_ID)).thenReturn(voiceNote);
+
+        VoiceShare first = new VoiceShare();
+        first.setId(10L);
+        first.setVoiceNoteId(VOICE_NOTE_ID);
+        first.setOwnerId(OWNER_ID);
+        first.setSharedWithUserId(RECIPIENT_ID);
+        first.setPermission(SharePermission.READ);
+
+        Page<VoiceShare> page = new PageImpl<>(List.of(first), pageable, 1);
+        when(voiceShareRepository.findByVoiceNoteIdAndOwnerId(VOICE_NOTE_ID, OWNER_ID, pageable)).thenReturn(page);
+
+        VoiceShareResponse mappedResponse = new VoiceShareResponse(
+                10L, VOICE_NOTE_ID, OWNER_ID, RECIPIENT_ID, SharePermission.READ, LocalDateTime.now(), null);
+        when(voiceShareMapper.toResponse(first)).thenReturn(mappedResponse);
+
+        var result = service.listShares(OWNER_ID, VOICE_NOTE_ID, pageable);
+
+        assertThat(result.content()).containsExactly(mappedResponse);
+        assertThat(result.totalElements()).isEqualTo(1);
+    }
+
+    @Test
+    void listShares_nonOwnerGetsNotFound_beforeAnySharesAreQueried() {
+        Pageable pageable = PageRequest.of(0, 20);
+        // getVoiceNote is owner-scoped: a non-owner probing this voice note's
+        // shares gets 404 from the voicenote module before the repository
+        // is ever asked for a page — the ownership check runs first, not as
+        // a fallback on an empty result.
+        when(voiceNoteService.getVoiceNote(OWNER_ID, VOICE_NOTE_ID))
+                .thenThrow(new VoiceNoteNotFoundException("Voice note not found."));
+
+        assertThatThrownBy(() -> service.listShares(OWNER_ID, VOICE_NOTE_ID, pageable))
+                .isInstanceOf(VoiceNoteNotFoundException.class);
+
+        verify(voiceShareRepository, never()).findByVoiceNoteIdAndOwnerId(any(), any(), any());
     }
 }

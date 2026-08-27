@@ -30,6 +30,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -108,6 +110,11 @@ class SharedVoiceNoteServiceImplTest {
 
         assertThat(result.content()).isEmpty();
         verify(voiceShareMapper, org.mockito.Mockito.never()).toSharedVoiceNote(any(), any());
+        // Documents the "known inconsistency" the implementation's own doc
+        // comment calls out: totalElements comes straight from the grants
+        // page and is NOT recomputed after stale-grant rows are filtered
+        // out, so it can overstate what content() actually returns.
+        assertThat(result.totalElements()).isEqualTo(1);
     }
 
     @Test
@@ -166,5 +173,65 @@ class SharedVoiceNoteServiceImplTest {
         SharedVoiceNoteSummaryResponse result = service.getSharedVoiceNote(RECIPIENT_ID, VOICE_NOTE_ID);
 
         assertThat(result).isEqualTo(summary);
+    }
+
+    // -------------------------------------------------------------------
+    // Step 9c — review pass. Two gaps in the otherwise-solid existing
+    // suite: getSharedVoiceNote never had its own non-recipient case (only
+    // getAudio did, even though both share the same requireGrant gate),
+    // and listSharedWithMe's N+1-avoidance claim was only ever exercised
+    // with a single grant, which can't tell a real batch call apart from
+    // one that happens to work for exactly one row.
+    // -------------------------------------------------------------------
+
+    @Test
+    void getSharedVoiceNote_nonRecipientGetsNotFound() {
+        // Same requireGrant gate as getAudio: no row for this user -> 404-
+        // equivalent, metadata never touched.
+        when(voiceShareRepository.findByVoiceNoteIdAndSharedWithUserId(VOICE_NOTE_ID, STRANGER_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getSharedVoiceNote(STRANGER_ID, VOICE_NOTE_ID))
+                .isInstanceOf(VoiceShareNotFoundException.class);
+
+        verify(voiceNoteService, never()).getAuthorizedVoiceNote(any());
+        verify(voiceShareMapper, never()).toSharedVoiceNote(any(), any());
+    }
+
+    @Test
+    void listSharedWithMe_resolvesAllVoiceNoteIdsOnThePageInASingleBatchCall() {
+        Long secondVoiceNoteId = 200L;
+        VoiceShare secondGrant = new VoiceShare();
+        secondGrant.setId(11L);
+        secondGrant.setVoiceNoteId(secondVoiceNoteId);
+        secondGrant.setOwnerId(OWNER_ID);
+        secondGrant.setSharedWithUserId(RECIPIENT_ID);
+        secondGrant.setPermission(SharePermission.READ);
+
+        VoiceNoteResponse secondVoiceNote = new VoiceNoteResponse(
+                secondVoiceNoteId, OWNER_ID, null, "other.m4a", "audio/mp4",
+                512L, 15, LocalDateTime.now(), null);
+
+        Pageable pageable = PageRequest.of(0, 20);
+        when(voiceShareRepository.findBySharedWithUserId(RECIPIENT_ID, pageable))
+                .thenReturn(new PageImpl<>(List.of(grant, secondGrant), pageable, 2));
+        when(voiceNoteService.getAuthorizedVoiceNoteSummaries(List.of(VOICE_NOTE_ID, secondVoiceNoteId)))
+                .thenReturn(Map.of(VOICE_NOTE_ID, voiceNote, secondVoiceNoteId, secondVoiceNote));
+
+        SharedVoiceNoteSummaryResponse firstSummary = new SharedVoiceNoteSummaryResponse(
+                grant.getId(), VOICE_NOTE_ID, null, OWNER_ID, SharePermission.READ,
+                "memo.m4a", "audio/mp4", 1024L, 30, LocalDateTime.now(), grant.getCreatedAt());
+        SharedVoiceNoteSummaryResponse secondSummary = new SharedVoiceNoteSummaryResponse(
+                secondGrant.getId(), secondVoiceNoteId, null, OWNER_ID, SharePermission.READ,
+                "other.m4a", "audio/mp4", 512L, 15, LocalDateTime.now(), secondGrant.getCreatedAt());
+        when(voiceShareMapper.toSharedVoiceNote(grant, voiceNote)).thenReturn(firstSummary);
+        when(voiceShareMapper.toSharedVoiceNote(secondGrant, secondVoiceNote)).thenReturn(secondSummary);
+
+        PagedResponse<SharedVoiceNoteSummaryResponse> result = service.listSharedWithMe(RECIPIENT_ID, pageable);
+
+        assertThat(result.content()).containsExactly(firstSummary, secondSummary);
+        // Exactly one batch call covering both ids — not one lookup per row,
+        // which is the whole point of the pattern this test is guarding.
+        verify(voiceNoteService, times(1)).getAuthorizedVoiceNoteSummaries(any());
     }
 }
