@@ -202,7 +202,8 @@ class VoiceNoteServiceImplTest {
 
     @Test
     void upload_validatesBeforeTouchingStorageOrTheDatabase() {
-        MultipartFile file = multipartFile("audio/mpeg", "memo.mp3", new byte[]{1, 2, 3});
+        MultipartFile file = mock(MultipartFile.class);
+
         doThrow(new InvalidVoiceUploadException("Audio file is missing or empty."))
                 .when(voiceUploadValidator).validate(file, 10);
 

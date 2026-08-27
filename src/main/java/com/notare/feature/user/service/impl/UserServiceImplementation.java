@@ -52,9 +52,17 @@ public class UserServiceImplementation implements UserService {
             throw new PasswordMisMatchException("Passwords do not match");
         }
 
-        Optional<User> existingUser = userRepository.findByUsernameOrEmail(request.getUsername(), request.getEmail());
+        String username = request.getUsername() == null
+                ? null
+                : request.getUsername().trim();
+
+        String email = request.getEmail() == null
+                ? null
+                : request.getEmail().trim().toLowerCase();
+
+        Optional<User> existingUser = userRepository.findByUsernameOrEmail(username, email);
         existingUser.ifPresent(userFound -> {
-            if (userFound.getUsername().equals(request.getUsername())) {
+            if (userFound.getUsername().equals(username)) {
                 throw new UserAlreadyExistException("A user with this username is already registered");
             }
             throw new UserAlreadyExistException("A user with this email is already registered");

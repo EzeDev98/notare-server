@@ -2,6 +2,7 @@ package com.notare.feature.user.event;
 
 import com.notare.feature.auth.service.OtpService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -51,9 +52,12 @@ class UserRegisteredEventListenerTest {
 
     @Mock
     private OtpService otpService;
+    private UserRegisteredEventListener listener;
 
-    private final UserRegisteredEventListener listener = new UserRegisteredEventListener(otpService);
-
+    @BeforeEach
+    void setUp() {
+        listener = new UserRegisteredEventListener(otpService);
+    }
     @Test
     void onUserRegistered_forwardsTheUserIdToSendOtp() {
         listener.onUserRegistered(new UserRegisteredEvent(USER_ID));

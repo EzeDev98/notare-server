@@ -276,10 +276,16 @@ public class NoteServiceImpl implements NoteService {
     @Override
     @Transactional(readOnly = true)
     public Page<NoteChange> findChangesSince(Long ownerId, LocalDateTime since, Pageable pageable) {
-        Pageable stable = PageRequest.of(
-                pageable.getPageNumber(),
-                pageable.getPageSize(),
-                Sort.by(Sort.Order.asc("updatedAt"), Sort.Order.asc("id")));
+        Sort stableSort = Sort.by(Sort.Order.asc("updatedAt"), Sort.Order.asc("id"));
+
+        // Pageable.unpaged() is a legitimate "everything, just sorted" request —
+        // its getPageNumber()/getPageSize()/getOffset() deliberately throw, so
+        // building a PageRequest from them here would crash. Only getSort() is
+        // safe to call on it, so an unpaged request stays unpaged; we just
+        // replace whatever sort it carries with the stable one below.
+        Pageable stable = pageable.isPaged()
+                ? PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), stableSort)
+                : Pageable.unpaged(stableSort);
 
         // No cursor = first sync: active notes only. Tombstones would be noise
         // for a client that has nothing cached to evict.

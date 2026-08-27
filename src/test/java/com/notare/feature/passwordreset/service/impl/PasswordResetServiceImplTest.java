@@ -15,6 +15,7 @@ import com.notare.feature.user.model.User;
 import com.notare.feature.user.model.UserDetail;
 import com.notare.feature.user.repository.UserRepository;
 import io.jsonwebtoken.JwtException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -30,7 +31,6 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -42,7 +42,7 @@ import static org.mockito.Mockito.when;
  * <p><b>Not executed in this sandbox</b> - Mockito, Spring Security ({@code
  * PasswordEncoder}), and jjwt ({@code JwtException}) are unavailable as
  * compile-time dependencies here (see {@link
- * com.notare.feature.user.service.impl.UserServiceImplementationTest} for the
+ * UserServiceImplementationTest} for the
  * full explanation). Reasoned carefully from source; run via
  * {@code mvn test} before trusting it.
  *
@@ -73,8 +73,18 @@ class PasswordResetServiceImplTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private JwtService jwtService;
 
-    private final PasswordResetServiceImpl service =
-            new PasswordResetServiceImpl(userRepository, otpService, passwordEncoder, jwtService);
+    // Built in @BeforeEach, not as a field initializer: field initializers run
+    // during instance construction, which happens BEFORE MockitoExtension
+    // injects the @Mock fields (that injection is a postProcessTestInstance
+    // callback that runs after construction). Building `service` as a field
+    // initializer freezes it around still-null mocks — and since the field is
+    // final, it stays wired to nulls for the lifetime of the test.
+    private PasswordResetServiceImpl service;
+
+    @BeforeEach
+    void setUp() {
+        service = new PasswordResetServiceImpl(userRepository, otpService, passwordEncoder, jwtService);
+    }
 
     private User user(Long id, String username, String email) {
         User u = new User();

@@ -46,7 +46,7 @@ import static org.mockito.Mockito.when;
  *
  * <p><b>Not executed in this sandbox</b> - Mockito and Spring Data are
  * unavailable here (see {@link
- * com.notare.feature.user.service.impl.UserServiceImplementationTest} for the
+ * UserServiceImplementationTest} for the
  * full explanation). {@link NoteShareMapper} is real - no third-party
  * dependency of its own. Reasoned carefully from source; run via
  * {@code mvn test} before trusting it.

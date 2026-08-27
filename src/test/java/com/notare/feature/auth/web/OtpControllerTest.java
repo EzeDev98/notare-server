@@ -10,6 +10,7 @@ import com.notare.feature.auth.dto.request.VerifyOtpRequest;
 import com.notare.feature.auth.enums.OtpPurpose;
 import com.notare.feature.auth.service.OtpService;
 import com.notare.feature.auth.validation.OtpCodeValidator;
+import com.notare.common.security.JwtAuthenticationFilter;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -17,6 +18,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -65,14 +68,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@link OtpExpiredException}, {@link OtpAttemptsExceededException} from the
  * service each surface with the right status. {@code resend-otp} - happy
  * path forwards the request and always returns the same
- * non-committal message regardless of what the service does internally
- * (per the controller's own javadoc on why that wording must never change
- * based on account existence), plus the blank-identifier 400.
+ * non-committal message regardless of the outcome (see the controller's own
+ * javadoc on why that wording must never change based on account
+ * existence), plus the blank-identifier 400.
  */
-@WebMvcTest(controllers = OtpController.class)
+@WebMvcTest(
+        controllers = OtpController.class,
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = JwtAuthenticationFilter.class
+        )
+)
 @AutoConfigureMockMvc(addFilters = false)
 @Import({OtpProperties.class, OtpCodeValidator.class})
-class OtpControllerTest {
+public class OtpControllerTest {
 
     private static final String VERIFY_URL = "/api/v1/otp/verify-otp";
     private static final String RESEND_URL = "/api/v1/otp/resend-otp";

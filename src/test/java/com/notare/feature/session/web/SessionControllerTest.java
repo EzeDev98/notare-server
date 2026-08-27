@@ -18,6 +18,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 
 import java.time.Instant;
 import java.util.List;
@@ -39,17 +41,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Step 15i of the coverage roadmap.
  *
  * <p><b>Not executed in this sandbox</b> - see {@link
- * com.notare.feature.auth.web.AuthControllerTest}'s disclaimer (Step 15a);
+ * AuthControllerTest}'s disclaimer (Step 15a);
  * same reasoning. Run via {@code mvn test} before trusting it.
  *
  * <p>Authenticated principal is supplied the same way as
- * {@link com.notare.feature.collaboration.web.CollaborationControllerTest}
+ * {@link CollaborationControllerTest}
  * (Step 15d) - directly on {@code SecurityContextHolder} in the test thread,
  * with {@code addFilters = false} keeping the real
  * {@code JwtAuthenticationFilter} chain out of this slice.
  *
  * <p>{@code GET /session/sessions} needs the same stand-in as
- * {@link com.notare.feature.logout.web.LogoutControllerTest} (Step 15e) for
+ * {@link LogoutControllerTest} (Step 15e) for
  * the request ATTRIBUTE {@code JwtAuthenticationFilter} would ordinarily
  * populate - the current session id, read here via
  * {@code @RequestAttribute(required = false)} so the service can mark which
@@ -71,10 +73,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * authenticated user's id (never anything from the body, since there is
  * none) as the requesting user; and {@link SessionNotFoundException} (the
  * session doesn't exist, or exists but belongs to someone else - the service
- * doesn't distinguish, so neither does this test) -&gt; 404 via
+ * doesn't distinguish which) -&gt; 404 via
  * {@code GlobalExceptionHandler} (Step 14a).
  */
-@WebMvcTest(controllers = SessionController.class)
+@WebMvcTest(
+        controllers = SessionController.class,
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = JwtAuthenticationFilter.class
+        )
+)
 @AutoConfigureMockMvc(addFilters = false)
 class SessionControllerTest {
 

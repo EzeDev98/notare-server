@@ -4,6 +4,7 @@ import com.notare.feature.note.event.NotePermanentlyDeletedEvent;
 import com.notare.feature.sync.model.NoteTombstone;
 import com.notare.feature.sync.repository.NoteTombstoneRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -58,9 +59,12 @@ class NoteTombstoneListenerTest {
 
     @Captor
     private ArgumentCaptor<NoteTombstone> tombstoneCaptor;
+    private NoteTombstoneListener listener;
 
-    private final NoteTombstoneListener listener = new NoteTombstoneListener(noteTombstoneRepository);
-
+    @BeforeEach
+    void setUp() {
+        listener = new NoteTombstoneListener(noteTombstoneRepository);
+    }
     @Test
     void onNotePermanentlyDeleted_savesATombstoneCarryingTheNoteAndOwnerIdExactly() {
         listener.onNotePermanentlyDeleted(new NotePermanentlyDeletedEvent(NOTE_ID, OWNER_ID));

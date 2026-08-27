@@ -2,6 +2,7 @@ package com.notare.feature.logout.service.impl;
 
 import com.notare.feature.logout.dto.response.LogoutResponse;
 import com.notare.feature.session.service.SessionService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -16,7 +17,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
  * Step 5e of the coverage roadmap.
  *
  * <p><b>Not executed in this sandbox</b> - Mockito is unavailable here (see
- * {@link com.notare.feature.user.service.impl.UserServiceImplementationTest}
+ * {@link UserServiceImplementationTest}
  * for the full explanation). Reasoned from source; run via {@code mvn test}
  * before trusting it.
  *
@@ -33,7 +34,19 @@ class LogoutServiceImplTest {
 
     @Mock private SessionService sessionService;
 
-    private final LogoutServiceImpl service = new LogoutServiceImpl(sessionService);
+    // Built in @BeforeEach, not as a field initializer: field initializers run
+    // during instance construction, which happens BEFORE MockitoExtension
+    // injects the @Mock fields (that injection is a postProcessTestInstance
+    // callback that runs after construction). Building `service` as a field
+    // initializer freezes it around a still-null sessionService — and since
+    // the field is final, it stays null for the lifetime of the test. Every
+    // test in this class saw "this.sessionService is null" because of this.
+    private LogoutServiceImpl service;
+
+    @BeforeEach
+    void setUp() {
+        service = new LogoutServiceImpl(sessionService);
+    }
 
     @Test
     void logout_withANullSessionId_returnsA400WithoutCallingSessionService() {

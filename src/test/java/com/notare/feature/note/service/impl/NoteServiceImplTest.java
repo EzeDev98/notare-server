@@ -51,7 +51,7 @@ import static org.mockito.Mockito.when;
  * <p><b>Not executed in this sandbox</b> - Mockito and Spring Data
  * ({@code Page}/{@code Pageable}/{@code Sort}) are unavailable as
  * compile-time dependencies here (see {@link
- * com.notare.feature.user.service.impl.UserServiceImplementationTest} for the
+ * UserServiceImplementationTest} for the
  * full explanation). {@link NoteMapper} itself is real - it has no
  * third-party runtime dependency and was executed and verified in Step 3 - so
  * the entity/DTO shapes below follow its actual, confirmed field mapping, but

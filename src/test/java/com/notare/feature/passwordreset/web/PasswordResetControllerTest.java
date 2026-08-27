@@ -8,6 +8,7 @@ import com.notare.config.OtpProperties;
 import com.notare.feature.auth.validation.OtpCodeValidator;
 import com.notare.feature.passwordreset.dto.response.VerifyResetOtpResponse;
 import com.notare.feature.passwordreset.service.PasswordResetService;
+import com.notare.common.security.JwtAuthenticationFilter;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -15,6 +16,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -32,13 +35,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Step 15h of the coverage roadmap.
  *
  * <p><b>Not executed in this sandbox</b> - see {@link
- * com.notare.feature.auth.web.AuthControllerTest}'s disclaimer (Step 15a);
+ * AuthControllerTest}'s disclaimer (Step 15a);
  * same reasoning. Run via {@code mvn test} before trusting it.
  *
  * <p>All three endpoints are on {@code WebSecurityConfig}'s permit-all list
  * ({@code POST /api/v1/password/**}), so {@code addFilters = false} matches
  * how they're actually reached - unauthenticated, exactly like
- * {@link com.notare.feature.auth.web.OtpControllerTest} (Step 15c).
+ * {@link OtpControllerTest} (Step 15c).
  *
  * <p>{@code VerifyResetOtpRequest.code} carries the same {@code @ValidOtpCode}
  * constraint as {@code VerifyOtpRequest} in Step 15c, for the identical
@@ -58,11 +61,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * service's reset token; a malformed (wrong-length) code is rejected by
  * validation; {@link InvalidOtpException} from the service surfaces as 400.
  * {@code reset-password} - happy path returns the fixed success message;
- * blank fields rejected by validation; {@link PasswordMisMatchException}
+ * blank fields rejected by validation -&gt; 400, {@link PasswordMisMatchException}
  * -&gt; 400 and {@link InvalidResetTokenException} -&gt; 401, both via
  * {@code GlobalExceptionHandler} (Step 14a).
  */
-@WebMvcTest(controllers = PasswordResetController.class)
+@WebMvcTest(
+        controllers = PasswordResetController.class,
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = JwtAuthenticationFilter.class
+        )
+)
 @AutoConfigureMockMvc(addFilters = false)
 @Import({OtpProperties.class, OtpCodeValidator.class})
 class PasswordResetControllerTest {

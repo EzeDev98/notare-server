@@ -2,11 +2,13 @@ package com.notare.feature.auth.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.notare.common.exception.InvalidRefreshTokenException;
+import com.notare.common.security.WebSecurityConfigTest;
 import com.notare.common.web.ClientIpArgumentResolver;
 import com.notare.common.web.UserAgentArgumentResolver;
 import com.notare.config.WebMvcConfig;
 import com.notare.feature.auth.dto.response.TokenResponse;
 import com.notare.feature.auth.service.AuthService;
+import com.notare.common.security.JwtAuthenticationFilter;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +17,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -44,7 +48,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@code POST /api/v1/auth/refresh}), so wiring in
  * {@code JwtAuthenticationFilter} and its own three dependencies here would
  * only add noise. Full authenticated-vs-anonymous routing is
- * {@link com.notare.common.security.WebSecurityConfigTest}'s job (Step 4f),
+ * {@link WebSecurityConfigTest}'s job (Step 4f),
  * already covered.
  *
  * <p>{@link WebMvcConfig} IS imported, deliberately: {@code @WebMvcTest}
@@ -61,15 +65,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@code X-Forwarded-For} path and the direct-connection fallback, per
  * {@link ClientIpArgumentResolver}); a blank refresh token is rejected by
  * bean validation before the service is ever called; and
- * {@link InvalidRefreshTokenException} from the service surfaces as 401
- * through {@link com.notare.common.exception.GlobalExceptionHandler}
+ * {@link InvalidRefreshTokenException} from the service surfaces as 401 via
+ * {@code GlobalExceptionHandler}
  * (Step 14a), which {@code @WebMvcTest} picks up automatically as a
  * {@code @RestControllerAdvice}.
  */
-@WebMvcTest(controllers = AuthController.class)
+@WebMvcTest(
+        controllers = AuthController.class,
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = JwtAuthenticationFilter.class
+        )
+)
 @AutoConfigureMockMvc(addFilters = false)
 @Import({WebMvcConfig.class, ClientIpArgumentResolver.class, UserAgentArgumentResolver.class})
-class AuthControllerTest {
+public class AuthControllerTest {
 
     private static final String REFRESH_URL = "/api/v1/auth/refresh";
 

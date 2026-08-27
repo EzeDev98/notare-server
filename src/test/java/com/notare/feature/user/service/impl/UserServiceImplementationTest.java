@@ -68,7 +68,7 @@ import static org.mockito.Mockito.when;
  * search where blank means "list all").
  */
 @ExtendWith(MockitoExtension.class)
-class UserServiceImplementationTest {
+public class UserServiceImplementationTest {
 
     private static final int MAX_ID_GENERATION_ATTEMPTS = 10;
     private static final int MAX_USER_LOOKUP_IDS = 100;
@@ -78,7 +78,7 @@ class UserServiceImplementationTest {
     @Mock private UserRepository userRepository;
     @Mock private ApplicationEventPublisher eventPublisher;
 
-    private UserServiceImplementation service;
+    public UserServiceImplementation service;
 
     @BeforeEach
     void setUp() {

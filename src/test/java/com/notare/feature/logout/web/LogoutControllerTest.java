@@ -18,6 +18,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -30,11 +32,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Step 15e of the coverage roadmap.
  *
  * <p><b>Not executed in this sandbox</b> - see {@link
- * com.notare.feature.auth.web.AuthControllerTest}'s disclaimer (Step 15a);
+ * AuthControllerTest}'s disclaimer (Step 15a);
  * same reasoning. Run via {@code mvn test} before trusting it.
  *
  * <p>Authenticated principal is supplied the same way as
- * {@link com.notare.feature.collaboration.web.CollaborationControllerTest}
+ * {@link CollaborationControllerTest}
  * (Step 15d) - directly on {@link SecurityContextHolder} in the test thread,
  * with {@code addFilters = false} keeping {@link JwtAuthenticationFilter}
  * itself out of this slice (that filter's own behaviour is Step 4b's job).
@@ -67,12 +69,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * (this controller's {@code required = false} branch) still reaches the
  * service as {@code null} - and it is this class's {@link LogoutServiceImpl}
  * collaborator (not the controller) that turns that into the 400 seen here,
- * per its own null-check. {@code POST /logout-all} - the authenticated
- * user's id is forwarded and the service's 200 is echoed the same way.
+ * per its own null-check. {@code POST /logout/logout-all} - only the
+ * authenticated user's id is forwarded and the service's 200 is echoed the
+ * same way.
  */
-@WebMvcTest(controllers = LogoutController.class)
+@WebMvcTest(
+        controllers = LogoutController.class,
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = JwtAuthenticationFilter.class
+        )
+)
 @AutoConfigureMockMvc(addFilters = false)
-class LogoutControllerTest {
+public class LogoutControllerTest {
 
     private static final String LOGOUT_URL = "/api/v1/logout/logout";
     private static final String LOGOUT_ALL_URL = "/api/v1/logout/logout-all";

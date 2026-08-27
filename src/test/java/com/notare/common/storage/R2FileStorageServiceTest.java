@@ -113,7 +113,7 @@ class R2FileStorageServiceTest {
     }
 
     @Test
-    void store_sendsTheExactBytesRead_asARequestBody() {
+    void store_sendsTheExactBytesRead_asARequestBody() throws IOException {
         byte[] content = "hello voice note".getBytes(StandardCharsets.UTF_8);
         when(s3.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
                 .thenReturn(PutObjectResponse.builder().build());

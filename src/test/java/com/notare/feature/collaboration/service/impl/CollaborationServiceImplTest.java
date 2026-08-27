@@ -44,7 +44,7 @@ import static org.mockito.Mockito.when;
  * <p><b>Not executed in this sandbox</b> - Mockito and Spring Data
  * ({@code Page}/{@code Pageable}) are unavailable as compile-time
  * dependencies here (see {@link
- * com.notare.feature.user.service.impl.UserServiceImplementationTest} for the
+ * UserServiceImplementationTest} for the
  * full explanation). {@link CollaborationMapper} itself is real - no
  * third-party dependency of its own - so it's used directly rather than
  * mocked. Reasoned carefully from source; run via {@code mvn test} before

@@ -28,12 +28,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  * already need - rather than a hand-rolled unit test here. Flagging this
  * explicitly rather than silently only covering half of 4f.
  *
+ * <p><b>Update (Step 5 of the test-suite fix plan):</b> that slice test now
+ * exists - see {@link WebSecurityFilterChainTest}. This class's scope stays
+ * exactly as described above; it isn't being extended to cover the DSL.
+ *
  * <p>The four no-op constructor arguments below are safe: none of {@code
  * jwtAuthenticationFilter}, {@code userDetailsService}, {@code
  * authenticationEntryPoint}, or {@code accessDeniedHandler} is read by
  * {@code corsConfigurationSource()}.
  */
-class WebSecurityConfigTest {
+public class WebSecurityConfigTest {
 
     private final WebSecurityConfig config = new WebSecurityConfig(null, null, null, null);
 

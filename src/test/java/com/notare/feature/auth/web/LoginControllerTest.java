@@ -6,6 +6,7 @@ import com.notare.common.web.UserAgentArgumentResolver;
 import com.notare.config.WebMvcConfig;
 import com.notare.feature.auth.dto.response.LoginResponse;
 import com.notare.feature.auth.service.LoginService;
+import com.notare.common.security.JwtAuthenticationFilter;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +18,8 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -56,11 +59,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@link LoginService#login}; blank username-or-email / blank password are
  * rejected by bean validation before the service runs; and the three
  * authentication failure modes {@link LoginService} can throw -
- * {@link BadCredentialsException}, {@link DisabledException},
+ * {@link BadCredentialsException}, {@link DisabledException}, and
  * {@link LockedException} - each surface with the correct status through
  * {@link com.notare.common.exception.GlobalExceptionHandler} (Step 14a).
  */
-@WebMvcTest(controllers = LoginController.class)
+@WebMvcTest(
+        controllers = LoginController.class,
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = JwtAuthenticationFilter.class
+        )
+)
 @AutoConfigureMockMvc(addFilters = false)
 @Import({WebMvcConfig.class, ClientIpArgumentResolver.class, UserAgentArgumentResolver.class})
 class LoginControllerTest {

@@ -7,6 +7,7 @@ import com.notare.feature.notification.service.impl.NotificationDispatcher;
 import com.notare.feature.transcription.event.TranscriptionCompletedEvent;
 import com.notare.feature.transcription.event.TranscriptionFailedEvent;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -56,9 +57,12 @@ class TranscriptionNotificationListenerTest {
 
     @Mock
     private NotificationDispatcher dispatcher;
+    private TranscriptionNotificationListener listener;
 
-    private final TranscriptionNotificationListener listener = new TranscriptionNotificationListener(dispatcher);
-
+    @BeforeEach
+    void setUp() {
+        listener = new TranscriptionNotificationListener(dispatcher);
+    }
     @Test
     void onTranscriptionCompleted_notifiesTheOwnerWithNoActorAndPointsAtTheVoiceNote() {
         listener.onTranscriptionCompleted(

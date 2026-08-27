@@ -4,6 +4,7 @@ import com.notare.feature.collaboration.event.CollaborationRemovedEvent;
 import com.notare.feature.note.event.NotePermanentlyDeletedEvent;
 import com.notare.feature.share.repository.NoteShareRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -15,7 +16,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
  * Step 8d of the coverage roadmap.
  *
  * <p><b>Not executed in this sandbox</b> - Mockito is unavailable here (see
- * {@link com.notare.feature.user.service.impl.UserServiceImplementationTest}
+ * {@link UserServiceImplementationTest}
  * for the full explanation). Reasoned from source; run via {@code mvn test}
  * before trusting it.
  *
@@ -48,9 +49,12 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 class NoteShareCleanupListenerTest {
 
     @Mock private NoteShareRepository noteShareRepository;
+    private NoteShareCleanupListener listener;
 
-    private final NoteShareCleanupListener listener = new NoteShareCleanupListener(noteShareRepository);
-
+    @BeforeEach
+    void setUp() {
+        listener = new NoteShareCleanupListener(noteShareRepository);
+    }
     @Test
     void onCollaborationRemoved_deletesOnlyTheGrantsFromThatOwnerToThatCollaborator() {
         listener.onCollaborationRemoved(new CollaborationRemovedEvent(1L, 2L));

@@ -26,7 +26,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.notare.common.security.JwtAuthenticationFilter;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -52,11 +55,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Step 15j of the coverage roadmap.
  *
  * <p><b>Not executed in this sandbox</b> - see {@link
- * com.notare.feature.auth.web.AuthControllerTest}'s disclaimer (Step 15a);
+ * AuthControllerTest}'s disclaimer (Step 15a);
  * same reasoning. Run via {@code mvn test} before trusting it.
  *
  * <p>Authenticated principal is supplied the same way as
- * {@link com.notare.feature.collaboration.web.CollaborationControllerTest}
+ * {@link CollaborationControllerTest}
  * (Step 15d) - directly on {@code SecurityContextHolder} in the test thread,
  * with {@code addFilters = false} keeping the real
  * {@code JwtAuthenticationFilter} chain out of this slice.
@@ -90,7 +93,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * .../shares/{sharedWithUserId}} - 204, delegating with the authenticated
  * owner's id (never anything else), and the same 404 for an unknown grant.
  */
-@WebMvcTest(controllers = NoteShareController.class)
+@WebMvcTest(
+        controllers = NoteShareController.class,
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = JwtAuthenticationFilter.class
+        )
+)
 @AutoConfigureMockMvc(addFilters = false)
 class NoteShareControllerTest {
 

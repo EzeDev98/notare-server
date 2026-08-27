@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.notare.common.dto.PagedResponse;
 import com.notare.common.exception.NoteConflictException;
 import com.notare.common.exception.NoteNotFoundException;
+import com.notare.feature.auth.web.AuthControllerTest;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
 import com.notare.feature.note.dto.response.TrashedNoteResponse;
@@ -11,6 +12,7 @@ import com.notare.feature.note.service.NoteService;
 import com.notare.feature.user.enums.UserStatus;
 import com.notare.feature.user.model.User;
 import com.notare.feature.user.model.UserDetail;
+import com.notare.common.security.JwtAuthenticationFilter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -26,6 +28,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -54,11 +58,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Step 15f of the coverage roadmap.
  *
  * <p><b>Not executed in this sandbox</b> - see {@link
- * com.notare.feature.auth.web.AuthControllerTest}'s disclaimer (Step 15a);
+ * AuthControllerTest}'s disclaimer (Step 15a);
  * same reasoning. Run via {@code mvn test} before trusting it.
  *
  * <p>Authenticated principal is supplied the same way as
- * {@link com.notare.feature.collaboration.web.CollaborationControllerTest}
+ * {@link CollaborationControllerTest}
  * (Step 15d) - directly on {@code SecurityContextHolder} in the test
  * thread, with {@code addFilters = false} keeping the real
  * {@code JwtAuthenticationFilter} chain out of this slice (Step 4b already
@@ -90,11 +94,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@code currentVersion} surfaced as an extension member. {@code PATCH
  * /notes/{id}} (auto-save) - happy path with no content (partial update) and
  * the same missing-version 400. {@code DELETE /notes/{id}} - 204.
- * {@code POST /notes/{id}/restore} - 200. Pin/unpin/archive/unarchive - each
- * maps to {@code NoteService#setPinned}/{@code #setArchived} with the right
- * boolean. {@code DELETE /notes/{id}/permanent} - 204.
+ * {@code POST /notes/{id}/restore} - 200 with the restored note.
+ * {@code POST}/{@code DELETE /notes/{id}/pin} and {@code /archive} - each
+ * delegates to {@code NoteService#setPinned}/{@code #setArchived} with the
+ * right boolean. {@code DELETE /notes/{id}/permanent} - 204.
  */
-@WebMvcTest(controllers = NoteController.class)
+@WebMvcTest(
+        controllers = NoteController.class,
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = JwtAuthenticationFilter.class
+        )
+)
 @AutoConfigureMockMvc(addFilters = false)
 class NoteControllerTest {
 

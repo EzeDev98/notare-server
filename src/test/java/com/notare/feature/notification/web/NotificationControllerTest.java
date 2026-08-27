@@ -10,6 +10,7 @@ import com.notare.feature.notification.service.NotificationService;
 import com.notare.feature.user.enums.UserStatus;
 import com.notare.feature.user.model.User;
 import com.notare.feature.user.model.UserDetail;
+import com.notare.common.security.JwtAuthenticationFilter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -25,6 +26,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -46,11 +49,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Step 15g of the coverage roadmap.
  *
  * <p><b>Not executed in this sandbox</b> - see {@link
- * com.notare.feature.auth.web.AuthControllerTest}'s disclaimer (Step 15a);
+ * AuthControllerTest}'s disclaimer (Step 15a);
  * same reasoning. Run via {@code mvn test} before trusting it.
  *
  * <p>Authenticated principal is supplied the same way as
- * {@link com.notare.feature.collaboration.web.CollaborationControllerTest}
+ * {@link CollaborationControllerTest}
  * (Step 15d) - directly on {@code SecurityContextHolder} in the test
  * thread, with {@code addFilters = false} keeping the real
  * {@code JwtAuthenticationFilter} chain out of this slice.
@@ -70,11 +73,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 200 with the wrapped count. {@code POST /notifications/{id}/read} - 200
  * with the updated notification, and unknown/not-mine -&gt; 404.
  * {@code POST /notifications/read-all} - 200 wrapping the service's
- * marked-count in {@link com.notare.feature.notification.dto.response.MarkAllReadResponse},
+ * marked-count in {@link MarkAllReadResponse},
  * including the zero case. {@code DELETE /notifications/{id}} - 204, and
  * unknown/not-mine -&gt; 404.
  */
-@WebMvcTest(controllers = NotificationController.class)
+@WebMvcTest(
+        controllers = NotificationController.class,
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = JwtAuthenticationFilter.class
+        )
+)
 @AutoConfigureMockMvc(addFilters = false)
 class NotificationControllerTest {
 

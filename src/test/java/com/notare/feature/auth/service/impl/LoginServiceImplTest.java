@@ -8,6 +8,7 @@ import com.notare.feature.session.service.SessionService;
 import com.notare.feature.user.enums.UserStatus;
 import com.notare.feature.user.model.User;
 import com.notare.feature.user.model.UserDetail;
+import com.notare.feature.user.service.impl.UserServiceImplementationTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -32,7 +33,7 @@ import static org.mockito.Mockito.when;
  * Step 5c of the coverage roadmap.
  *
  * <p><b>Not executed in this sandbox</b> - Mockito and Spring Security are
- * unavailable here (see {@link com.notare.feature.user.service.impl.UserServiceImplementationTest}
+ * unavailable here (see {@link UserServiceImplementationTest}
  * for the full explanation). Reasoned from source; run via {@code mvn test}
  * before trusting it.
  *

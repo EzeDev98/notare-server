@@ -44,7 +44,7 @@ import static org.mockito.Mockito.when;
  * <p><b>Not executed in this sandbox</b> - Mockito and Spring Data Redis
  * ({@code StringRedisTemplate}, {@code ZSetOperations}) are unavailable as
  * compile-time dependencies here (see {@link
- * com.notare.feature.user.service.impl.UserServiceImplementationTest} for the
+ * UserServiceImplementationTest} for the
  * full explanation). Reasoned carefully from source; run via
  * {@code mvn test} before trusting it.
  *
@@ -78,7 +78,7 @@ import static org.mockito.Mockito.when;
  * expectations are not just copy-pasted assumptions.
  */
 @ExtendWith(MockitoExtension.class)
-class SessionServiceImplTest {
+public class SessionServiceImplTest {
 
     private static final String SESSION_KEY_PREFIX = "session:";
     private static final String USER_SESSIONS_KEY_PREFIX = "user-sessions:";

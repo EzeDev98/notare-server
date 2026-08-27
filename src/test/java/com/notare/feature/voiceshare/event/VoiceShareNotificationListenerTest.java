@@ -6,6 +6,7 @@ import com.notare.feature.notification.enums.NotificationType;
 import com.notare.feature.notification.service.impl.NotificationDispatcher;
 import com.notare.feature.share.enums.SharePermission;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -60,9 +61,12 @@ class VoiceShareNotificationListenerTest {
 
     @Mock
     private NotificationDispatcher dispatcher;
+    private VoiceShareNotificationListener listener;
 
-    private final VoiceShareNotificationListener listener = new VoiceShareNotificationListener(dispatcher);
-
+    @BeforeEach
+    void setUp() {
+        listener = new VoiceShareNotificationListener(dispatcher);
+    }
     @Test
     void onVoiceNoteShared_notifiesTheRecipientWithTheOwnerAsActorAndLinksToTheVoiceNote() {
         listener.onVoiceNoteShared(new VoiceNoteSharedEvent(

@@ -4,6 +4,7 @@ import com.notare.feature.collaboration.event.CollaborationRemovedEvent;
 import com.notare.feature.voicenote.event.VoiceNoteDeletedEvent;
 import com.notare.feature.voiceshare.repository.VoiceShareRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -54,9 +55,12 @@ class VoiceShareCleanupListenerTest {
 
     @Mock
     private VoiceShareRepository voiceShareRepository;
+    private VoiceShareCleanupListener listener;
 
-    private final VoiceShareCleanupListener listener = new VoiceShareCleanupListener(voiceShareRepository);
-
+    @BeforeEach
+    void setUp() {
+        listener = new VoiceShareCleanupListener(voiceShareRepository);
+    }
     @Test
     void onCollaborationRemoved_deletesOnlyTheGrantsFromThatOwnerToThatCollaborator() {
         listener.onCollaborationRemoved(new CollaborationRemovedEvent(1L, 2L));

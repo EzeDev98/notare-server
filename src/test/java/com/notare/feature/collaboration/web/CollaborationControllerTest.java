@@ -12,6 +12,7 @@ import com.notare.feature.collaboration.service.CollaborationService;
 import com.notare.feature.user.enums.UserStatus;
 import com.notare.feature.user.model.User;
 import com.notare.feature.user.model.UserDetail;
+import com.notare.common.security.JwtAuthenticationFilter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -27,6 +28,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -51,7 +54,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Step 15d of the coverage roadmap.
  *
  * <p><b>Not executed in this sandbox</b> - see {@link
- * com.notare.feature.auth.web.AuthControllerTest}'s disclaimer (Step 15a);
+ * AuthControllerTest}'s disclaimer (Step 15a);
  * same reasoning. Run via {@code mvn test} before trusting it.
  *
  * <h2>How {@code @AuthenticationPrincipal} is supplied without the real
@@ -91,13 +94,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@code DELETE /collaborations/{id}} - 204, and confirms the acting user id
  * (not the path) is what the controller sends as the owner. {@code GET
  * .../sent} and {@code .../received} - the {@code @PageableDefault} (size 20,
- * sort updatedAt DESC) is what actually reaches the service when the caller
- * supplies no paging params, an explicit page/size/sort request overrides it,
+ * sort updatedAt DESC) is what actually reaches the service when no paging
+ * params are given; an explicit page/size/sort request overrides it,
  * and the {@link PagedResponse} envelope round-trips through JSON.
  */
-@WebMvcTest(controllers = CollaborationController.class)
+@WebMvcTest(
+        controllers = CollaborationController.class,
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = JwtAuthenticationFilter.class
+        )
+)
 @AutoConfigureMockMvc(addFilters = false)
-class CollaborationControllerTest {
+public class CollaborationControllerTest {
 
     private static final String BASE_URL = "/api/v1/collaborations";
 

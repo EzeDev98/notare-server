@@ -14,6 +14,7 @@ import com.notare.feature.auth.service.EmailService;
 import com.notare.feature.user.enums.UserStatus;
 import com.notare.feature.user.model.User;
 import com.notare.feature.user.repository.UserRepository;
+import com.notare.feature.user.service.impl.UserServiceImplementationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,7 +44,7 @@ import static org.mockito.Mockito.when;
  *
  * <p><b>Not executed in this sandbox</b> - Mockito and Spring Security
  * ({@code PasswordEncoder}) are unavailable as compile-time dependencies here
- * (see {@link com.notare.feature.user.service.impl.UserServiceImplementationTest}
+ * (see {@link UserServiceImplementationTest}
  * for the full explanation). Reasoned carefully from source; run via
  * {@code mvn test} before trusting it.
  *

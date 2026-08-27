@@ -9,6 +9,7 @@ import com.notare.feature.share.event.NoteSharePermissionChangedEvent;
 import com.notare.feature.share.event.NoteShareRevokedEvent;
 import com.notare.feature.share.event.NoteSharedEvent;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -63,9 +64,12 @@ class ShareNotificationListenerTest {
 
     @Mock
     private NotificationDispatcher dispatcher;
+    private ShareNotificationListener listener;
 
-    private final ShareNotificationListener listener = new ShareNotificationListener(dispatcher);
-
+    @BeforeEach
+    void setUp() {
+        listener = new ShareNotificationListener(dispatcher);
+    }
     @Test
     void onNoteShared_notifiesTheRecipientWithTheOwnerAsActorAndLinksToTheNote() {
         listener.onNoteShared(new NoteSharedEvent(
