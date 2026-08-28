@@ -2,6 +2,7 @@ package com.notare.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.notare.integration.support.CapturingEmailService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -33,10 +34,13 @@ class AccountLifecycleIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private CapturingEmailService emailService;
+
     @Test
     void account_can_register_login_access_protected_resource_and_logout() throws Exception {
         String username =
-                "integration_" + UUID.randomUUID().toString().replace("-", "");
+                "integration_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
 
         String email =
                 username + "@example.com";
@@ -46,11 +50,14 @@ class AccountLifecycleIntegrationTest {
 
         String registrationRequest = """
                 {
+                  "firstName": "Integration",
+                  "lastName": "Tester",
                   "username": "%s",
                   "email": "%s",
-                  "password": "%s"
+                  "password": "%s",
+                  "confirmPassword": "%s"
                 }
-                """.formatted(username, email, password);
+                """.formatted(username, email, password, password);
 
         ResponseEntity<String> registration =
                 restTemplate.postForEntity(
@@ -65,9 +72,28 @@ class AccountLifecycleIntegrationTest {
                         HttpStatus.CREATED
                 );
 
+        String otpCode = emailService.awaitCode(email);
+
+        String verifyOtpRequest = """
+                {
+                  "notarianIdOrEmail": "%s",
+                  "code": "%s"
+                }
+                """.formatted(email, otpCode);
+
+        ResponseEntity<String> verifyOtp =
+                restTemplate.postForEntity(
+                        url("/api/v1/otp/verify-otp"),
+                        json(verifyOtpRequest),
+                        String.class
+                );
+
+        assertThat(verifyOtp.getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
         String loginRequest = """
                 {
-                  "username": "%s",
+                  "usernameOrEmail": "%s",
                   "password": "%s"
                 }
                 """.formatted(username, password);

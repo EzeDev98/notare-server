@@ -580,11 +580,16 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void handleUnsupportedAudioFormatException_returns415WithMessage() {
+    void handleUnsupportedAudioFormatException_returns400WithMessage() {
+        // Aligned with VoiceNoteControllerTest's documented contract: an
+        // unsupported audio format is a validation failure on the upload
+        // request (same family as a missing/empty file), not a
+        // content-negotiation failure between client and server - so this
+        // maps to 400, not 415.
         ProblemDetail problem = handler.handleUnsupportedAudioFormatException(
                 new UnsupportedAudioFormatException("Only audio/webm and audio/mp4 are supported."));
 
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE.value());
+        assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
         assertThat(problem.getDetail()).isEqualTo("Only audio/webm and audio/mp4 are supported.");
     }
 

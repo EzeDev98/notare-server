@@ -201,7 +201,7 @@ public class UserServiceImplementationTest {
     void registerUser_retriesNotarianIdGeneration_untilACollisionFreeIdIsFound() {
         RegistrationRequest request = registrationRequest();
         when(userRepository.findByUsernameOrEmail("johndoe", "john@example.com")).thenReturn(Optional.empty());
-        when(notarianIdGenerator.generateId()).thenReturn("TAKEN11", "TAKEN11", "FREEID1");
+        when(notarianIdGenerator.generateId()).thenReturn("TAKEN11", "FREEID1");
         when(userRepository.existsByNotarianId("TAKEN11")).thenReturn(true);
         when(userRepository.existsByNotarianId("FREEID1")).thenReturn(false);
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));

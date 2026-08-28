@@ -153,7 +153,12 @@ class NotificationServiceImplTest {
         Notification first = notification(RECIPIENT_ID, null);
         Notification second = notification(RECIPIENT_ID, null);
         second.setId(11L);
-        Page<Notification> page = new PageImpl<>(List.of(first, second), pageable, 12);
+        // totalElements must exceed 20 (not just 10) so that page 1 is a
+        // genuine middle page: with size 10, page 0 covers items 0-9 and
+        // page 1 covers items 10-19. If total were only 12, page 1 would be
+        // the LAST page and hasNext() would correctly be false. 22 puts a
+        // page 2 after this one, so both hasNext() and hasPrevious() are true.
+        Page<Notification> page = new PageImpl<>(List.of(first, second), pageable, 22);
         when(notificationRepository.findByRecipientId(RECIPIENT_ID, pageable)).thenReturn(page);
         NotificationResponse firstResponse = mock(NotificationResponse.class);
         NotificationResponse secondResponse = mock(NotificationResponse.class);
@@ -163,7 +168,7 @@ class NotificationServiceImplTest {
         PagedResponse<NotificationResponse> result = service.list(RECIPIENT_ID, false, pageable);
 
         assertThat(result.content()).containsExactly(firstResponse, secondResponse);
-        assertThat(result.totalElements()).isEqualTo(12);
+        assertThat(result.totalElements()).isEqualTo(22);
         assertThat(result.hasNext()).isTrue();
         assertThat(result.hasPrevious()).isTrue();
     }

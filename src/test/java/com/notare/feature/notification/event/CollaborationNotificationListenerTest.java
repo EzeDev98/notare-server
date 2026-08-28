@@ -7,6 +7,7 @@ import com.notare.feature.notification.dto.command.CreateNotificationCommand;
 import com.notare.feature.notification.enums.NotificationTargetType;
 import com.notare.feature.notification.enums.NotificationType;
 import com.notare.feature.notification.service.impl.NotificationDispatcher;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -59,7 +60,18 @@ class CollaborationNotificationListenerTest {
     @Mock
     private NotificationDispatcher dispatcher;
 
-    private final CollaborationNotificationListener listener = new CollaborationNotificationListener(dispatcher);
+    // Built in @BeforeEach, not as a field initializer: field initializers run
+    // during instance construction, which happens BEFORE MockitoExtension
+    // injects the @Mock fields (that injection is a postProcessTestInstance
+    // callback that runs after construction). Building `listener` as a field
+    // initializer freezes it around a still-null dispatcher — and since the
+    // field is final, it stays null for the lifetime of the test.
+    private CollaborationNotificationListener listener;
+
+    @BeforeEach
+    void setUp() {
+        listener = new CollaborationNotificationListener(dispatcher);
+    }
 
     @Test
     void onCollaborationInvited_notifiesTheInviteeWithTheOwnerAsActor() {

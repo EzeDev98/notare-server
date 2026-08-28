@@ -278,7 +278,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(UnsupportedAudioFormatException.class)
     public ProblemDetail handleUnsupportedAudioFormatException(UnsupportedAudioFormatException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.UNSUPPORTED_MEDIA_TYPE, ex.getMessage());
+        // Documented in VoiceNoteControllerTest's class Javadoc as 400
+        // alongside InvalidVoiceUploadException, not 415: an unsupported
+        // audio format is a validation failure on the upload request, the
+        // same family as a missing/empty file, not a content-negotiation
+        // failure between client and server.
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
     @ExceptionHandler(VoiceFileTooLargeException.class)

@@ -10,6 +10,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -50,6 +51,15 @@ class OtpCodeValidatorTest {
         otpProperties = new OtpProperties();
         otpProperties.setLength(6);
         validator = new OtpCodeValidator(otpProperties);
+
+        // Stubbed leniently: only the invalid-value tests below actually reach
+        // this call (production code only touches the context when the value
+        // fails validation), but declaring it once here — rather than
+        // per-test — keeps every "isInvalid" test from repeating the same
+        // three lines. Without lenient(), MockitoExtension's strict stubbing
+        // would fail the valid-value tests that never touch context at all.
+        lenient().when(context.buildConstraintViolationWithTemplate(anyString()))
+                .thenReturn(violationBuilder);
     }
 
     @Test

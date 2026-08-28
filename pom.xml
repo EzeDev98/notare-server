@@ -117,6 +117,25 @@
 			<artifactId>s3</artifactId>
 			<version>2.54.2</version>
 		</dependency>
+
+		<!--
+			Explicit sync HTTP client for the s3 dependency above, instead of
+			letting the SDK auto-select one from the classpath. Since AWS SDK
+			2.46.0, S3Client defaults to Apache5HttpClient, which is built on
+			Apache HttpClient 5.6.x — that pulls in httpclient5/httpcore5,
+			whose versions Spring Boot's own dependencyManagement also pins
+			(older ones, for RestTemplate/actuator). Spring's pin always wins
+			over the transitive one, producing NoSuchMethodError /
+			NoClassDefFoundError at runtime because the two don't match.
+			url-connection-client sidesteps this permanently: it's built on
+			java.net.HttpURLConnection, so it has no Apache HttpClient
+			dependency at all, and needs no version pin here.
+		-->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>url-connection-client</artifactId>
+			<version>2.54.2</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>

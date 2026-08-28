@@ -2,6 +2,7 @@ package com.notare.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.notare.integration.support.CapturingEmailService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,10 +35,66 @@ class SharingCollaborationIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private CapturingEmailService emailService;
+
     @Test
     void note_share_can_be_created_accessed_and_revoked() throws Exception {
         TestUser owner = registerAndLogin("owner");
         TestUser recipient = registerAndLogin("recipient");
+
+        // shareNote requires the recipient to already be an accepted
+        // collaborator (NoteShareServiceImpl's third gate) — without this,
+        // the POST /shares call below 400s with InvalidNoteShareException.
+        String collaborationRequest = """
+                {
+                  "collaboratorId": %d
+                }
+                """.formatted(recipient.userId());
+
+        ResponseEntity<String> invitation =
+                exchange(
+                        HttpMethod.POST,
+                        "/api/v1/collaborations",
+                        owner.token(),
+                        collaborationRequest
+                );
+
+        assertThat(invitation.getStatusCode())
+                .isIn(
+                        HttpStatus.OK,
+                        HttpStatus.CREATED
+                );
+
+        ResponseEntity<String> invitationsReceived =
+                exchange(
+                        HttpMethod.GET,
+                        "/api/v1/collaborations/received",
+                        recipient.token(),
+                        null
+                );
+
+        assertThat(invitationsReceived.getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
+        String collaborationId =
+                extractIdFromFirstArrayElement(invitationsReceived.getBody());
+
+        assertThat(collaborationId).isNotBlank();
+
+        ResponseEntity<String> acceptCollaboration =
+                exchange(
+                        HttpMethod.POST,
+                        "/api/v1/collaborations/" + collaborationId + "/accept",
+                        recipient.token(),
+                        null
+                );
+
+        assertThat(acceptCollaboration.getStatusCode())
+                .isIn(
+                        HttpStatus.OK,
+                        HttpStatus.NO_CONTENT
+                );
 
         String noteRequest = """
                 {
@@ -228,7 +285,8 @@ class SharingCollaborationIntegrationTest {
                 prefix + "_"
                         + UUID.randomUUID()
                         .toString()
-                        .replace("-", "");
+                        .replace("-", "")
+                        .substring(0, 8);
 
         String email =
                 username + "@example.com";
@@ -238,11 +296,14 @@ class SharingCollaborationIntegrationTest {
 
         String registration = """
                 {
+                  "firstName": "Integration",
+                  "lastName": "Tester",
                   "username": "%s",
                   "email": "%s",
-                  "password": "%s"
+                  "password": "%s",
+                  "confirmPassword": "%s"
                 }
-                """.formatted(username, email, password);
+                """.formatted(username, email, password, password);
 
         ResponseEntity<String> registrationResponse =
                 restTemplate.postForEntity(
@@ -257,9 +318,28 @@ class SharingCollaborationIntegrationTest {
                         HttpStatus.CREATED
                 );
 
+        String otpCode = emailService.awaitCode(email);
+
+        String verifyOtpRequest = """
+                {
+                  "notarianIdOrEmail": "%s",
+                  "code": "%s"
+                }
+                """.formatted(email, otpCode);
+
+        ResponseEntity<String> verifyOtpResponse =
+                restTemplate.postForEntity(
+                        url("/api/v1/otp/verify-otp"),
+                        json(verifyOtpRequest),
+                        String.class
+                );
+
+        assertThat(verifyOtpResponse.getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
         String login = """
                 {
-                  "username": "%s",
+                  "usernameOrEmail": "%s",
                   "password": "%s"
                 }
                 """.formatted(username, password);

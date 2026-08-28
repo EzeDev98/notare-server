@@ -317,7 +317,12 @@ class TranscriptionServiceImplTest {
         Transcription first = existing(TranscriptionStatus.COMPLETED);
         Transcription second = existing(TranscriptionStatus.COMPLETED);
         second.setId(501L);
-        Page<Transcription> page = new PageImpl<>(List.of(first, second), pageable, 12);
+        // totalElements must exceed 20 (not just 10) so page 1 is a genuine
+        // middle page: page 0 covers items 0-9, page 1 covers items 10-19.
+        // At total=12, page 1 is the LAST page and hasNext() is correctly
+        // false. 22 puts a page 2 after this one, making both hasNext() and
+        // hasPrevious() true.
+        Page<Transcription> page = new PageImpl<>(List.of(first, second), pageable, 22);
         when(transcriptionRepository.searchByOwnerAndStatus(anyLong(), eq(TranscriptionStatus.COMPLETED), any(), eq(pageable)))
                 .thenReturn(page);
 
@@ -329,7 +334,7 @@ class TranscriptionServiceImplTest {
         PagedResponse<TranscriptionResponse> result = service.searchTranscripts(OWNER_ID, "note", pageable);
 
         assertThat(result.content()).containsExactly(firstResponse, secondResponse);
-        assertThat(result.totalElements()).isEqualTo(12);
+        assertThat(result.totalElements()).isEqualTo(22);
         assertThat(result.page()).isEqualTo(1);
         assertThat(result.hasNext()).isTrue();
         assertThat(result.hasPrevious()).isTrue();
