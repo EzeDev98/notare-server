@@ -82,8 +82,7 @@ public class PostgresFileStorageService implements FileStorageService {
     @Override
     public Resource load(String storageKey) {
         FileBlob blob = repository.findById(storageKey)
-                .orElseThrow(() -> new StorageException(
-                        "Stored file is missing or unreadable: " + storageKey));
+                .orElseThrow(() -> new StorageException("Stored file is missing or unreadable: " + storageKey));
         return new ByteArrayResource(blob.getContent());
     }
 

@@ -626,9 +626,7 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void handleInvalidRefreshTokenException_returns401WithMessage() {
-        ProblemDetail problem = handler.handleInvalidRefreshTokenException(
-                new InvalidRefreshTokenException("This refresh token is invalid or has expired."));
-
+        ProblemDetail problem = handler.handleInvalidRefreshTokenException(new InvalidRefreshTokenException("This refresh token is invalid or has expired."));
         assertThat(problem.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
         assertThat(problem.getDetail()).isEqualTo("This refresh token is invalid or has expired.");
     }
