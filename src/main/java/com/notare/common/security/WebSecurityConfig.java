@@ -49,6 +49,16 @@ public class WebSecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/user/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/password/**").permitAll()
                         .requestMatchers("/public/**").permitAll()
+                        // Operator-only wipe endpoint — gated on its own shared
+                        // secret inside AdminController, not a user JWT, so it
+                        // has to be reachable here without one. See that
+                        // controller's own doc comment for why.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/admin/**").permitAll()
+                        // The client's own keep-alive ping (see keepAlive.ts) —
+                        // needs to keep working with no session at all, since
+                        // its whole point is stopping Render from spinning the
+                        // instance down while nobody happens to be logged in.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/keep-alive").permitAll()
                         // Spring Boot forwards any unhandled 404/500 to /error, and that
                         // forward goes through this filter chain as an ERROR dispatch. If
                         // /error isn't permitted it falls to anyRequest().authenticated(),
