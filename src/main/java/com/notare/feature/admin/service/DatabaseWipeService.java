@@ -56,8 +56,7 @@ public class DatabaseWipeService {
             } else if ("PostgreSQL".equalsIgnoreCase(product)) {
                 wipePostgres(connection, tables);
             } else {
-                throw new IllegalStateException(
-                        "Database wipe is only implemented for MySQL and PostgreSQL, got: " + product);
+                throw new IllegalStateException("Database wipe is only implemented for MySQL and PostgreSQL, got: " + product);
             }
 
             log.warn("Database wipe complete — {} table(s) cleared: {}", tables.size(), tables);
