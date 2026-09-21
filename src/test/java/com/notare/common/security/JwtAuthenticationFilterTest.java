@@ -1,194 +1,166 @@
 package com.notare.common.security;
 
-import com.notare.feature.session.service.SessionService;
+import com.notare.feature.user.enums.UserStatus;
+import com.notare.feature.user.model.User;
+import com.notare.feature.user.model.UserDetail;
 import com.notare.feature.user.service.impl.CustomUserDetailsService;
-import io.jsonwebtoken.JwtException;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.mock.web.MockFilterChain;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.oauth2.jwt.BadJwtException;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 4b of the coverage roadmap.
- *
- * <p>Covers {@link JwtAuthenticationFilter#doFilterInternal}: the two
- * fall-through cases (no header, non-Bearer header) that must never touch
- * {@code JwtService}, the full happy path that ends in an authenticated
- * {@code SecurityContextHolder}, the two independent reasons authentication
- * can be withheld even with a syntactically valid token (an inactive session,
- * {@code isTokenValid} returning false), the catch block that clears context
- * on a thrown {@code JwtException}/{@code UsernameNotFoundException} rather
- * than letting the request fail outright, and the re-entrancy guard - if
- * something upstream already authenticated this request, this filter must
- * not overwrite it.
- *
- * <p>{@code SecurityContextHolder} is a static, thread-local singleton, so
- * every test clears it in {@code @AfterEach} - without that, an
- * authentication set by one test would leak into the next one's "should stay
- * null" assertions.
- *
- * <p>Verification note: not compiled or executed in this sandbox (no route to
- * the jakarta.servlet-api / spring-security-web jars) - reasoned from the
- * source, same caveat as Step 4a.
- */
 @ExtendWith(MockitoExtension.class)
 class JwtAuthenticationFilterTest {
 
-    @Mock private JwtService jwtService;
+    @Mock private JwtDecoder jwtDecoder;
     @Mock private CustomUserDetailsService userDetailsService;
-    @Mock private SessionService sessionService;
-    @Mock private HttpServletRequest request;
-    @Mock private HttpServletResponse response;
-    @Mock private FilterChain filterChain;
-    @Mock private UserDetails userDetails;
-
-    private JwtAuthenticationFilter filter;
-
-    private static final String SESSION_ID = "sess-123";
-
-    @org.junit.jupiter.api.BeforeEach
-    void setUp() {
-        filter = new JwtAuthenticationFilter(jwtService, userDetailsService, sessionService);
-    }
 
     @AfterEach
-    void clearSecurityContext() {
+    void clearContext() {
         SecurityContextHolder.clearContext();
     }
 
-    private void doFilter() throws Exception {
-        filter.doFilterInternal(request, response, filterChain);
+    private JwtAuthenticationFilter filter(String clientApplicationId) {
+        return new JwtAuthenticationFilter(jwtDecoder, userDetailsService, clientApplicationId);
+    }
+
+    private Jwt jwt(String username, Object clientApplicationId) {
+        Jwt.Builder builder = Jwt.withTokenValue("tok").header("alg", "none")
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(900)).subject("iam-1");
+        if (username != null) builder.claim("username", username);
+        if (clientApplicationId != null) builder.claim("client_application_id", clientApplicationId);
+        return builder.build();
+    }
+
+    private UserDetail userDetail(UserStatus status, boolean emailVerified) {
+        User user = new User();
+        user.setId(42L);
+        user.setUsername("jdoe");
+        user.setUserStatus(status);
+        user.setEmailVerified(emailVerified);
+        return new UserDetail(user);
+    }
+
+    /** Runs the filter and returns true when it let the request continue down the chain. */
+    private boolean run(JwtAuthenticationFilter filter, String authHeader) throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        if (authHeader != null) request.addHeader("Authorization", authHeader);
+        MockFilterChain chain = new MockFilterChain();
+        filter.doFilter(request, new MockHttpServletResponse(), chain);
+        return chain.getRequest() != null;
+    }
+
+    private boolean authenticated() {
+        return SecurityContextHolder.getContext().getAuthentication() != null;
     }
 
     @Test
-    void doFilter_noAuthorizationHeaderPassesThroughWithoutAuthenticating() throws Exception {
-        when(request.getHeader("Authorization")).thenReturn(null);
-
-        doFilter();
-
-        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
-        verify(filterChain).doFilter(request, response);
-        verifyNoInteractions(jwtService, userDetailsService, sessionService);
+    void noAuthorizationHeader_passesThroughUnauthenticated() throws Exception {
+        assertThat(run(filter(""), null)).isTrue();
+        assertThat(authenticated()).isFalse();
+        verifyNoInteractions(jwtDecoder, userDetailsService);
     }
 
     @Test
-    void doFilter_nonBearerHeaderPassesThroughWithoutAuthenticating() throws Exception {
-        when(request.getHeader("Authorization")).thenReturn("Basic dXNlcjpwYXNz");
-
-        doFilter();
-
-        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
-        verify(filterChain).doFilter(request, response);
-        verifyNoInteractions(jwtService, userDetailsService, sessionService);
+    void nonBearerHeader_passesThroughUnauthenticated() throws Exception {
+        assertThat(run(filter(""), "Basic abc")).isTrue();
+        assertThat(authenticated()).isFalse();
+        verifyNoInteractions(jwtDecoder);
     }
 
     @Test
-    void doFilter_validTokenAndActiveSessionAuthenticatesTheRequest() throws Exception {
-        when(request.getHeader("Authorization")).thenReturn("Bearer good-token");
-        when(jwtService.extractUsername("good-token")).thenReturn("alice@example.com");
-        when(userDetailsService.loadUserByUsername("alice@example.com")).thenReturn(userDetails);
-        when(jwtService.extractSessionId("good-token")).thenReturn(SESSION_ID);
-        when(jwtService.isTokenValid("good-token", userDetails)).thenReturn(true);
-        when(sessionService.isSessionActive(SESSION_ID)).thenReturn(true);
+    void validToken_authenticatesTheLocalUser() throws Exception {
+        when(jwtDecoder.decode("tok")).thenReturn(jwt("jdoe", null));
+        when(userDetailsService.loadUserByUsername("jdoe")).thenReturn(userDetail(UserStatus.ACTIVE, true));
 
-        doFilter();
+        assertThat(run(filter(""), "Bearer tok")).isTrue();
 
-        assertThat(SecurityContextHolder.getContext().getAuthentication())
-                .isInstanceOf(UsernamePasswordAuthenticationToken.class);
-        assertThat(SecurityContextHolder.getContext().getAuthentication().getPrincipal()).isEqualTo(userDetails);
-        verify(request).setAttribute(JwtAuthenticationFilter.SESSION_ID_ATTRIBUTE, SESSION_ID);
-        verify(sessionService).touch(SESSION_ID);
-        verify(filterChain).doFilter(request, response);
+        assertThat(authenticated()).isTrue();
+        assertThat(SecurityContextHolder.getContext().getAuthentication().getName()).isEqualTo("jdoe");
     }
 
     @Test
-    void doFilter_validTokenButInactiveSessionDoesNotAuthenticate() throws Exception {
-        when(request.getHeader("Authorization")).thenReturn("Bearer good-token");
-        when(jwtService.extractUsername("good-token")).thenReturn("alice@example.com");
-        when(userDetailsService.loadUserByUsername("alice@example.com")).thenReturn(userDetails);
-        when(jwtService.extractSessionId("good-token")).thenReturn(SESSION_ID);
-        when(jwtService.isTokenValid("good-token", userDetails)).thenReturn(true);
-        when(sessionService.isSessionActive(SESSION_ID)).thenReturn(false);
+    void rejectedToken_continuesUnauthenticated() throws Exception {
+        when(jwtDecoder.decode("tok")).thenThrow(new BadJwtException("expired"));
 
-        doFilter();
+        assertThat(run(filter(""), "Bearer tok")).isTrue();
 
-        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
-        verify(sessionService, never()).touch(any());
-        verify(filterChain).doFilter(request, response);
+        assertThat(authenticated()).isFalse();
+        verifyNoInteractions(userDetailsService);
     }
 
     @Test
-    void doFilter_isTokenValidFalseDoesNotAuthenticate() throws Exception {
-        when(request.getHeader("Authorization")).thenReturn("Bearer stale-token");
-        when(jwtService.extractUsername("stale-token")).thenReturn("alice@example.com");
-        when(userDetailsService.loadUserByUsername("alice@example.com")).thenReturn(userDetails);
-        when(jwtService.extractSessionId("stale-token")).thenReturn(SESSION_ID);
-        when(jwtService.isTokenValid("stale-token", userDetails)).thenReturn(false);
+    void tokenWithoutUsernameClaim_isNotAuthenticated() throws Exception {
+        when(jwtDecoder.decode("tok")).thenReturn(jwt(null, null));
 
-        doFilter();
+        assertThat(run(filter(""), "Bearer tok")).isTrue();
 
-        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
-        verify(sessionService, never()).isSessionActive(any());
-        verify(filterChain).doFilter(request, response);
+        assertThat(authenticated()).isFalse();
+        verifyNoInteractions(userDetailsService);
     }
 
     @Test
-    void doFilter_jwtExceptionIsCaughtAndClearsContextButStillContinuesTheChain() throws Exception {
-        when(request.getHeader("Authorization")).thenReturn("Bearer expired-token");
-        when(jwtService.extractUsername("expired-token")).thenThrow(new JwtException("expired"));
+    void validTokenForUnknownLocalUser_isNotAuthenticated() throws Exception {
+        when(jwtDecoder.decode("tok")).thenReturn(jwt("ghost", null));
+        when(userDetailsService.loadUserByUsername("ghost")).thenThrow(new UsernameNotFoundException("none"));
 
-        doFilter();
+        assertThat(run(filter(""), "Bearer tok")).isTrue();
 
-        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
-        verify(filterChain).doFilter(request, response);
+        assertThat(authenticated()).isFalse();
     }
 
     @Test
-    void doFilter_unknownUserIsCaughtAndClearsContextButStillContinuesTheChain() throws Exception {
-        when(request.getHeader("Authorization")).thenReturn("Bearer good-token");
-        when(jwtService.extractUsername("good-token")).thenReturn("ghost@example.com");
-        when(userDetailsService.loadUserByUsername("ghost@example.com"))
-                .thenThrow(new UsernameNotFoundException("no such user"));
+    void lockedLocalUser_isNotAuthenticated() throws Exception {
+        when(jwtDecoder.decode("tok")).thenReturn(jwt("jdoe", null));
+        when(userDetailsService.loadUserByUsername("jdoe")).thenReturn(userDetail(UserStatus.LOCKED, true));
 
-        doFilter();
+        assertThat(run(filter(""), "Bearer tok")).isTrue();
 
-        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
-        verify(filterChain).doFilter(request, response);
+        assertThat(authenticated()).isFalse();
     }
 
     @Test
-    void doFilter_alreadyAuthenticatedContextIsNeverOverwrittenOrRequeried() throws Exception {
-        // Simulates a request that's already authenticated by the time this
-        // filter runs. The `SecurityContextHolder...getAuthentication() == null`
-        // guard means the whole block - including the user/session lookups -
-        // must be skipped entirely.
-        UsernamePasswordAuthenticationToken existing =
-                new UsernamePasswordAuthenticationToken("someone", null);
-        SecurityContextHolder.getContext().setAuthentication(existing);
+    void unverifiedLocalUser_isNotAuthenticated() throws Exception {
+        when(jwtDecoder.decode("tok")).thenReturn(jwt("jdoe", null));
+        when(userDetailsService.loadUserByUsername("jdoe")).thenReturn(userDetail(UserStatus.ACTIVE, false));
 
-        when(request.getHeader("Authorization")).thenReturn("Bearer good-token");
-        when(jwtService.extractUsername("good-token")).thenReturn("alice@example.com");
+        assertThat(run(filter(""), "Bearer tok")).isTrue();
 
-        doFilter();
+        assertThat(authenticated()).isFalse();
+    }
 
-        assertThat(SecurityContextHolder.getContext().getAuthentication()).isSameAs(existing);
-        verifyNoInteractions(userDetailsService, sessionService);
-        verify(filterChain).doFilter(request, response);
+    @Test
+    void tokenForAnotherClientApplication_isRejectedWhenClientIdIsPinned() throws Exception {
+        when(jwtDecoder.decode("tok")).thenReturn(jwt("jdoe", 99L));
+
+        assertThat(run(filter("7"), "Bearer tok")).isTrue();
+
+        assertThat(authenticated()).isFalse();
+        verifyNoInteractions(userDetailsService);
+    }
+
+    @Test
+    void tokenForThisClientApplication_isAcceptedWhenClientIdIsPinned() throws Exception {
+        when(jwtDecoder.decode("tok")).thenReturn(jwt("jdoe", 7L));
+        when(userDetailsService.loadUserByUsername("jdoe")).thenReturn(userDetail(UserStatus.ACTIVE, true));
+
+        assertThat(run(filter("7"), "Bearer tok")).isTrue();
+
+        assertThat(authenticated()).isTrue();
     }
 }

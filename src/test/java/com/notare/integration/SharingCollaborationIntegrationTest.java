@@ -2,7 +2,6 @@ package com.notare.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.notare.integration.support.CapturingEmailService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,9 +33,6 @@ class SharingCollaborationIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
-
-    @Autowired
-    private CapturingEmailService emailService;
 
     @Test
     void note_share_can_be_created_accessed_and_revoked() throws Exception {
@@ -317,25 +313,6 @@ class SharingCollaborationIntegrationTest {
                         HttpStatus.OK,
                         HttpStatus.CREATED
                 );
-
-        String otpCode = emailService.awaitCode(email);
-
-        String verifyOtpRequest = """
-                {
-                  "notarianIdOrEmail": "%s",
-                  "code": "%s"
-                }
-                """.formatted(email, otpCode);
-
-        ResponseEntity<String> verifyOtpResponse =
-                restTemplate.postForEntity(
-                        url("/api/v1/otp/verify-otp"),
-                        json(verifyOtpRequest),
-                        String.class
-                );
-
-        assertThat(verifyOtpResponse.getStatusCode())
-                .isEqualTo(HttpStatus.OK);
 
         String login = """
                 {

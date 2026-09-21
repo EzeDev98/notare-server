@@ -1,92 +1,47 @@
 package com.notare.feature.logout.service.impl;
 
+import com.notare.client.service.InternalAuthClient;
+import com.notare.common.exception.InternalAuthCallException;
 import com.notare.feature.logout.dto.response.LogoutResponse;
-import com.notare.feature.session.service.SessionService;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.never;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-/**
- * Step 5e of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox</b> - Mockito is unavailable here (see
- * {@link UserServiceImplementationTest}
- * for the full explanation). Reasoned from source; run via {@code mvn test}
- * before trusting it.
- *
- * <p>Covers {@link LogoutServiceImpl#logout} and {@code logoutAll}. The one
- * behavior worth calling out: {@code logout} with a {@code null} sessionId
- * does NOT throw and does NOT call {@link SessionService} at all - it
- * short-circuits to a 400 {@link LogoutResponse}. That matters because a
- * client that already lost its session id (an expired/cleared cookie, a
- * client-side bug) should get a clean "there is nothing to log out" answer
- * rather than an exception bubbling up from a null being handed to Redis.
- */
 @ExtendWith(MockitoExtension.class)
 class LogoutServiceImplTest {
 
-    @Mock private SessionService sessionService;
-
-    // Built in @BeforeEach, not as a field initializer: field initializers run
-    // during instance construction, which happens BEFORE MockitoExtension
-    // injects the @Mock fields (that injection is a postProcessTestInstance
-    // callback that runs after construction). Building `service` as a field
-    // initializer freezes it around a still-null sessionService — and since
-    // the field is final, it stays null for the lifetime of the test. Every
-    // test in this class saw "this.sessionService is null" because of this.
-    private LogoutServiceImpl service;
-
-    @BeforeEach
-    void setUp() {
-        service = new LogoutServiceImpl(sessionService);
-    }
+    @Mock private InternalAuthClient authClient;
+    @InjectMocks private LogoutServiceImpl service;
 
     @Test
-    void logout_withANullSessionId_returnsA400WithoutCallingSessionService() {
-        LogoutResponse response = service.logout(null, 1L);
+    void logout_endsTheSessionAtIam_andReturns200() {
+        LogoutResponse response = service.logout("access-1");
 
-        assertThat(response.getStatusCode()).isEqualTo(400);
-        assertThat(response.getMessage()).isEqualTo("SessionId is null");
-        verifyNoInteractions(sessionService);
-    }
-
-    @Test
-    void logout_withARealSessionId_revokesItForTheRequestingUser_andReturns200() {
-        LogoutResponse response = service.logout("session-1", 7L);
-
-        verify(sessionService).revokeSession("session-1", 7L);
+        verify(authClient).logout("access-1");
         assertThat(response.getStatusCode()).isEqualTo(200);
-        assertThat(response.getMessage()).isEqualTo("Logout successfully");
     }
 
     @Test
-    void logout_doesNotSwallowExceptionsFromSessionService() {
-        org.mockito.Mockito.doThrow(new com.notare.common.exception.SessionNotFoundException("Session not found."))
-                .when(sessionService).revokeSession("missing", 7L);
+    void logout_withBlankToken_returns400_withoutCallingIam() {
+        assertThat(service.logout(" ").getStatusCode()).isEqualTo(400);
+        assertThat(service.logout(null).getStatusCode()).isEqualTo(400);
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.logout("missing", 7L))
-                .isInstanceOf(com.notare.common.exception.SessionNotFoundException.class);
+        verifyNoInteractions(authClient);
     }
 
     @Test
-    void logoutAll_revokesEverySessionForTheUser_andReturns200() {
-        LogoutResponse response = service.logoutAll(7L);
+    void logout_doesNotSwallowIamFailures() {
+        doThrow(new InternalAuthCallException(HttpStatus.BAD_GATEWAY, "down")).when(authClient).logout("access-1");
 
-        verify(sessionService).revokeAllSessions(7L);
-        assertThat(response.getStatusCode()).isEqualTo(200);
-        assertThat(response.getMessage()).isEqualTo("All account logged out successfully");
-    }
-
-    @Test
-    void logout_andLogoutAll_neverCallEachOthersSessionServiceMethod() {
-        service.logout("session-1", 7L);
-        verify(sessionService, never()).revokeAllSessions(org.mockito.ArgumentMatchers.anyLong());
+        assertThatThrownBy(() -> service.logout("access-1")).isInstanceOf(InternalAuthCallException.class);
     }
 }

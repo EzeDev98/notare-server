@@ -99,7 +99,6 @@ class TranscriptionSearchControllerTest {
         user.setUsername("jdoe");
         user.setNotarianId("NOT-ABCDEF");
         user.setEmail("jdoe@example.com");
-        user.setPassword("hashed");
         user.setUserStatus(UserStatus.ACTIVE);
         user.setEmailVerified(true);
 

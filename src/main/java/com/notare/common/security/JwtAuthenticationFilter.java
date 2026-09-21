@@ -1,35 +1,47 @@
 package com.notare.common.security;
 
-import com.notare.feature.session.service.SessionService;
 import com.notare.feature.user.service.impl.CustomUserDetailsService;
-import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+/**
+ * Authenticates a request from an internal-auth-server access token. The token
+ * is verified against IAM's signing keys (JWKS); notare holds no session state.
+ */
 @Component
-@RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
-
-    public static final String SESSION_ID_ATTRIBUTE = "sid";
 
     private static final String AUTH_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final String USERNAME_CLAIM = "username";
+    private static final String CLIENT_APPLICATION_ID_CLAIM = "client_application_id";
 
-    private final JwtService jwtService;
+    private final JwtDecoder jwtDecoder;
     private final CustomUserDetailsService userDetailsService;
-    private final SessionService sessionService;
+    private final String expectedClientApplicationId;
+
+    public JwtAuthenticationFilter(JwtDecoder jwtDecoder,
+                                   CustomUserDetailsService userDetailsService,
+                                   @Value("${internal-auth.client-application-id:}") String expectedClientApplicationId) {
+        this.jwtDecoder = jwtDecoder;
+        this.userDetailsService = userDetailsService;
+        this.expectedClientApplicationId = expectedClientApplicationId == null ? "" : expectedClientApplicationId.trim();
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
@@ -41,31 +53,33 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        String token = authHeader.substring(BEARER_PREFIX.length());
+        String token = authHeader.substring(BEARER_PREFIX.length()).trim();
 
         try {
-            String username = jwtService.extractUsername(token);
+            Jwt jwt = jwtDecoder.decode(token);
+            String username = jwt.getClaimAsString(USERNAME_CLAIM);
 
-            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            if (username != null && belongsToThisApp(jwt) && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
-                String sessionId = jwtService.extractSessionId(token);
-
-                // The session's presence in Redis is the source of truth for whether this
-                // otherwise-stateless access token is still valid ? this is what makes
-                // logout / logout-all / per-device revocation take effect instantly instead
-                // of waiting for the token's natural expiry.
-                if (jwtService.isTokenValid(token, userDetails) && sessionService.isSessionActive(sessionId)) {
+                if (userDetails.isEnabled() && userDetails.isAccountNonLocked()) {
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
-                    request.setAttribute(SESSION_ID_ATTRIBUTE, sessionId);
-                    sessionService.touch(sessionId);
                 }
             }
         } catch (JwtException | UsernameNotFoundException ex) {
             SecurityContextHolder.clearContext();
         }
         filterChain.doFilter(request, response);
+    }
+
+    /** IAM is multi-tenant and shares one signing key, so pin tokens to notare's client when configured. */
+    private boolean belongsToThisApp(Jwt jwt) {
+        if (expectedClientApplicationId.isEmpty()) {
+            return true;
+        }
+        Object claim = jwt.getClaim(CLIENT_APPLICATION_ID_CLAIM);
+        return claim != null && expectedClientApplicationId.equals(String.valueOf(claim));
     }
 }

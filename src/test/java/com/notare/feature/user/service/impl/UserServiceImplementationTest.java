@@ -3,7 +3,9 @@ package com.notare.feature.user.service.impl;
 import com.notare.common.dto.PagedResponse;
 import com.notare.common.exception.InvalidUserLookupException;
 import com.notare.common.exception.NotarianIdGenerationException;
-import com.notare.common.exception.PasswordMisMatchException;
+import com.notare.common.exception.RegistrationException;
+import com.notare.client.dto.response.InternalAuthApiResponse;
+import com.notare.client.dto.response.RegisterResponse;
 import com.notare.common.exception.UserAlreadyExistException;
 import com.notare.common.exception.UserNotFoundException;
 import com.notare.common.util.LikeEscaper;
@@ -15,6 +17,8 @@ import com.notare.feature.user.enums.UserStatus;
 import com.notare.feature.user.event.UserRegisteredEvent;
 import com.notare.feature.user.model.User;
 import com.notare.feature.user.repository.UserRepository;
+import com.notare.feature.auth.validation.RegistrationValidator;
+import com.notare.client.service.InternalAuthClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -77,12 +82,14 @@ public class UserServiceImplementationTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private UserRepository userRepository;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private RegistrationValidator registrationValidator;
+    @Mock private InternalAuthClient authClient;
 
     public UserServiceImplementation service;
 
     @BeforeEach
     void setUp() {
-        service = new UserServiceImplementation(notarianIdGenerator, passwordEncoder, userRepository, eventPublisher);
+        service = new UserServiceImplementation(notarianIdGenerator, passwordEncoder, userRepository, eventPublisher, registrationValidator, authClient);
     }
 
     private RegistrationRequest registrationRequest() {
@@ -96,6 +103,11 @@ public class UserServiceImplementationTest {
         return request;
     }
 
+    private void stubIamRegister() {
+        when(authClient.register(any()))
+                .thenReturn(InternalAuthApiResponse.success(new RegisterResponse("iam-1", "johndoe", "ok")));
+    }
+
     private User existingUser(String username, String email) {
         User user = new User();
         user.setId(1L);
@@ -107,16 +119,17 @@ public class UserServiceImplementationTest {
     // ---- registerUser -------------------------------------------------
 
     @Test
-    void registerUser_throwsPasswordMisMatchException_whenPasswordsDiffer() {
+    void registerUser_propagatesValidatorFailure_beforeAnyRepositoryOrIamInteraction() {
         RegistrationRequest request = registrationRequest();
         request.setConfirmPassword("SomethingElse1");
+        doThrow(new RegistrationException("Passwords do not match"))
+                .when(registrationValidator).validateRegistrationRequest(request);
 
         assertThatThrownBy(() -> service.registerUser(request))
-                .isInstanceOf(PasswordMisMatchException.class)
+                .isInstanceOf(RegistrationException.class)
                 .hasMessage("Passwords do not match");
 
-        // Fails before any repository/generator interaction - cheapest check first.
-        verifyNoInteractions(userRepository, notarianIdGenerator, eventPublisher);
+        verifyNoInteractions(userRepository, notarianIdGenerator, eventPublisher, authClient);
     }
 
     @Test
@@ -127,7 +140,7 @@ public class UserServiceImplementationTest {
 
         assertThatThrownBy(() -> service.registerUser(request))
                 .isInstanceOf(UserAlreadyExistException.class)
-                .hasMessage("A user with this username is already registered");
+                .hasMessage("This username is already taken");
 
         verify(userRepository, never()).save(any(User.class));
     }
@@ -148,6 +161,7 @@ public class UserServiceImplementationTest {
     @Test
     void registerUser_trimsAndNormalizesFields_encodesPassword_andSetsInitialStatus() {
         RegistrationRequest request = registrationRequest();
+        stubIamRegister();
         when(userRepository.findByUsernameOrEmail("johndoe", "john@example.com")).thenReturn(Optional.empty());
         when(notarianIdGenerator.generateId()).thenReturn("BADAZOP");
         when(userRepository.existsByNotarianId("BADAZOP")).thenReturn(false);
@@ -181,6 +195,7 @@ public class UserServiceImplementationTest {
     @Test
     void registerUser_publishesUserRegisteredEventWithTheSavedUsersId() {
         RegistrationRequest request = registrationRequest();
+        stubIamRegister();
         when(userRepository.findByUsernameOrEmail("johndoe", "john@example.com")).thenReturn(Optional.empty());
         when(notarianIdGenerator.generateId()).thenReturn("BADAZOP");
         when(userRepository.existsByNotarianId("BADAZOP")).thenReturn(false);
@@ -200,6 +215,7 @@ public class UserServiceImplementationTest {
     @Test
     void registerUser_retriesNotarianIdGeneration_untilACollisionFreeIdIsFound() {
         RegistrationRequest request = registrationRequest();
+        stubIamRegister();
         when(userRepository.findByUsernameOrEmail("johndoe", "john@example.com")).thenReturn(Optional.empty());
         when(notarianIdGenerator.generateId()).thenReturn("TAKEN11", "FREEID1");
         when(userRepository.existsByNotarianId("TAKEN11")).thenReturn(true);
@@ -215,6 +231,7 @@ public class UserServiceImplementationTest {
     @Test
     void registerUser_throwsNotarianIdGenerationException_afterExhaustingAllAttempts() {
         RegistrationRequest request = registrationRequest();
+        stubIamRegister();
         when(userRepository.findByUsernameOrEmail("johndoe", "john@example.com")).thenReturn(Optional.empty());
         when(notarianIdGenerator.generateId()).thenReturn("ALWAYSSAME");
         when(userRepository.existsByNotarianId("ALWAYSSAME")).thenReturn(true);
@@ -230,6 +247,7 @@ public class UserServiceImplementationTest {
     @Test
     void registerUser_wrapsDataIntegrityViolationExceptionFromSave_intoUserAlreadyExistException() {
         RegistrationRequest request = registrationRequest();
+        stubIamRegister();
         when(userRepository.findByUsernameOrEmail("johndoe", "john@example.com")).thenReturn(Optional.empty());
         when(notarianIdGenerator.generateId()).thenReturn("BADAZOP");
         when(userRepository.existsByNotarianId("BADAZOP")).thenReturn(false);

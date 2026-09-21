@@ -39,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class WebSecurityConfigTest {
 
-    private final WebSecurityConfig config = new WebSecurityConfig(null, null, null, null);
+    private final WebSecurityConfig config = new WebSecurityConfig(null, null, null);
 
     private CorsConfiguration corsConfigurationFor(String path) {
         CorsConfigurationSource source = config.corsConfigurationSource();

@@ -19,11 +19,11 @@ import com.notare.feature.user.repository.UserRepository;
 import com.notare.feature.user.service.UserService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,12 +36,12 @@ import java.util.Set;
 import static com.notare.common.constant.GeneralConstant.MAX_ID_GENERATION_ATTEMPTS;
 import static com.notare.common.constant.GeneralConstant.MAX_USER_LOOKUP_IDS;
 
+@Slf4j
 @RequiredArgsConstructor
 @Service
 public class UserServiceImplementation implements UserService {
 
     private final NotarianIdGenerator notarianIdGenerator;
-    private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final RegistrationValidator registrationValidator;
@@ -51,7 +51,6 @@ public class UserServiceImplementation implements UserService {
     @Override
     @Transactional
     public RegistrationResponse registerUser(RegistrationRequest request) {
-
 
         registrationValidator.validateRegistrationRequest(request);
 
@@ -64,26 +63,52 @@ public class UserServiceImplementation implements UserService {
         if (existingUser.isPresent()) {
             User found = existingUser.get();
 
-            if (request.getEmail() != null && found.getEmail().equals(request.getEmail())) {
-                throw new UserAlreadyExistsException("A user with this email is already registered");
+            if (email != null && found.getEmail().equals(email)) {
+                throw new UserAlreadyExistException("A user with this email is already registered");
             }
-            if (request.getUsername() != null && found.getUsername().equals(request.getUsername())) {
-                throw new UserAlreadyExistsException("This username is already taken");
+            if (username != null && found.getUsername().equals(username)) {
+                throw new UserAlreadyExistException("This username is already taken");
             }
         }
 
-        RegisterRequest registerRequest = new RegisterRequest(request.getUsername(), null, request.getEmail(), request.getPassword(), request.getConfirmPassword());
+        // Send the normalized values, not the raw request ones - otherwise IAM
+        // and Notare can end up holding two different casings/whitespace
+        // variants of the same email for one person.
+        RegisterRequest registerRequest = new RegisterRequest(username, null, email, request.getPassword(), request.getConfirmPassword());
 
         InternalAuthApiResponse<RegisterResponse> registerResponse = authClient.register(registerRequest);
 
-        RegisterResponse response = registerResponse.getData();
+        RegisterResponse response = registerResponse == null ? null : registerResponse.getData();
+
+        if (response == null || response.getInternalAuthUserId() == null) {
+            throw new RegistrationException("internal-auth-server did not return an account id.");
+        }
 
         try {
             User user = createUser(request, response.getInternalAuthUserId());
             eventPublisher.publishEvent(new UserRegisteredEvent(user.getId()));
             return new RegistrationResponse(HttpServletResponse.SC_CREATED, "Account created. Please check your email to verify your account.", user.getNotarianId());
         } catch (DataIntegrityViolationException ex) {
+            rollbackIamUser(response.getInternalAuthUserId());
             throw new UserAlreadyExistException("A user with this username or email is already registered");
+        } catch (NotarianIdGenerationException ex) {
+            // Not a duplicate-account problem: keep the real failure, but
+            // still remove the IAM account so the person can retry later.
+            rollbackIamUser(response.getInternalAuthUserId());
+            throw ex;
+        }
+    }
+
+    /**
+     * Best-effort cleanup of an IAM account created before the local save
+     * failed. If the delete itself fails, log it and let the caller surface
+     * the original failure rather than a downstream cleanup error.
+     */
+    private void rollbackIamUser(String internalAuthUserId) {
+        try {
+            authClient.deleteUser(internalAuthUserId);
+        } catch (Exception rollbackEx) {
+            log.warn("Failed to roll back orphaned internal-auth-server user {} after local registration failure", internalAuthUserId, rollbackEx);
         }
     }
 
@@ -131,8 +156,7 @@ public class UserServiceImplementation implements UserService {
             throw new InvalidUserLookupException("At least one id is required.");
         }
         if (distinctIds.size() > MAX_USER_LOOKUP_IDS) {
-            throw new InvalidUserLookupException(
-                    "At most " + MAX_USER_LOOKUP_IDS + " ids may be looked up in one request.");
+            throw new InvalidUserLookupException("At most " + MAX_USER_LOOKUP_IDS + " ids may be looked up in one request.");
         }
 
         // Ids with no row are simply absent from the response. That includes
@@ -191,7 +215,6 @@ public class UserServiceImplementation implements UserService {
         user.setLastName(request.getLastName().trim());
         user.setUsername(request.getUsername().trim());
         user.setEmail(request.getEmail().trim().toLowerCase());
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setUserStatus(UserStatus.PENDING_VERIFICATION);
         user.setEmailVerified(false);
 

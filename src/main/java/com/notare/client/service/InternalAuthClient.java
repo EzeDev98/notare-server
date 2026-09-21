@@ -186,6 +186,37 @@ public class InternalAuthClient {
                 .body(new ParameterizedTypeReference<InternalAuthApiResponse<PasswordResetResponse>>() {});
     }
 
+    public InternalAuthApiResponse<PasswordResetResponse> requestPasswordResetEmailOtp(String email) {
+        return restClient.post()
+                .uri("/password-reset/email/request")
+                .header(HttpHeaders.AUTHORIZATION, basicAuthHeader)
+                .body(java.util.Map.of("email", email))
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, this::handleDownstreamError)
+                .body(new ParameterizedTypeReference<InternalAuthApiResponse<PasswordResetResponse>>() {});
+    }
+
+    public InternalAuthApiResponse<VerifyOtpResponse> verifyPasswordResetEmailOtp(String email, String otp) {
+        return restClient.post()
+                .uri("/password-reset/email/verify-otp")
+                .header(HttpHeaders.AUTHORIZATION, basicAuthHeader)
+                .body(java.util.Map.of("email", email, "otp", otp))
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, this::handleDownstreamError)
+                .body(new ParameterizedTypeReference<InternalAuthApiResponse<VerifyOtpResponse>>() {});
+    }
+
+    /** Asks IAM to email a fresh activation link (IAM answers generically whether or not the email exists). */
+    public void resendActivation(String email) {
+        restClient.post()
+                .uri("/auth/resend-activation")
+                .header(HttpHeaders.AUTHORIZATION, basicAuthHeader)
+                .body(java.util.Map.of("email", email))
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, this::handleDownstreamError)
+                .toBodilessEntity();
+    }
+
     public InternalAuthApiResponse<LogoutResponse> logout(String accessToken) {
         return restClient.delete()
                 .uri(uriBuilder -> uriBuilder
@@ -216,9 +247,10 @@ public class InternalAuthClient {
     public void deleteUser(String internalAuthUserId) {
         restClient.delete()
                 .uri(uriBuilder -> uriBuilder
-                        .path("/user")
+                        .path("/users")
                         .queryParam("internalAuthUserId", internalAuthUserId)
                         .build())
+                .header(HttpHeaders.AUTHORIZATION, basicAuthHeader)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, this::handleDownstreamError)
                 .body(new ParameterizedTypeReference<InternalAuthApiResponse<Void>>() {});

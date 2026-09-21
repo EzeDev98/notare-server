@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.notare.common.web.ClientIpArgumentResolver;
 import com.notare.common.web.UserAgentArgumentResolver;
 import com.notare.config.WebMvcConfig;
-import com.notare.feature.auth.dto.response.LoginResponse;
+import com.notare.feature.auth.dto.response.UserLoginResponse;
 import com.notare.feature.auth.service.LoginService;
 import com.notare.common.security.JwtAuthenticationFilter;
 import org.junit.jupiter.api.Test;
@@ -54,7 +54,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * against {@code WebSecurityConfig}'s allowlist entry, which is
  * {@code "/api/v1/login/**"} for exactly this reason.
  *
- * <p>Covers: a valid login maps to 200 with every {@link LoginResponse}
+ * <p>Covers: a valid login maps to 200 with every {@link UserLoginResponse}
  * field surfaced; the resolved client IP / user agent reach
  * {@link LoginService#login}; blank username-or-email / blank password are
  * rejected by bean validation before the service runs; and the three
@@ -88,7 +88,7 @@ class LoginControllerTest {
     @Test
     void login_validCredentials_returns200WithLoginResponseBody() throws Exception {
         when(loginService.login(any(), anyString(), anyString())).thenReturn(
-                new LoginResponse("access-tok", "refresh-tok", "Bearer", 900L, "NOT-ABCDEF", "jdoe"));
+                new UserLoginResponse("access-tok", "refresh-tok", "Bearer", 900L, "NOT-ABCDEF", "jdoe"));
 
         mockMvc.perform(post(LOGIN_URL)
                         .contentType("application/json")
@@ -105,7 +105,7 @@ class LoginControllerTest {
     @Test
     void login_forwardsClientIpAndUserAgentToTheService() throws Exception {
         when(loginService.login(any(), anyString(), anyString())).thenReturn(
-                new LoginResponse("a", "b", "Bearer", 1L, "id", "u"));
+                new UserLoginResponse("a", "b", "Bearer", 1L, "id", "u"));
 
         mockMvc.perform(post(LOGIN_URL)
                         .header("X-Forwarded-For", "198.51.100.9")

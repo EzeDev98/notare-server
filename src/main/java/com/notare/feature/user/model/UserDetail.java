@@ -24,7 +24,7 @@ public class UserDetail implements UserDetails {
 
     @Override
     public @Nullable String getPassword() {
-        return user.getPassword();
+        return null; // credentials live only in internal-auth-server
     }
 
     @Override
@@ -49,7 +49,9 @@ public class UserDetail implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return user.isEmailVerified();
+        return user.isEmailVerified()
+                && user.getUserStatus() != UserStatus.SUSPENDED
+                && user.getUserStatus() != UserStatus.DEACTIVATED;
     }
 
     public User getUser() {

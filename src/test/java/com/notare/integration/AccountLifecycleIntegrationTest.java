@@ -2,7 +2,6 @@ package com.notare.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.notare.integration.support.CapturingEmailService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -33,9 +32,6 @@ class AccountLifecycleIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
-
-    @Autowired
-    private CapturingEmailService emailService;
 
     @Test
     void account_can_register_login_access_protected_resource_and_logout() throws Exception {
@@ -71,25 +67,6 @@ class AccountLifecycleIntegrationTest {
                         HttpStatus.OK,
                         HttpStatus.CREATED
                 );
-
-        String otpCode = emailService.awaitCode(email);
-
-        String verifyOtpRequest = """
-                {
-                  "notarianIdOrEmail": "%s",
-                  "code": "%s"
-                }
-                """.formatted(email, otpCode);
-
-        ResponseEntity<String> verifyOtp =
-                restTemplate.postForEntity(
-                        url("/api/v1/otp/verify-otp"),
-                        json(verifyOtpRequest),
-                        String.class
-                );
-
-        assertThat(verifyOtp.getStatusCode())
-                .isEqualTo(HttpStatus.OK);
 
         String loginRequest = """
                 {

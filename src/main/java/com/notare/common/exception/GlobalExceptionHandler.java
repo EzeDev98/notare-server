@@ -1,5 +1,6 @@
 package com.notare.common.exception;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,7 @@ import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.LinkedHashMap;
@@ -45,6 +47,7 @@ import java.util.Map;
  * be flattened into a tidy message that hides a bug.
  */
 @Order(Ordered.HIGHEST_PRECEDENCE)
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -140,6 +143,39 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UserAlreadyExistException.class)
     public ProblemDetail handleUserAlreadyExistException(UserAlreadyExistException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(RegistrationException.class)
+    public ProblemDetail handleRegistrationException(RegistrationException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    /**
+     * internal-auth-server answered with an error status. 4xx (validation,
+     * conflict, rejected credentials) pass through with IAM's own message so the
+     * caller sees why. A 5xx from IAM becomes a 502: Notare itself is fine, an
+     * upstream dependency failed, and IAM's internals are not the caller's
+     * business. The real status and message are always logged.
+     */
+    @ExceptionHandler(InternalAuthCallException.class)
+    public ProblemDetail handleInternalAuthCallException(InternalAuthCallException ex) {
+        log.warn("internal-auth-server call failed: status={}, message={}", ex.getStatus().value(), ex.getMessage());
+        if (ex.getStatus().is4xxClientError()) {
+            return ProblemDetail.forStatusAndDetail(ex.getStatus(), ex.getMessage());
+        }
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY,
+                "Authentication service error. Please try again later.");
+    }
+
+    /**
+     * Connection refused / timeout reaching internal-auth-server. InternalAuthClient
+     * is the only RestClient user in this app, so this can only mean IAM is unreachable.
+     */
+    @ExceptionHandler(ResourceAccessException.class)
+    public ProblemDetail handleResourceAccessException(ResourceAccessException ex) {
+        log.error("internal-auth-server unreachable: {}", ex.getMessage());
+        return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
+                "Authentication service is unavailable. Please try again later.");
     }
 
     @ExceptionHandler(InvalidUserLookupException.class)

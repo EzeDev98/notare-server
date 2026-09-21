@@ -99,11 +99,6 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>com.mailjet</groupId>
-			<artifactId>mailjet-client</artifactId>
-			<version>6.0.0</version>
-		</dependency>
 		<!--
 			Prod voice-note storage (R2FileStorageService, @Profile("prod")).
 			R2 is Cloudflare's S3-compatible object store — this is the plain AWS
@@ -139,6 +134,10 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-oauth2-jose</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.modulith</groupId>

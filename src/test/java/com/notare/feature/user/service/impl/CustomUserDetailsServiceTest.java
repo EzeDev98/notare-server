@@ -78,7 +78,6 @@ class CustomUserDetailsServiceTest {
         User user = new User();
         user.setId(7L);
         user.setUsername("johndoe");
-        user.setPassword("hashed");
         user.setUserStatus(UserStatus.ACTIVE);
         user.setEmailVerified(true);
         when(userRepository.findByUsernameOrEmail("johndoe", "johndoe")).thenReturn(Optional.of(user));
@@ -89,7 +88,7 @@ class CustomUserDetailsServiceTest {
         UserDetail detail = (UserDetail) result;
         assertThat(detail.getUser()).isSameAs(user);
         assertThat(detail.getUsername()).isEqualTo("johndoe");
-        assertThat(detail.getPassword()).isEqualTo("hashed");
+        assertThat(detail.getPassword()).isNull();
         assertThat(detail.isEnabled()).isTrue();
         assertThat(detail.isAccountNonLocked()).isTrue();
     }

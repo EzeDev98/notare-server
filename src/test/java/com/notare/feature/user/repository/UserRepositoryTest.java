@@ -116,6 +116,7 @@ class UserRepositoryTest {
     ) {
         return new User(
                 null,
+                null,
                 firstName,
                 lastName,
                 username,

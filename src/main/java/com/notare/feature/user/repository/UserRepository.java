@@ -55,6 +55,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     List<User> findByIdIn(Collection<Long> ids);
 
+    java.util.Optional<User> findByInternalAuthId(String internalAuthId);
+
     /**
      * Find people to invite: partial, case-insensitive match on username, email,
      * or full display name (first + last). Excludes the caller (you never need to
@@ -72,6 +74,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("""
             SELECT u FROM User u
             WHERE u.id <> :excludeUserId
+              AND (u.userStatus IS NULL OR u.userStatus NOT IN (
+                    com.notare.feature.user.enums.UserStatus.SUSPENDED,
+                    com.notare.feature.user.enums.UserStatus.DEACTIVATED))
               AND (
                     LOWER(u.username) LIKE LOWER(CONCAT('%', :term, '%')) ESCAPE '!'
                  OR LOWER(u.email) LIKE LOWER(CONCAT('%', :term, '%')) ESCAPE '!'

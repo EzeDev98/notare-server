@@ -1,20 +1,14 @@
 package com.notare.common.security;
 
-import com.notare.feature.user.service.impl.CustomUserDetailsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.util.matcher.RequestMatcher;
@@ -31,7 +25,6 @@ import java.util.List;
 public class WebSecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final CustomUserDetailsService userDetailsService;
     private final ProblemDetailAuthenticationEntryPoint authenticationEntryPoint;
     private final ProblemDetailAccessDeniedHandler accessDeniedHandler;
 
@@ -45,10 +38,12 @@ public class WebSecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(maliciousProbesMatcher()).denyAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/login/**", "/api/v1/auth/refresh").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/otp/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/activation/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/user/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/password/**").permitAll()
                         .requestMatchers("/public/**").permitAll()
+                        // IAM -> notare user lifecycle push; gated on a shared secret in UserEventController
+                        .requestMatchers(HttpMethod.POST, "/api/v1/internal/user-events").permitAll()
                         // Operator-only wipe endpoint — gated on its own shared
                         // secret inside AdminController, not a user JWT, so it
                         // has to be reachable here without one. See that
@@ -97,7 +92,6 @@ public class WebSecurityConfig {
                 .exceptionHandling(handling -> handling
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
-                .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -157,29 +151,5 @@ public class WebSecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-
-    /**
-     * NOTE for the Boot 3.2 downgrade: the DaoAuthenticationProvider constructor
-     * that takes a UserDetailsService was only added in Spring Security 6.4.
-     * Boot 3.2.5 ships Security 6.2, where the service is set after
-     * construction. Reverted accordingly — this will not compile otherwise.
-     */
-    @Bean
-    public DaoAuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
-        provider.setUserDetailsService(userDetailsService);
-        provider.setPasswordEncoder(passwordEncoder());
-        return provider;
-    }
-
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager();
     }
 }

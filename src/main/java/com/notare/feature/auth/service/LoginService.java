@@ -1,8 +1,8 @@
 package com.notare.feature.auth.service;
 
 import com.notare.feature.auth.dto.request.LoginRequest;
-import com.notare.feature.auth.dto.response.LoginResponse;
+import com.notare.feature.auth.dto.response.UserLoginResponse;
 
 public interface LoginService {
-    LoginResponse login(LoginRequest request, String userAgent, String ipAddress);
+    UserLoginResponse login(LoginRequest request, String userAgent, String ipAddress);
 }

@@ -1,5 +1,6 @@
 package com.notare.feature.admin.web;
 
+import com.notare.client.service.InternalAuthClient;
 import com.notare.feature.admin.service.DatabaseWipeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,7 @@ import java.security.MessageDigest;
 public class AdminController {
 
     private final DatabaseWipeService databaseWipeService;
+    private final InternalAuthClient authClient;
 
     @Value("${app.admin.wipe-secret}")
     private String wipeSecret;
@@ -51,7 +53,18 @@ public class AdminController {
 
         log.warn("Database wipe triggered via POST /admin/database/wipe.");
         databaseWipeService.wipeAllData();
-        return ResponseEntity.ok("All data wiped.");
+
+        // Users also live in internal-auth-server; wipe this app's tenant there so the same
+        // usernames/emails can register again. Safe to retry: both steps are idempotent.
+        try {
+            authClient.wipeTenantData();
+        } catch (RuntimeException e) {
+            log.error("Local database wiped, but the internal-auth tenant wipe failed", e);
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .body("Local data wiped, but the internal-auth tenant wipe failed: " + e.getMessage()
+                            + ". Call this endpoint again to retry.");
+        }
+        return ResponseEntity.ok("All data wiped (notare database and internal-auth tenant data).");
     }
 
     /** Constant-time comparison — a plain .equals() leaks the secret's

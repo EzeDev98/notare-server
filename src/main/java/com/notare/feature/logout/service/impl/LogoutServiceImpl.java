@@ -1,8 +1,8 @@
 package com.notare.feature.logout.service.impl;
 
+import com.notare.client.service.InternalAuthClient;
 import com.notare.feature.logout.dto.response.LogoutResponse;
 import com.notare.feature.logout.service.LogoutService;
-import com.notare.feature.session.service.SessionService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -11,22 +11,16 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class LogoutServiceImpl implements LogoutService {
 
-    private final SessionService sessionService;
+    private final InternalAuthClient authClient;
 
     @Override
-    public LogoutResponse logout(String sessionId, Long userId) {
+    public LogoutResponse logout(String accessToken) {
 
-        if (sessionId == null) {
-            return new LogoutResponse(HttpServletResponse.SC_BAD_REQUEST, "SessionId is null");
+        if (accessToken == null || accessToken.isBlank()) {
+            return new LogoutResponse(HttpServletResponse.SC_BAD_REQUEST, "Access token is missing");
         }
 
-        sessionService.revokeSession(sessionId, userId);
+        authClient.logout(accessToken);
         return new LogoutResponse(HttpServletResponse.SC_OK, "Logout successfully");
-    }
-
-    @Override
-    public LogoutResponse logoutAll(Long userId) {
-        sessionService.revokeAllSessions(userId);
-        return new LogoutResponse(HttpServletResponse.SC_OK, "All account logged out successfully");
     }
 }
