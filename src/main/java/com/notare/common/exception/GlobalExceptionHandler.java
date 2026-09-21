@@ -160,6 +160,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InternalAuthCallException.class)
     public ProblemDetail handleInternalAuthCallException(InternalAuthCallException ex) {
         log.warn("internal-auth-server call failed: status={}, message={}", ex.getStatus().value(), ex.getMessage());
+        // IAM answers 403 both for "verify your email" and for an admin-disabled account.
+        // Only the first should send the client to the verification page, so the
+        // disabled case is surfaced with the same status as a locked account.
+        if (ex.getStatus() == HttpStatus.FORBIDDEN
+                && ex.getMessage() != null
+                && ex.getMessage().toLowerCase().contains("disabled")) {
+            return ProblemDetail.forStatusAndDetail(HttpStatus.LOCKED,
+                    "This account has been disabled. Please contact support.");
+        }
         if (ex.getStatus().is4xxClientError()) {
             return ProblemDetail.forStatusAndDetail(ex.getStatus(), ex.getMessage());
         }
