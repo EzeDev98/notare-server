@@ -1,12 +1,13 @@
 package com.notare.feature.user.service.impl;
 
+import com.notare.client.dto.request.RegisterRequest;
+import com.notare.client.dto.response.InternalAuthApiResponse;
+import com.notare.client.dto.response.RegisterResponse;
+import com.notare.client.service.InternalAuthClient;
 import com.notare.common.dto.PagedResponse;
-import com.notare.common.exception.InvalidUserLookupException;
-import com.notare.common.exception.NotarianIdGenerationException;
-import com.notare.common.exception.PasswordMisMatchException;
-import com.notare.common.exception.UserAlreadyExistException;
-import com.notare.common.exception.UserNotFoundException;
+import com.notare.common.exception.*;
 import com.notare.common.util.LikeEscaper;
+import com.notare.feature.auth.validation.RegistrationValidator;
 import com.notare.feature.user.dto.request.RegistrationRequest;
 import com.notare.feature.user.dto.response.CurrentUserResponse;
 import com.notare.feature.user.dto.response.RegistrationResponse;
@@ -43,33 +44,42 @@ public class UserServiceImplementation implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final RegistrationValidator registrationValidator;
+    private final InternalAuthClient authClient;
 
 
     @Override
     @Transactional
     public RegistrationResponse registerUser(RegistrationRequest request) {
-        if (!request.getPassword().equals(request.getConfirmPassword())) {
-            throw new PasswordMisMatchException("Passwords do not match");
-        }
 
-        String username = request.getUsername() == null
-                ? null
-                : request.getUsername().trim();
 
-        String email = request.getEmail() == null
-                ? null
-                : request.getEmail().trim().toLowerCase();
+        registrationValidator.validateRegistrationRequest(request);
+
+        String username = request.getUsername() == null ? null : request.getUsername().trim();
+
+        String email = request.getEmail() == null ? null : request.getEmail().trim().toLowerCase();
 
         Optional<User> existingUser = userRepository.findByUsernameOrEmail(username, email);
-        existingUser.ifPresent(userFound -> {
-            if (userFound.getUsername().equals(username)) {
-                throw new UserAlreadyExistException("A user with this username is already registered");
+
+        if (existingUser.isPresent()) {
+            User found = existingUser.get();
+
+            if (request.getEmail() != null && found.getEmail().equals(request.getEmail())) {
+                throw new UserAlreadyExistsException("A user with this email is already registered");
             }
-            throw new UserAlreadyExistException("A user with this email is already registered");
-        });
+            if (request.getUsername() != null && found.getUsername().equals(request.getUsername())) {
+                throw new UserAlreadyExistsException("This username is already taken");
+            }
+        }
+
+        RegisterRequest registerRequest = new RegisterRequest(request.getUsername(), null, request.getEmail(), request.getPassword(), request.getConfirmPassword());
+
+        InternalAuthApiResponse<RegisterResponse> registerResponse = authClient.register(registerRequest);
+
+        RegisterResponse response = registerResponse.getData();
 
         try {
-            User user = createUser(request);
+            User user = createUser(request, response.getInternalAuthUserId());
             eventPublisher.publishEvent(new UserRegisteredEvent(user.getId()));
             return new RegistrationResponse(HttpServletResponse.SC_CREATED, "Account created. Please check your email to verify your account.", user.getNotarianId());
         } catch (DataIntegrityViolationException ex) {
@@ -172,9 +182,10 @@ public class UserServiceImplementation implements UserService {
                 user.getLastName());
     }
 
-    private User createUser(RegistrationRequest request) {
+    private User createUser(RegistrationRequest request, String interAuthUserId) {
 
         User user = new User();
+        user.setInternalAuthId(interAuthUserId);
         user.setNotarianId(generateUniqueNotarianId());
         user.setFirstName(request.getFirstName().trim());
         user.setLastName(request.getLastName().trim());

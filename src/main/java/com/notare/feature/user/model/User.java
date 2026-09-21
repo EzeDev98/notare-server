@@ -25,6 +25,9 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "internal_auth_id")
+    private String internalAuthId;
+
     @Column(nullable = false)
     private String firstName;
 
