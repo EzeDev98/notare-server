@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.notare.common.exception.InvalidOtpException;
 import com.notare.common.exception.InvalidResetTokenException;
 import com.notare.common.exception.PasswordMisMatchException;
-import com.notare.config.OtpProperties;
 import com.notare.feature.auth.validation.OtpCodeValidator;
 import com.notare.feature.passwordreset.dto.response.VerifyResetOtpResponse;
 import com.notare.feature.passwordreset.service.PasswordResetService;
@@ -47,7 +46,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * constraint as {@code VerifyOtpRequest} in Step 15c, for the identical
  * reason: {@code @WebMvcTest} does not component-scan a plain
  * {@code @Component} outside the controller-shaped set, so
- * {@link OtpCodeValidator} (and the {@link OtpProperties} it depends on for
+ * {@link OtpCodeValidator} (which validates the 6-digit code; it used to depend on OtpProperties for
  * {@code app.otp.length=6}) must be imported explicitly, or the constraint
  * would be silently absent and the malformed-code test below would pass for
  * the wrong reason.
@@ -73,7 +72,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         )
 )
 @AutoConfigureMockMvc(addFilters = false)
-@Import({OtpProperties.class, OtpCodeValidator.class})
+@Import(OtpCodeValidator.class)
 class PasswordResetControllerTest {
 
     private static final String FORGOT_PASSWORD_URL = "/api/v1/password/forgot-password";

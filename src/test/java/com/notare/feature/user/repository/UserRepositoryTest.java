@@ -122,7 +122,6 @@ class UserRepositoryTest {
                 username,
                 notarianId,
                 email,
-                "encoded-password",
                 UserStatus.ACTIVE,
                 true,
                 LocalDateTime.now(),

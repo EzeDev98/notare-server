@@ -1,6 +1,5 @@
 package com.notare.feature.auth.validation;
 
-import com.notare.config.OtpProperties;
 import jakarta.validation.ConstraintValidatorContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,14 +42,11 @@ class OtpCodeValidatorTest {
     @Mock
     private ConstraintValidatorContext.ConstraintViolationBuilder violationBuilder;
 
-    private OtpProperties otpProperties;
     private OtpCodeValidator validator;
 
     @BeforeEach
     void setUp() {
-        otpProperties = new OtpProperties();
-        otpProperties.setLength(6);
-        validator = new OtpCodeValidator(otpProperties);
+        validator = new OtpCodeValidator();
 
         // Stubbed leniently: only the invalid-value tests below actually reach
         // this call (production code only touches the context when the value
@@ -122,15 +118,14 @@ class OtpCodeValidatorTest {
     }
 
     @Test
-    void isValid_usesTheConfiguredLengthNotAHardcodedSix() {
-        otpProperties.setLength(4);
-
-        assertThat(validator.isValid("1234", context)).isTrue();
-        assertThat(validator.isValid("123456", context)).isFalse();
+    void isValid_requiresExactlySixDigits() {
+        assertThat(validator.isValid("123456", context)).isTrue();
+        assertThat(validator.isValid("1234", context)).isFalse();
+        assertThat(validator.isValid("1234567", context)).isFalse();
     }
 
     @Test
-    void isValid_invalidValueDisablesDefaultViolationAndBuildsTheConfiguredLengthMessage() {
+    void isValid_invalidValueDisablesDefaultViolationAndBuildsTheLengthMessage() {
         when(context.buildConstraintViolationWithTemplate(anyString())).thenReturn(violationBuilder);
 
         boolean result = validator.isValid("abc", context);
@@ -139,16 +134,6 @@ class OtpCodeValidatorTest {
         verify(context).disableDefaultConstraintViolation();
         verify(context).buildConstraintViolationWithTemplate("Code must be 6 digits.");
         verify(violationBuilder).addConstraintViolation();
-    }
-
-    @Test
-    void isValid_violationMessageReflectsANonDefaultConfiguredLength() {
-        otpProperties.setLength(4);
-        when(context.buildConstraintViolationWithTemplate(anyString())).thenReturn(violationBuilder);
-
-        validator.isValid("12345", context); // 5 digits, configured length is 4
-
-        verify(context).buildConstraintViolationWithTemplate("Code must be 4 digits.");
     }
 
     @Test

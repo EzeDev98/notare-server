@@ -29,7 +29,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -79,7 +78,6 @@ public class UserServiceImplementationTest {
     private static final int MAX_USER_LOOKUP_IDS = 100;
 
     @Mock private NotarianIdGenerator notarianIdGenerator;
-    @Mock private PasswordEncoder passwordEncoder;
     @Mock private UserRepository userRepository;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private RegistrationValidator registrationValidator;
@@ -89,7 +87,7 @@ public class UserServiceImplementationTest {
 
     @BeforeEach
     void setUp() {
-        service = new UserServiceImplementation(notarianIdGenerator, passwordEncoder, userRepository, eventPublisher, registrationValidator, authClient);
+        service = new UserServiceImplementation(notarianIdGenerator, userRepository, eventPublisher, registrationValidator, authClient);
     }
 
     private RegistrationRequest registrationRequest() {
@@ -159,13 +157,12 @@ public class UserServiceImplementationTest {
     }
 
     @Test
-    void registerUser_trimsAndNormalizesFields_encodesPassword_andSetsInitialStatus() {
+    void registerUser_trimsAndNormalizesFields_andSetsInitialStatus() {
         RegistrationRequest request = registrationRequest();
         stubIamRegister();
         when(userRepository.findByUsernameOrEmail("johndoe", "john@example.com")).thenReturn(Optional.empty());
         when(notarianIdGenerator.generateId()).thenReturn("BADAZOP");
         when(userRepository.existsByNotarianId("BADAZOP")).thenReturn(false);
-        when(passwordEncoder.encode("Passw0rd!")).thenReturn("$2a$encoded");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
             User saved = invocation.getArgument(0);
             saved.setId(99L);
@@ -182,7 +179,6 @@ public class UserServiceImplementationTest {
         assertThat(saved.getLastName()).isEqualTo("Doe");
         assertThat(saved.getUsername()).isEqualTo("johndoe");
         assertThat(saved.getEmail()).isEqualTo("john@example.com");
-        assertThat(saved.getPassword()).isEqualTo("$2a$encoded");
         assertThat(saved.getNotarianId()).isEqualTo("BADAZOP");
         assertThat(saved.getUserStatus()).isEqualTo(UserStatus.PENDING_VERIFICATION);
         assertThat(saved.isEmailVerified()).isFalse();
