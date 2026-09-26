@@ -233,6 +233,24 @@ public class InternalAuthClient {
      * signing the user out in internal-auth deletes those tokens, which is how SyncPoint
      * finds out that its own "signed in elsewhere" record is stale.
      */
+    public InternalAuthApiResponse<LogoutResponse> logoutAll(String accessToken) {
+        return restClient.delete()
+                .uri("/session/all")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, this::handleDownstreamError)
+                .body(new ParameterizedTypeReference<InternalAuthApiResponse<LogoutResponse>>() {});
+    }
+
+    public InternalAuthApiResponse<java.util.List<SessionResponse>> listSessions(String accessToken) {
+        return restClient.get()
+                .uri("/session")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, this::handleDownstreamError)
+                .body(new ParameterizedTypeReference<InternalAuthApiResponse<java.util.List<SessionResponse>>>() {});
+    }
+
     public boolean isSessionLive(String username) {
         InternalAuthApiResponse<SessionStatusResponse> response = restClient.post()
                 .uri("/auth/session-status")

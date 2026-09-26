@@ -25,4 +25,11 @@ public class LogoutController {
         LogoutResponse response = logoutService.logout(token);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+
+    @PostMapping("/logout-all")
+    public ResponseEntity<LogoutResponse> logoutAll(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization) {
+        String token = authorization.startsWith(BEARER_PREFIX) ? authorization.substring(BEARER_PREFIX.length()).trim() : null;
+        LogoutResponse response = logoutService.logoutAll(token);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
 }
