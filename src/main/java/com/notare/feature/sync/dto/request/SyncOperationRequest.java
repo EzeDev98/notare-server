@@ -60,15 +60,4 @@ public class SyncOperationRequest {
 
     /** CREATE and UPDATE. */
     private String content;
-
-    /**
-     * UPDATE only: the version the client's edit was based on.
-     *
-     * <p>This is what makes offline editing safe. It flows into the same
-     * requireMatchingVersion check the online PUT uses, so a queued edit built
-     * on stale state is caught by exactly the mechanism from Step 2 — one
-     * conflict protocol, whether the client was online or has been in a tunnel
-     * for an hour.
-     */
-    private Long version;
 }

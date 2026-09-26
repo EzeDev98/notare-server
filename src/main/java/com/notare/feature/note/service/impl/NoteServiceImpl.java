@@ -1,7 +1,6 @@
 package com.notare.feature.note.service.impl;
 
 import com.notare.common.dto.PagedResponse;
-import com.notare.common.exception.NoteConflictException;
 import com.notare.common.exception.NoteNotFoundException;
 import com.notare.common.util.LikeEscaper;
 import com.notare.feature.note.dto.request.AutoSaveNoteRequest;
@@ -308,24 +307,14 @@ public class NoteServiceImpl implements NoteService {
     }
 
     /**
-     * Full replacement of a note's editable fields (PUT semantics), version
-     * gate included.
+     * Full replacement of a note's editable fields (PUT semantics).
      *
      * <p>Shared by the owner's updateNote and the collaborator's
-     * updateAuthorizedNote. Both writers MUST pass the same version gate or
-     * Step 2's optimistic locking silently breaks now that a two-writer race is
-     * possible — and the surest way to guarantee that is for there to be one
-     * gate, not two identical ones.
+     * updateAuthorizedNote. Last write wins: there is no version check, so the
+     * content that arrives replaces whatever is stored.
      *
-     * <p>Layer 1 is requireMatchingVersion: it catches the common case, a
-     * client editing from a version the server has already moved past, and
-     * returns a clean 409 carrying the current version.
-     *
-     * <p>Layer 2 is saveAndFlush, which forces the UPDATE now so @Version
-     * increments and @LastModifiedDate is set before the response is mapped. It
-     * also means a genuinely concurrent write — two requests that both passed
-     * layer 1 — trips Hibernate's own optimistic-lock check here and surfaces
-     * as ObjectOptimisticLockingFailureException, also a 409.
+     * <p>saveAndFlush forces the UPDATE now so @Version increments and
+     * @LastModifiedDate is set before the response is mapped.
      *
      * <p>A null content CLEARS it. That is the difference from
      * auto-save, and the reason the two request DTOs stay separate types
@@ -336,8 +325,6 @@ public class NoteServiceImpl implements NoteService {
      * of it.
      */
     private NoteResponse applyFullUpdate(Note note, UpdateNoteRequest request) {
-        requireMatchingVersion(request.getVersion(), note);
-
         note.setContent(request.getContent());
 
         Note saved = noteRepository.saveAndFlush(note);
@@ -345,7 +332,7 @@ public class NoteServiceImpl implements NoteService {
     }
 
     /**
-     * Partial update (PATCH semantics), version gate included.
+     * Partial update (PATCH semantics). Last write wins, no version check.
      *
      * <p>Shared by the owner's autoSave and the collaborator's
      * autoSaveAuthorizedNote, for the same reason as applyFullUpdate above.
@@ -364,8 +351,6 @@ public class NoteServiceImpl implements NoteService {
      * client can never catch up with.
      */
     private NoteResponse applyAutoSave(Note note, AutoSaveNoteRequest request) {
-        requireMatchingVersion(request.getVersion(), note);
-
         if (request.getContent() != null) {
             note.setContent(request.getContent());
         }
@@ -469,19 +454,5 @@ public class NoteServiceImpl implements NoteService {
                 .map(noteMapper::toSummary)
                 .toList();
         return PagedResponse.of(content, page);
-    }
-
-    /**
-     * Compares the version the client based its edit on against the note's
-     * current version. A mismatch means someone else saved in between, so we
-     * abort with a 409 that carries the current version for reconciliation.
-     * Shared by the full update, the auto-save, and the collaborator write path.
-     */
-    private void requireMatchingVersion(Long expectedVersion, Note note) {
-        if (!note.getVersion().equals(expectedVersion)) {
-            throw new NoteConflictException(
-                    "This note has been modified since you loaded it.",
-                    note.getVersion());
-        }
     }
 }

@@ -3,7 +3,6 @@ package com.notare.feature.share.web;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.notare.common.dto.PagedResponse;
 import com.notare.common.exception.InsufficientNotePermissionException;
-import com.notare.common.exception.NoteConflictException;
 import com.notare.common.exception.NoteShareNotFoundException;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
@@ -276,35 +275,6 @@ public class SharedNoteControllerTest {
     }
 
     @Test
-    void updateSharedNote_missingVersion_returns400BeforeReachingTheService() throws Exception {
-        authenticateAs(1L);
-
-        Map<String, Object> body = new HashMap<>();
-        body.put("content", "edited");
-
-        mockMvc.perform(put(BASE_URL + "/7")
-                        .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(body)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors.version").value("Version is required so we can detect edit conflicts."));
-
-        verifyNoInteractions(sharedNoteService);
-    }
-
-    @Test
-    void updateSharedNote_staleVersion_returns409WithCurrentVersionExposed() throws Exception {
-        authenticateAs(1L);
-        when(sharedNoteService.updateSharedNote(eq(1L), eq(7L), any()))
-                .thenThrow(new NoteConflictException("This note was modified elsewhere.", 5L));
-
-        mockMvc.perform(put(BASE_URL + "/7")
-                        .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(updateBody("stale", 1L))))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.currentVersion").value(5));
-    }
-
-    @Test
     void updateSharedNote_readOnlyRecipient_returns403ViaGlobalExceptionHandler() throws Exception {
         authenticateAs(1L);
         when(sharedNoteService.updateSharedNote(eq(1L), eq(7L), any()))
@@ -335,19 +305,6 @@ public class SharedNoteControllerTest {
                         .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.version").value(2));
-    }
-
-    @Test
-    void autoSaveSharedNote_missingVersion_returns400BeforeReachingTheService() throws Exception {
-        authenticateAs(1L);
-
-        mockMvc.perform(patch(BASE_URL + "/7")
-                        .contentType("application/json")
-                        .content("{}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors.version").value("Version is required so we can detect edit conflicts."));
-
-        verifyNoInteractions(sharedNoteService);
     }
 
     // ----------------------------------------------------------------

@@ -22,7 +22,6 @@ public record SyncBatchResponse(
          * without walking the list.
          */
         int appliedCount,
-        int conflictCount,
 
         /**
          * The server's clock at the end of the batch, offered as the next pull

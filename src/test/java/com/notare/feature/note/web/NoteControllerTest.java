@@ -2,7 +2,6 @@ package com.notare.feature.note.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.notare.common.dto.PagedResponse;
-import com.notare.common.exception.NoteConflictException;
 import com.notare.common.exception.NoteNotFoundException;
 import com.notare.feature.auth.web.AuthControllerTest;
 import com.notare.feature.note.dto.response.NoteResponse;
@@ -373,36 +372,6 @@ class NoteControllerTest {
     }
 
     @Test
-    void updateNote_missingVersion_returns400BeforeReachingTheService() throws Exception {
-        authenticateAs(1L);
-
-        Map<String, Object> body = new HashMap<>();
-        body.put("content", "updated");
-
-        mockMvc.perform(put(BASE_URL + "/5")
-                        .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(body)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors.version").value("Version is required so we can detect edit conflicts."));
-
-        verifyNoInteractions(noteService);
-    }
-
-    @Test
-    void updateNote_staleVersion_returns409WithCurrentVersionExposed() throws Exception {
-        authenticateAs(1L);
-        when(noteService.updateNote(eq(1L), eq(5L), any()))
-                .thenThrow(new NoteConflictException("This note was modified elsewhere.", 3L));
-
-        mockMvc.perform(put(BASE_URL + "/5")
-                        .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(updateBody("stale edit", 1L))))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.detail").value("This note was modified elsewhere."))
-                .andExpect(jsonPath("$.currentVersion").value(3));
-    }
-
-    @Test
     void updateNote_unknownNote_returns404ViaGlobalExceptionHandler() throws Exception {
         authenticateAs(1L);
         when(noteService.updateNote(eq(1L), eq(999L), any()))
@@ -432,36 +401,6 @@ class NoteControllerTest {
                         .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.version").value(2));
-    }
-
-    @Test
-    void autoSave_missingVersion_returns400BeforeReachingTheService() throws Exception {
-        authenticateAs(1L);
-
-        mockMvc.perform(patch(BASE_URL + "/5")
-                        .contentType("application/json")
-                        .content("{}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors.version").value("Version is required so we can detect edit conflicts."));
-
-        verifyNoInteractions(noteService);
-    }
-
-    @Test
-    void autoSave_staleVersion_returns409WithCurrentVersionExposed() throws Exception {
-        authenticateAs(1L);
-        when(noteService.autoSave(eq(1L), eq(5L), any()))
-                .thenThrow(new NoteConflictException("This note was modified elsewhere.", 4L));
-
-        Map<String, Object> body = new HashMap<>();
-        body.put("content", "typing...");
-        body.put("version", 1L);
-
-        mockMvc.perform(patch(BASE_URL + "/5")
-                        .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(body)))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.currentVersion").value(4));
     }
 
     // ----------------------------------------------------------------

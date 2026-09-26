@@ -259,10 +259,10 @@ class SyncControllerTest {
         authenticateAs(1L);
         SyncOperationResult applied = new SyncOperationResult(
                 "op-1", SyncResultStatus.APPLIED, sampleNote(5L, 1L, 1L), "client-note-1", null);
-        SyncOperationResult conflict = new SyncOperationResult(
-                "op-2", SyncResultStatus.CONFLICT, sampleNote(6L, 1L, 4L), null, "Server version is newer.");
+        SyncOperationResult notFound = new SyncOperationResult(
+                "op-2", SyncResultStatus.NOT_FOUND, null, null, "This note no longer exists.");
         SyncBatchResponse response = new SyncBatchResponse(
-                List.of(applied, conflict), 1, 1, LocalDateTime.now());
+                List.of(applied, notFound), 1, LocalDateTime.now());
         when(syncPushService.push(eq(1L), any())).thenReturn(response);
 
         mockMvc.perform(post(BATCH_URL)
@@ -272,13 +272,12 @@ class SyncControllerTest {
                                 operation("op-2", "UPDATE", null, 6L, "edit", 3L)))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.appliedCount").value(1))
-                .andExpect(jsonPath("$.conflictCount").value(1))
                 .andExpect(jsonPath("$.results[0].operationId").value("op-1"))
                 .andExpect(jsonPath("$.results[0].status").value("APPLIED"))
                 .andExpect(jsonPath("$.results[0].clientId").value("client-note-1"))
                 .andExpect(jsonPath("$.results[1].operationId").value("op-2"))
-                .andExpect(jsonPath("$.results[1].status").value("CONFLICT"))
-                .andExpect(jsonPath("$.results[1].message").value("Server version is newer."));
+                .andExpect(jsonPath("$.results[1].status").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.results[1].message").value("This note no longer exists."));
 
         verify(syncPushService).push(eq(1L), any());
     }
@@ -350,7 +349,7 @@ class SyncControllerTest {
     void push_isKeyedOffTheAuthenticatedPrincipalNotAnythingElse() throws Exception {
         authenticateAs(42L);
         when(syncPushService.push(eq(42L), any()))
-                .thenReturn(new SyncBatchResponse(List.of(), 0, 0, LocalDateTime.now()));
+                .thenReturn(new SyncBatchResponse(List.of(), 0, LocalDateTime.now()));
 
         mockMvc.perform(post(BATCH_URL)
                         .contentType("application/json")

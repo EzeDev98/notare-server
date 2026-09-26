@@ -460,30 +460,6 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void handleNoteConflictException_returns409WithMessageAndCurrentVersionExtension() {
-        // The one handler with a custom extension member beyond title/detail.
-        NoteConflictException ex = new NoteConflictException(
-                "This note was modified by another request.", 7L);
-
-        ProblemDetail problem = handler.handleNoteConflictException(ex);
-
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
-        assertThat(problem.getDetail()).isEqualTo("This note was modified by another request.");
-        assertThat(problem.getProperties().get("currentVersion")).isEqualTo(7L);
-    }
-
-    @Test
-    void handleNoteConflictException_currentVersionCanBeNull() {
-        // NoteConflictException accepts a null currentVersion (e.g. the note
-        // was deleted concurrently); the handler must not NPE unboxing it.
-        NoteConflictException ex = new NoteConflictException("Conflict.", null);
-
-        ProblemDetail problem = handler.handleNoteConflictException(ex);
-
-        assertThat(problem.getProperties().get("currentVersion")).isNull();
-    }
-
-    @Test
     void handleOptimisticLockingFailure_returns409WithFixedMessage() {
         ObjectOptimisticLockingFailureException ex =
                 new ObjectOptimisticLockingFailureException("Note", 5L);

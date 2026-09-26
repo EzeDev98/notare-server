@@ -203,7 +203,6 @@ class SharedNoteServiceImplTest {
 
         UpdateNoteRequest request = new UpdateNoteRequest();
         request.setContent("new");
-        request.setVersion(1L);
 
         assertThatThrownBy(() -> service.updateSharedNote(2L, 10L, request))
                 .isInstanceOf(InsufficientNotePermissionException.class)
@@ -217,7 +216,6 @@ class SharedNoteServiceImplTest {
                 .thenReturn(Optional.of(share(1L, 10L, 1L, 2L, SharePermission.WRITE)));
         UpdateNoteRequest request = new UpdateNoteRequest();
         request.setContent("new");
-        request.setVersion(1L);
         when(noteService.updateAuthorizedNote(10L, request)).thenReturn(noteResponse(10L, "new"));
 
         NoteResponse response = service.updateSharedNote(2L, 10L, request);
@@ -234,7 +232,6 @@ class SharedNoteServiceImplTest {
                 .thenReturn(Optional.of(share(1L, 10L, 1L, 2L, SharePermission.READ)));
 
         AutoSaveNoteRequest request = new AutoSaveNoteRequest();
-        request.setVersion(1L);
 
         assertThatThrownBy(() -> service.autoSaveSharedNote(2L, 10L, request))
                 .isInstanceOf(InsufficientNotePermissionException.class);
@@ -246,7 +243,6 @@ class SharedNoteServiceImplTest {
         when(noteShareRepository.findByNoteIdAndSharedWithUserId(10L, 2L))
                 .thenReturn(Optional.of(share(1L, 10L, 1L, 2L, SharePermission.WRITE)));
         AutoSaveNoteRequest request = new AutoSaveNoteRequest();
-        request.setVersion(1L);
         when(noteService.autoSaveAuthorizedNote(10L, request)).thenReturn(noteResponse(10L, "patched"));
 
         service.autoSaveSharedNote(2L, 10L, request);

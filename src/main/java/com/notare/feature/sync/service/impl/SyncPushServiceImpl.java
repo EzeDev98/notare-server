@@ -1,9 +1,7 @@
 package com.notare.feature.sync.service.impl;
 
-import com.notare.common.exception.NoteConflictException;
 import com.notare.common.exception.NoteNotFoundException;
 import com.notare.feature.note.dto.response.NoteResponse;
-import com.notare.feature.note.service.NoteService;
 import com.notare.feature.sync.dto.request.SyncBatchRequest;
 import com.notare.feature.sync.dto.request.SyncOperationRequest;
 import com.notare.feature.sync.dto.response.SyncBatchResponse;
@@ -35,13 +33,11 @@ import java.util.List;
 public class SyncPushServiceImpl implements SyncPushService {
 
     private final SyncOperationApplier applier;
-    private final NoteService noteService;
 
     @Override
     public SyncBatchResponse push(Long ownerId, SyncBatchRequest request) {
         List<SyncOperationResult> results = new ArrayList<>();
         int applied = 0;
-        int conflicts = 0;
 
         // Sequential, in the order the client queued them. NOT parallelised:
         // a client that created a note offline and then edited it sends CREATE
@@ -60,25 +56,9 @@ public class SyncPushServiceImpl implements SyncPushService {
             }
 
             try {
-                SyncOperationResult result = applier.apply(ownerId, operation);
+                SyncOperationResult result = applyWithRetry(ownerId, operation);
                 results.add(result);
                 applied++;
-
-            } catch (NoteConflictException | OptimisticLockingFailureException ex) {
-                // Somebody else wrote first. Fetch the server's CURRENT note and
-                // ship it back, so the client can diff or merge immediately
-                // instead of making another request to find out what it lost to.
-                //
-                // This read runs OUTSIDE the applier's rolled-back transaction,
-                // which is why the conflict wasn't caught in there: an
-                // optimistic-lock failure leaves the persistence context
-                // unusable, so nothing more can safely be done inside it.
-                NoteResponse current = noteService
-                        .findAnyNote(ownerId, operation.getNoteId())
-                        .orElse(null);
-                results.add(result(operation, SyncResultStatus.CONFLICT, current,
-                        "This note was modified elsewhere since your change."));
-                conflicts++;
 
             } catch (NoteNotFoundException ex) {
                 // Trashed or deleted from another device while this one was
@@ -102,7 +82,7 @@ public class SyncPushServiceImpl implements SyncPushService {
 
         // The SERVER's clock, offered as the client's next pull cursor. Taken
         // after the loop so it covers everything just written.
-        return new SyncBatchResponse(results, applied, conflicts, LocalDateTime.now());
+        return new SyncBatchResponse(results, applied, LocalDateTime.now());
     }
 
     /**
@@ -119,21 +99,30 @@ public class SyncPushServiceImpl implements SyncPushService {
             case CREATE -> operation.getClientId() == null || operation.getClientId().isBlank()
                     ? "clientId is required for a CREATE operation."
                     : null;
-            case UPDATE -> {
-                if (operation.getNoteId() == null) {
-                    yield "noteId is required for an UPDATE operation.";
-                }
-                // Without a version there is nothing to compare, so the write
-                // would silently overwrite whatever is on the server — exactly
-                // the last-write-wins behaviour this design rejected.
-                yield operation.getVersion() == null
-                        ? "version is required for an UPDATE operation."
-                        : null;
-            }
+            case UPDATE -> operation.getNoteId() == null
+                    ? "noteId is required for an UPDATE operation."
+                    : null;
             case DELETE -> operation.getNoteId() == null
                     ? "noteId is required for a DELETE operation."
                     : null;
         };
+    }
+
+    /**
+     * Last write wins. If two writes to the same note collide at the database
+     * level, the operation is simply applied again on top of the fresh row
+     * rather than reported back as a conflict.
+     */
+    private SyncOperationResult applyWithRetry(Long ownerId, SyncOperationRequest operation) {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return applier.apply(ownerId, operation);
+            } catch (OptimisticLockingFailureException ex) {
+                if (attempt >= 3) {
+                    throw ex;
+                }
+            }
+        }
     }
 
     private SyncOperationResult result(SyncOperationRequest operation,

@@ -1,6 +1,5 @@
 package com.notare.feature.sync.service.impl;
 
-import com.notare.common.exception.NoteConflictException;
 import com.notare.common.exception.NoteNotFoundException;
 import com.notare.feature.note.dto.request.CreateNoteRequest;
 import com.notare.feature.note.dto.request.UpdateNoteRequest;
@@ -127,7 +126,6 @@ class SyncOperationApplierTest {
 
         SyncOperationRequest req = request(SyncOperationType.UPDATE);
         req.setNoteId(NOTE_ID);
-        req.setVersion(1L); // stale on purpose — a replay must ignore this entirely
 
         SyncOperationResult result = applier.apply(OWNER_ID, req);
 
@@ -208,7 +206,6 @@ class SyncOperationApplierTest {
                 .thenReturn(Optional.empty());
         SyncOperationRequest req = request(SyncOperationType.UPDATE);
         req.setNoteId(NOTE_ID);
-        req.setVersion(2L);
         req.setContent("updated content");
         NoteResponse updated = note(NOTE_ID, 3L);
         when(noteService.updateNote(eq(OWNER_ID), eq(NOTE_ID), any(UpdateNoteRequest.class)))
@@ -224,26 +221,9 @@ class SyncOperationApplierTest {
         ArgumentCaptor<UpdateNoteRequest> captor = ArgumentCaptor.forClass(UpdateNoteRequest.class);
         verify(noteService).updateNote(eq(OWNER_ID), eq(NOTE_ID), captor.capture());
         assertThat(captor.getValue().getContent()).isEqualTo("updated content");
-        assertThat(captor.getValue().getVersion()).isEqualTo(2L);
 
         verify(syncOperationRepository).save(ledgerCaptor.capture());
         assertThat(ledgerCaptor.getValue().getResultVersion()).isEqualTo(3L);
-    }
-
-    @Test
-    void apply_updateOperation_thatConflicts_propagatesTheExceptionAndSkipsTheLedgerWrite() {
-        when(syncOperationRepository.findByOwnerIdAndOperationId(OWNER_ID, OPERATION_ID))
-                .thenReturn(Optional.empty());
-        SyncOperationRequest req = request(SyncOperationType.UPDATE);
-        req.setNoteId(NOTE_ID);
-        req.setVersion(1L);
-        when(noteService.updateNote(eq(OWNER_ID), eq(NOTE_ID), any(UpdateNoteRequest.class)))
-                .thenThrow(new NoteConflictException("stale version", 5L));
-
-        assertThatThrownBy(() -> applier.apply(OWNER_ID, req))
-                .isInstanceOf(NoteConflictException.class);
-
-        verify(syncOperationRepository, never()).save(any());
     }
 
     // -------------------------------------------------------------------

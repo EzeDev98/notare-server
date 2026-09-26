@@ -1,6 +1,5 @@
 package com.notare.feature.sync.service.impl;
 
-import com.notare.common.exception.NoteConflictException;
 import com.notare.common.exception.NoteNotFoundException;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.service.NoteService;
@@ -86,7 +85,7 @@ class SyncPushServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new SyncPushServiceImpl(applier, noteService);
+        service = new SyncPushServiceImpl(applier);
     }
 
     private SyncOperationRequest operation(String operationId, SyncOperationType type) {
@@ -144,27 +143,12 @@ class SyncPushServiceImplTest {
     void push_updateMissingNoteId_isInvalidWithoutCallingTheApplier() {
         SyncOperationRequest op = operation("op-1", SyncOperationType.UPDATE);
         op.setNoteId(null);
-        op.setVersion(3L);
 
         SyncBatchResponse response = service.push(OWNER_ID, batch(op));
 
         SyncOperationResult result = response.results().get(0);
         assertThat(result.status()).isEqualTo(SyncResultStatus.INVALID);
         assertThat(result.message()).contains("noteId");
-        verifyNoInteractions(applier);
-    }
-
-    @Test
-    void push_updateMissingVersion_isInvalidWithoutCallingTheApplier() {
-        SyncOperationRequest op = operation("op-1", SyncOperationType.UPDATE);
-        op.setNoteId(NOTE_ID);
-        op.setVersion(null);
-
-        SyncBatchResponse response = service.push(OWNER_ID, batch(op));
-
-        SyncOperationResult result = response.results().get(0);
-        assertThat(result.status()).isEqualTo(SyncResultStatus.INVALID);
-        assertThat(result.message()).contains("version");
         verifyNoInteractions(applier);
     }
 
@@ -195,7 +179,6 @@ class SyncPushServiceImplTest {
 
         assertThat(response.results()).containsExactly(applied("op-1"));
         assertThat(response.appliedCount()).isEqualTo(1);
-        assertThat(response.conflictCount()).isEqualTo(0);
     }
 
     @Test
@@ -216,53 +199,6 @@ class SyncPushServiceImplTest {
     // treated identically
     // -------------------------------------------------------------------
 
-    @Test
-    void push_applierThrowsNoteConflictException_returnsConflictWithTheCurrentNote() {
-        SyncOperationRequest op = operation("op-1", SyncOperationType.UPDATE);
-        op.setNoteId(NOTE_ID);
-        op.setVersion(1L);
-        when(applier.apply(OWNER_ID, op)).thenThrow(new NoteConflictException("stale", 5L));
-        NoteResponse current = note(NOTE_ID, 5L);
-        when(noteService.findAnyNote(OWNER_ID, NOTE_ID)).thenReturn(Optional.of(current));
-
-        SyncBatchResponse response = service.push(OWNER_ID, batch(op));
-
-        SyncOperationResult result = response.results().get(0);
-        assertThat(result.status()).isEqualTo(SyncResultStatus.CONFLICT);
-        assertThat(result.note()).isEqualTo(current);
-        assertThat(response.conflictCount()).isEqualTo(1);
-        assertThat(response.appliedCount()).isEqualTo(0);
-    }
-
-    @Test
-    void push_applierThrowsOptimisticLockingFailureException_isAlsoTreatedAsAConflict() {
-        SyncOperationRequest op = operation("op-1", SyncOperationType.UPDATE);
-        op.setNoteId(NOTE_ID);
-        op.setVersion(1L);
-        when(applier.apply(OWNER_ID, op)).thenThrow(new OptimisticLockingFailureException("stale row"));
-        when(noteService.findAnyNote(OWNER_ID, NOTE_ID)).thenReturn(Optional.of(note(NOTE_ID, 5L)));
-
-        SyncBatchResponse response = service.push(OWNER_ID, batch(op));
-
-        assertThat(response.results().get(0).status()).isEqualTo(SyncResultStatus.CONFLICT);
-        assertThat(response.conflictCount()).isEqualTo(1);
-    }
-
-    @Test
-    void push_conflict_whenTheNoteHasAlsoSinceVanished_resultCarriesANullNote() {
-        SyncOperationRequest op = operation("op-1", SyncOperationType.UPDATE);
-        op.setNoteId(NOTE_ID);
-        op.setVersion(1L);
-        when(applier.apply(OWNER_ID, op)).thenThrow(new NoteConflictException("stale", 5L));
-        when(noteService.findAnyNote(OWNER_ID, NOTE_ID)).thenReturn(Optional.empty());
-
-        SyncBatchResponse response = service.push(OWNER_ID, batch(op));
-
-        SyncOperationResult result = response.results().get(0);
-        assertThat(result.status()).isEqualTo(SyncResultStatus.CONFLICT);
-        assertThat(result.note()).isNull();
-    }
-
     // -------------------------------------------------------------------
     // Not-found handling
     // -------------------------------------------------------------------
@@ -278,7 +214,6 @@ class SyncPushServiceImplTest {
         SyncOperationResult result = response.results().get(0);
         assertThat(result.status()).isEqualTo(SyncResultStatus.NOT_FOUND);
         assertThat(response.appliedCount()).isEqualTo(0);
-        assertThat(response.conflictCount()).isEqualTo(0);
         // Unlike the conflict path, a not-found note has nothing worth
         // fetching — the operation is simply moot.
         verify(noteService, never()).findAnyNote(any(), any());
@@ -294,7 +229,6 @@ class SyncPushServiceImplTest {
         create.setClientId("local-1");
         SyncOperationRequest update = operation("op-2", SyncOperationType.UPDATE);
         update.setNoteId(NOTE_ID);
-        update.setVersion(1L);
         when(applier.apply(eq(OWNER_ID), any())).thenReturn(applied("op-1"), applied("op-2"));
 
         service.push(OWNER_ID, batch(create, update));
@@ -319,24 +253,6 @@ class SyncPushServiceImplTest {
         assertThat(response.results().get(1).status()).isEqualTo(SyncResultStatus.APPLIED);
         assertThat(response.appliedCount()).isEqualTo(1);
         verify(applier, never()).apply(OWNER_ID, invalid);
-    }
-
-    @Test
-    void push_oneConflictAmongOtherOperations_doesNotStopTheBatch() {
-        SyncOperationRequest conflicting = operation("op-1", SyncOperationType.UPDATE);
-        conflicting.setNoteId(NOTE_ID);
-        conflicting.setVersion(1L);
-        SyncOperationRequest valid = operation("op-2", SyncOperationType.CREATE);
-        valid.setClientId("local-2");
-        when(applier.apply(OWNER_ID, conflicting)).thenThrow(new NoteConflictException("stale", 5L));
-        when(noteService.findAnyNote(OWNER_ID, NOTE_ID)).thenReturn(Optional.empty());
-        when(applier.apply(OWNER_ID, valid)).thenReturn(applied("op-2"));
-
-        SyncBatchResponse response = service.push(OWNER_ID, batch(conflicting, valid));
-
-        assertThat(response.results()).hasSize(2);
-        assertThat(response.appliedCount()).isEqualTo(1);
-        assertThat(response.conflictCount()).isEqualTo(1);
     }
 
     // -------------------------------------------------------------------

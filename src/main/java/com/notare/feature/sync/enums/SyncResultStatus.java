@@ -26,14 +26,6 @@ public enum SyncResultStatus {
     APPLIED,
 
     /**
-     * Someone else got there first. The result carries the server's CURRENT
-     * note, not just its version, so the client can show a diff or merge
-     * immediately instead of making another request to find out what it's
-     * conflicting with.
-     */
-    CONFLICT,
-
-    /**
      * The note is gone — trashed or deleted on another device while this one
      * was offline. Not an error the user should see: the operation is simply
      * moot, and the client drops it.

@@ -101,11 +101,8 @@ public class SyncOperationApplier {
     private NoteResponse update(Long ownerId, SyncOperationRequest request) {
         UpdateNoteRequest updateRequest = new UpdateNoteRequest();
         updateRequest.setContent(request.getContent());
-        updateRequest.setVersion(request.getVersion());
-        // The ORDINARY owner-facing update: same requireMatchingVersion, same
-        // 409 semantics. An offline edit is not a special kind of write, it's
-        // an ordinary write that arrived late, and routing it anywhere else
-        // would fork the conflict protocol.
+        // The ORDINARY owner-facing update. Last write wins: whatever content
+        // arrives replaces what is stored.
         return noteService.updateNote(ownerId, request.getNoteId(), updateRequest);
     }
 

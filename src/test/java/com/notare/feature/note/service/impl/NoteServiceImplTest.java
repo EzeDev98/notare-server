@@ -1,7 +1,6 @@
 package com.notare.feature.note.service.impl;
 
 import com.notare.common.dto.PagedResponse;
-import com.notare.common.exception.NoteConflictException;
 import com.notare.common.exception.NoteNotFoundException;
 import com.notare.common.util.LikeEscaper;
 import com.notare.feature.note.dto.request.AutoSaveNoteRequest;
@@ -130,14 +129,12 @@ class NoteServiceImplTest {
     private UpdateNoteRequest updateNoteRequest(String content, Long version) {
         UpdateNoteRequest request = new UpdateNoteRequest();
         request.setContent(content);
-        request.setVersion(version);
         return request;
     }
 
     private AutoSaveNoteRequest autoSaveNoteRequest(String content, Long version) {
         AutoSaveNoteRequest request = new AutoSaveNoteRequest();
         request.setContent(content);
-        request.setVersion(version);
         return request;
     }
 
@@ -383,19 +380,6 @@ class NoteServiceImplTest {
     }
 
     @Test
-    void updateNote_throwsNoteConflictExceptionCarryingTheCurrentVersion_onAVersionMismatch() {
-        Note note = note(5L, 9L, "old", 3L);
-        when(noteRepository.findByIdAndOwnerIdAndDeletedFalse(5L, 9L)).thenReturn(Optional.of(note));
-
-        assertThatThrownBy(() -> service.updateNote(9L, 5L, updateNoteRequest("new", 2L)))
-                .isInstanceOf(NoteConflictException.class)
-                .hasMessage("This note has been modified since you loaded it.")
-                .satisfies(ex -> assertThat(((NoteConflictException) ex).getCurrentVersion()).isEqualTo(3L));
-
-        verify(noteRepository, never()).saveAndFlush(any());
-    }
-
-    @Test
     void updateNote_clearsTheContent_whenTheRequestsContentIsNull_thisIsPutSemantics() {
         Note note = note(5L, 9L, "old content", 3L);
         when(noteRepository.findByIdAndOwnerIdAndDeletedFalse(5L, 9L)).thenReturn(Optional.of(note));
@@ -430,16 +414,6 @@ class NoteServiceImplTest {
 
         assertThatThrownBy(() -> service.autoSave(9L, 5L, autoSaveNoteRequest("x", 1L)))
                 .isInstanceOf(NoteNotFoundException.class);
-    }
-
-    @Test
-    void autoSave_throwsNoteConflictException_onAVersionMismatch() {
-        Note note = note(5L, 9L, "old", 3L);
-        when(noteRepository.findByIdAndOwnerIdAndDeletedFalse(5L, 9L)).thenReturn(Optional.of(note));
-
-        assertThatThrownBy(() -> service.autoSave(9L, 5L, autoSaveNoteRequest("x", 2L)))
-                .isInstanceOf(NoteConflictException.class);
-        verify(noteRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -718,16 +692,6 @@ class NoteServiceImplTest {
         when(noteRepository.findByIdAndDeletedFalse(5L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getAuthorizedNote(5L)).isInstanceOf(NoteNotFoundException.class);
-    }
-
-    @Test
-    void updateAuthorizedNote_appliesTheSameVersionGate_andFullUpdateSemanticsAsUpdateNote() {
-        Note note = note(5L, 999L, "old", 3L);
-        when(noteRepository.findByIdAndDeletedFalse(5L)).thenReturn(Optional.of(note));
-
-        assertThatThrownBy(() -> service.updateAuthorizedNote(5L, updateNoteRequest("new", 2L)))
-                .isInstanceOf(NoteConflictException.class);
-        verify(noteRepository, never()).saveAndFlush(any());
     }
 
     @Test
