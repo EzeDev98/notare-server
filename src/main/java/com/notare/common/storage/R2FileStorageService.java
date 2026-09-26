@@ -88,7 +88,7 @@ public class R2FileStorageService implements FileStorageService {
         this.s3 = S3Client.builder()
                 .endpointOverride(URI.create(r2.getEndpoint()))
                 .credentialsProvider(StaticCredentialsProvider.create(credentials))
-                .region(Region.of("auto"))
+                .region(Region.of(r2.getRegion() == null || r2.getRegion().isBlank() ? "auto" : r2.getRegion()))
                 .serviceConfiguration(serviceConfiguration)
                 .httpClientBuilder(UrlConnectionHttpClient.builder())
                 .build();

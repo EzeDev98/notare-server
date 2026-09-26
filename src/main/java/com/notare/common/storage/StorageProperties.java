@@ -54,5 +54,6 @@ public class StorageProperties {
         private String bucket;
         private String accessKeyId;
         private String secretAccessKey;
+        private String region = "auto";
     }
 }
