@@ -2,6 +2,7 @@ package com.notare.feature.transcription.engine.impl;
 
 import com.notare.feature.transcription.dto.response.TranscriptionResult;
 import com.notare.feature.transcription.engine.TranscriptionEngine;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Component;
  * in prod by accident.
  */
 @Component
+@ConditionalOnProperty(prefix = "notare.transcription", name = "engine", havingValue = "stub", matchIfMissing = true)
 public class StubTranscriptionEngine implements TranscriptionEngine {
 
     @Override

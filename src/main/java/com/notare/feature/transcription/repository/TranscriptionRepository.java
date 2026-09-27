@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface TranscriptionRepository extends JpaRepository<Transcription, Long> {
@@ -38,4 +40,17 @@ public interface TranscriptionRepository extends JpaRepository<Transcription, Lo
                                                @Param("status") TranscriptionStatus status,
                                                @Param("term") String term,
                                                Pageable pageable);
+
+    /**
+     * Jobs left PENDING or PROCESSING past a cutoff — normally because the
+     * server restarted or slept mid-job and the in-memory worker never got to
+     * finish. Not ownership-scoped: recovery runs for every user's stuck jobs.
+     */
+    @Query("""
+            SELECT transcription FROM Transcription transcription
+            WHERE transcription.status IN :statuses
+              AND COALESCE(transcription.updatedAt, transcription.createdAt) < :cutoff
+            """)
+    List<Transcription> findStale(@Param("statuses") List<TranscriptionStatus> statuses,
+                                  @Param("cutoff") LocalDateTime cutoff);
 }
