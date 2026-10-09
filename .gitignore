@@ -46,3 +46,4 @@ application-test.properties
 ## LocalFileStorageService creates this directory itself on startup, so
 ## nothing here needs a tracked placeholder file.
 uploads/
+.DS_Store
