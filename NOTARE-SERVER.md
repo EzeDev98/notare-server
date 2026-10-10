@@ -6,6 +6,8 @@ This document covers everything built across Steps 1–10, the reasoning behind 
 
 **Status:** all ten planned steps complete and manually tested. Cross-cutting hardening not yet started.
 
+**Verified against code on 2026-10-09** (overhaul step 1g). Where this document and the controllers differ, the code wins (B-20).
+
 ---
 
 ## 1. Stack and build
@@ -241,7 +243,15 @@ Written as explicit JPQL because a **derived method name cannot express that gro
 
 `VoiceNote`: `ownerId`, optional `noteId` link, `contentType`, immutable `storageKey`, `sizeBytes`, `durationSeconds`. **Hard delete** (no soft delete, no `@Version`) — a recording is either there or it isn't, and a trashed binary blob helps nobody.
 
-`FileStorageService` is a Strategy interface. `LocalFileStorageService` is `@Profile("!prod")`. An S3 implementation is a drop-in.
+`FileStorageService` is a Strategy interface with three implementations:
+
+| Implementation | Active when | Stores |
+|---|---|---|
+| `LocalFileStorageService` | `@Profile("!prod")` | `notare.storage.local.location` on disk |
+| `R2FileStorageService` | `prod` and `notare.storage.backend=r2` (the default if unset) | Cloudflare R2, S3-compatible |
+| `PostgresFileStorageService` | `prod` and `notare.storage.backend=postgres` | `file_blobs` table in the same Postgres database (temporary, until R2 exists) |
+
+In prod, `STORAGE_BACKEND` picks the backend. R2 reads `R2_*` variables first, then the `AWS_*` variables Neon's console hands out. If `r2` is selected without its settings, `R2FileStorageService` fails fast at startup.
 
 ### The three lessons here
 
@@ -576,11 +586,12 @@ All paths are prefixed `/api/v1`. Everything requires a Bearer token except wher
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/user/register` | **public** |
+| GET | `/user/me` | current user profile |
+| GET | `/user/lookup?ids=1,2,3` | resolves ids to public profiles; bare list, not paged; also accepts `ids=1&ids=2` |
 | GET | `/user/search?q=&page=&size=` | blank `q` → empty page |
 | POST | `/login/login` | **public** |
 | POST | `/auth/refresh` | **public** |
-| POST | `/otp/verify-otp` | **public** |
-| POST | `/otp/resend-otp` | **public** |
+| POST | `/activation/resend` | **public**; always answers 200 with a generic message |
 | POST | `/password/forgot-password` | **public** |
 | POST | `/password/verify-reset-otp` | **public** |
 | POST | `/password/reset-password` | **public** |
@@ -588,6 +599,14 @@ All paths are prefixed `/api/v1`. Everything requires a Bearer token except wher
 | POST | `/logout/logout-all` | |
 | GET | `/session/sessions` | |
 | DELETE | `/session/sessions/{sessionId}` | |
+
+### Operator and internal
+
+| Method | Path | Success | Notes |
+|---|---|---|---|
+| POST | `/admin/database/wipe` | 200 | header `X-Admin-Secret`; 401 if wrong; 502 if the internal-auth tenant wipe fails (retry is safe) |
+| POST | `/internal/user-events` | 200 | header `X-Internal-Secret`, called by internal-auth-server; body `internalAuthUserId`, `event` |
+| GET | `/keep-alive` | 200 | **public** |
 
 ### Notes
 
@@ -600,7 +619,12 @@ All paths are prefixed `/api/v1`. Everything requires a Bearer token except wher
 | PUT | `/notes/{noteId}` | 200 | full replace; requires `version` |
 | PATCH | `/notes/{noteId}` | 200 | auto-save; partial; requires `version` |
 | DELETE | `/notes/{noteId}` | 204 | soft delete |
+| GET | `/notes/trash?page=&size=` | 200 | default sort `deletedAt` DESC |
 | POST | `/notes/{noteId}/restore` | 200 | |
+| POST | `/notes/{noteId}/pin` | 200 | owner only |
+| DELETE | `/notes/{noteId}/pin` | 200 | returns the note |
+| POST | `/notes/{noteId}/archive` | 200 | owner only |
+| DELETE | `/notes/{noteId}/archive` | 200 | returns the note |
 | DELETE | `/notes/{noteId}/permanent` | 204 | irreversible |
 
 ### Voice notes
@@ -634,6 +658,15 @@ All paths are prefixed `/api/v1`. Everything requires a Bearer token except wher
 | GET | `/collaborations/sent?page=&size=` | 200 | |
 | GET | `/collaborations/received?page=&size=` | 200 | |
 
+### Sharing a voice clip — owner side
+
+| Method | Path | Success | Notes |
+|---|---|---|---|
+| POST | `/voice-notes/{voiceNoteId}/shares` | 201 + `Location` | body: `ShareVoiceNoteRequest` |
+| GET | `/voice-notes/{voiceNoteId}/shares?page=&size=` | 200 | |
+| PUT | `/voice-notes/{voiceNoteId}/shares/{userId}` | 200 | body: permission |
+| DELETE | `/voice-notes/{voiceNoteId}/shares/{userId}` | 204 | |
+
 ### Sharing — owner side
 
 | Method | Path | Success | Notes |
@@ -650,6 +683,20 @@ All paths are prefixed `/api/v1`. Everything requires a Bearer token except wher
 | GET | `/shared-notes?page=&size=` | 200 | sorted by when shared |
 | GET | `/shared-notes/{noteId}` | 200 | requires READ |
 | PUT | `/shared-notes/{noteId}` | 200 | requires WRITE; 403 if READ only |
+| PATCH | `/shared-notes/{noteId}` | 200 | auto-save; partial; requires WRITE and `version` |
+| GET | `/shared-notes/{noteId}/voice-notes` | 200 | clips attached to the shared note |
+| POST | `/shared-notes/{noteId}/voice-notes?durationSeconds=` | 201 + `Location` | `multipart/form-data`, field `file` |
+| GET | `/shared-notes/{noteId}/voice-notes/{voiceNoteId}/download` | 200 | |
+| GET | `/shared-notes/{noteId}/voice-notes/{voiceNoteId}/stream` | 200 / 206 | HTTP Range |
+
+### Sharing a voice clip — recipient side
+
+| Method | Path | Success | Notes |
+|---|---|---|---|
+| GET | `/shared-voice-notes?page=&size=` | 200 | |
+| GET | `/shared-voice-notes/{voiceNoteId}` | 200 | metadata |
+| GET | `/shared-voice-notes/{voiceNoteId}/download` | 200 | |
+| GET | `/shared-voice-notes/{voiceNoteId}/stream` | 200 / 206 | HTTP Range |
 
 ### Notifications
 
@@ -717,14 +764,14 @@ That's a cycle, and it defeats the boundary the events were introduced to preser
 
 | Item | Why it matters |
 |---|---|
-| **No Flyway/Liquibase** | Prod runs `ddl-auto=validate`, which refuses to start when entities and schema differ. Every entity change since Step 1 needs manual SQL first. `V10__add_audit_columns.sql` exists and is Flyway-named, ready to drop in. |
-| **No `S3FileStorageService`** | `LocalFileStorageService` is `@Profile("!prod")`. Prod has no storage implementation at all. |
+| **Flyway: built, needs V5 onward** | Flyway runs in prod (`src/main/resources/db/migration`, V1 to V4: baseline schema, Modulith event publication, `users.internal_auth_id`, drop local password and OTP tables). Prod runs `ddl-auto=validate`; dev has Flyway off and uses `ddl-auto=update`. Every entity change from now on needs a new `V5__...` file. The manual DDL in `docs/` (`file_blobs_manual_ddl.sql`, `voice_shares_manual_ddl.sql`) must be folded into migrations before they are relied on. |
+| **File storage: built, needs a staging test** | `R2FileStorageService` and `PostgresFileStorageService` exist for prod, chosen by `STORAGE_BACKEND` (see §6). Test the chosen backend on staging before release. |
 
 ### Correctness and security
 
 | Item | Notes |
 |---|---|
-| **User id → name lookup** | The API returns bare ids everywhere (`lastModifiedBy`, `actorId`, `sharedWithUserId`, `collaboratorId`) but the user module only exposes text search. **Nothing can render a name.** Needs `GET /user/lookup?ids=1,2,3` → `List<UserSummaryResponse>`. Affects notifications, shares, collaborations and auditing equally. |
+| **User id → name lookup** | Built: `GET /user/lookup?ids=1,2,3` → `List<UserSummaryResponse>`. Known trade-off: ids are sequential, so an authenticated caller can walk the endpoint and enumerate public profiles. The per-request cap bounds the rate; the `/sync` rate limiter below should cover this path too. |
 | **Search wildcard escaping** | `%` and `_` in a search term act as SQL wildcards. Needs `ESCAPE` handling. |
 | **Magic-byte file validation** | Content type is client-declared and spoofable; the allowlist also produces false rejections. |
 | **Rate limiting on `/sync`** | `GET /sync` is designed to be polled and nothing bounds it. Needs bucket4j or a Redis limiter. |
@@ -737,7 +784,6 @@ That's a cycle, and it defeats the boundary the events were introduced to preser
 | Shared-with-me `totalElements` overcounts | 7 | Counts grants including trashed notes. Needs a JPQL `NoteShare→Note` join. |
 | No sort-by-note-recency on shared-with-me | 7 | Only the grant's own columns are sortable. Same join fixes it. |
 | `SharedNoteDetailResponse` | 7 | Shared reads currently expose the owner's `pinned`/`archived`. |
-| PATCH auto-save for collaborators | 7 | Recipients have PUT only; needs `autoSaveAuthorizedNote`. |
 | Revoke doesn't notify an open client | 7 | Access is gone server-side; the client learns on its next request. |
 | Notification payload column | 8 | Permission-changed can't say promotion vs demotion. |
 | `AFTER_COMMIT` retry could double-notify | 8 | No unique constraint, by design. Cosmetic in-app; matters once email exists. |
@@ -761,7 +807,12 @@ That's a cycle, and it defeats the boundary the events were introduced to preser
 | `notare.voice.max-size` | `20MB` | App-level limit; must stay ≤ multipart ceiling |
 | `notare.voice.max-duration-seconds` | `600` | Only checked when the client supplies a duration |
 | `notare.voice.allowed-content-types` | *(code default)* | Now unset in properties so the Java default governs |
-| `notare.storage.local.location` | `./uploads/voice-notes` | Local storage root (dev) |
+| `notare.storage.local.location` | `./uploads/voice-notes` | Local storage root (dev); env `VOICE_STORAGE_LOCATION` |
+| `notare.storage.backend` | `r2` | Prod only: `r2` or `postgres`; env `STORAGE_BACKEND` |
+| `notare.storage.r2.*` | *(empty)* | `endpoint`, `bucket`, `access-key-id`, `secret-access-key`, `region` (default `auto`); env `R2_*`, falling back to `AWS_*` |
+| `spring.flyway.enabled` | `true` (prod), `false` (dev) | Prod also sets `connect-retries=10` |
+| `app.admin.wipe-secret` | env `ADMIN_WIPE_SECRET` | Checked as `X-Admin-Secret` by `/admin/database/wipe` |
+| `internal-auth.user-events.secret` | env `INTERNAL_AUTH_USER_EVENTS_SECRET` | Required by `/internal/user-events`; unset means every call is rejected |
 | `notare.sync.overlap-seconds` | `5` | Delta window rewind |
 | `notare.sync.default-page-size` | `100` | |
 | `notare.sync.max-page-size` | `500` | |
