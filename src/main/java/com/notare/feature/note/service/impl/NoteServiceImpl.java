@@ -1,6 +1,7 @@
 package com.notare.feature.note.service.impl;
 
 import com.notare.common.dto.PagedResponse;
+import com.notare.common.exception.BodyIsCollaborativeException;
 import com.notare.common.exception.NoteNotFoundException;
 import com.notare.common.util.LikeEscaper;
 import com.notare.feature.note.dto.request.AutoSaveNoteRequest;
@@ -10,7 +11,9 @@ import com.notare.feature.note.dto.response.NoteChange;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
 import com.notare.feature.note.dto.response.TrashedNoteResponse;
+import com.notare.feature.note.enums.BodyMode;
 import com.notare.feature.note.event.NotePermanentlyDeletedEvent;
+import com.notare.feature.note.event.NoteSoftDeletedEvent;
 import com.notare.feature.note.mapper.NoteMapper;
 import com.notare.feature.note.model.Note;
 import com.notare.feature.note.repository.NoteRepository;
@@ -186,6 +189,7 @@ public class NoteServiceImpl implements NoteService {
         note.setDeleted(true);
         note.setDeletedAt(LocalDateTime.now());
         noteRepository.save(note);
+        eventPublisher.publishEvent(new NoteSoftDeletedEvent(noteId, ownerId));
     }
 
     @Override
@@ -325,6 +329,7 @@ public class NoteServiceImpl implements NoteService {
      * of it.
      */
     private NoteResponse applyFullUpdate(Note note, UpdateNoteRequest request) {
+        rejectIfCollaborative(note);
         note.setContent(request.getContent());
 
         Note saved = noteRepository.saveAndFlush(note);
@@ -352,11 +357,24 @@ public class NoteServiceImpl implements NoteService {
      */
     private NoteResponse applyAutoSave(Note note, AutoSaveNoteRequest request) {
         if (request.getContent() != null) {
+            rejectIfCollaborative(note);
             note.setContent(request.getContent());
         }
 
         Note saved = noteRepository.saveAndFlush(note);
         return noteMapper.toResponse(saved);
+    }
+
+    /**
+     * A COLLAB note's text is the merged document, so a plain "content = ..." write
+     * (PUT, or PATCH that sends content) is refused with 409 BODY_IS_COLLABORATIVE
+     * (step 15f). PATCH that leaves content out is unaffected, so the owner can still
+     * pin or archive. This also stops the legacy sync queue overwriting a merged body.
+     */
+    private static void rejectIfCollaborative(Note note) {
+        if (note.getBodyMode() == BodyMode.COLLAB) {
+            throw new BodyIsCollaborativeException(note.getId());
+        }
     }
 
     /**

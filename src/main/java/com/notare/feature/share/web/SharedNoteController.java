@@ -4,6 +4,7 @@ import com.notare.common.dto.PagedResponse;
 import com.notare.feature.note.dto.request.AutoSaveNoteRequest;
 import com.notare.feature.note.dto.request.UpdateNoteRequest;
 import com.notare.feature.note.dto.response.NoteResponse;
+import com.notare.feature.share.dto.response.SharedNoteDetailResponse;
 import com.notare.feature.share.dto.response.SharedNoteSummaryResponse;
 import com.notare.feature.share.service.SharedNoteService;
 import com.notare.feature.user.model.UserDetail;
@@ -88,7 +89,7 @@ public class SharedNoteController {
     public ResponseEntity<PagedResponse<SharedNoteSummaryResponse>> listSharedWithMe(
             @AuthenticationPrincipal UserDetail userDetail,
             @ParameterObject
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
+            @PageableDefault(size = 20)
             Pageable pageable) {
 
         PagedResponse<SharedNoteSummaryResponse> response =
@@ -99,15 +100,15 @@ public class SharedNoteController {
     /**
      * Open a shared note in full. Requires at least READ.
      *
-     * <p>Returns the same NoteResponse the owner's own endpoint returns —
-     * including the version, which the client must echo back to save.
+     * <p>Returns only what a recipient needs: id, title, body, role, owner name and
+     * updatedAt. The owner's pinned, archived and version are never included.
      */
     @GetMapping("/{noteId}")
-    public ResponseEntity<NoteResponse> getSharedNote(
+    public ResponseEntity<SharedNoteDetailResponse> getSharedNote(
             @AuthenticationPrincipal UserDetail userDetail,
             @PathVariable Long noteId) {
 
-        NoteResponse response = sharedNoteService.getSharedNote(
+        SharedNoteDetailResponse response = sharedNoteService.getSharedNote(
                 userDetail.getUser().getId(), noteId);
         return ResponseEntity.ok(response);
     }
@@ -126,12 +127,12 @@ public class SharedNoteController {
      * replacement semantics.
      */
     @PutMapping("/{noteId}")
-    public ResponseEntity<NoteResponse> updateSharedNote(
+    public ResponseEntity<SharedNoteDetailResponse> updateSharedNote(
             @AuthenticationPrincipal UserDetail userDetail,
             @PathVariable Long noteId,
             @Valid @RequestBody UpdateNoteRequest request) {
 
-        NoteResponse response = sharedNoteService.updateSharedNote(
+        SharedNoteDetailResponse response = sharedNoteService.updateSharedNote(
                 userDetail.getUser().getId(), noteId, request);
         return ResponseEntity.ok(response);
     }
@@ -159,12 +160,12 @@ public class SharedNoteController {
      * learn, whichever collection the note came from.
      */
     @PatchMapping("/{noteId}")
-    public ResponseEntity<NoteResponse> autoSaveSharedNote(
+    public ResponseEntity<SharedNoteDetailResponse> autoSaveSharedNote(
             @AuthenticationPrincipal UserDetail userDetail,
             @PathVariable Long noteId,
             @Valid @RequestBody AutoSaveNoteRequest request) {
 
-        NoteResponse response = sharedNoteService.autoSaveSharedNote(
+        SharedNoteDetailResponse response = sharedNoteService.autoSaveSharedNote(
                 userDetail.getUser().getId(), noteId, request);
         return ResponseEntity.ok(response);
     }

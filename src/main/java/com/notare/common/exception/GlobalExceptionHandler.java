@@ -227,6 +227,18 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
+    /**
+     * A plain-text write to a collaborative note (step 15f). The {@code code} member
+     * lets a client tell this 409 from a stale-version conflict without parsing prose.
+     */
+    @ExceptionHandler(BodyIsCollaborativeException.class)
+    public ProblemDetail handleBodyIsCollaborative(BodyIsCollaborativeException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("Body is collaborative");
+        problem.setProperty("code", "BODY_IS_COLLABORATIVE");
+        return problem;
+    }
+
     @ExceptionHandler(VoiceNoteNotFoundException.class)
     public ProblemDetail handleVoiceNoteNotFoundException(VoiceNoteNotFoundException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());

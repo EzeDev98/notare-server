@@ -6,6 +6,7 @@ import com.notare.common.exception.InsufficientNotePermissionException;
 import com.notare.common.exception.NoteShareNotFoundException;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
+import com.notare.feature.share.dto.response.SharedNoteDetailResponse;
 import com.notare.feature.share.dto.response.SharedNoteSummaryResponse;
 import com.notare.feature.share.enums.SharePermission;
 import com.notare.feature.share.service.SharedNoteService;
@@ -155,14 +156,15 @@ public class SharedNoteControllerTest {
                 new UsernamePasswordAuthenticationToken(userDetail, null, userDetail.getAuthorities()));
     }
 
-    private NoteResponse sampleNote(Long id, Long ownerId, String content, Long version) {
-        LocalDateTime now = LocalDateTime.now();
-        return new NoteResponse(id, ownerId, content, false, false, version, ownerId, now, now);
+    // ownerId and version are kept in the signature so call sites read the same, but a
+    // recipient's note no longer carries either (step 15g).
+    private SharedNoteDetailResponse sampleNote(Long id, Long ownerId, String content, Long version) {
+        return new SharedNoteDetailResponse(id, content, content, "viewer", "Ada Obi", LocalDateTime.now());
     }
 
     private SharedNoteSummaryResponse sampleSharedSummary(Long shareId, Long noteId, Long ownerId) {
-        NoteSummaryResponse note = new NoteSummaryResponse(noteId, "preview...", false, false, 1L, LocalDateTime.now());
-        return new SharedNoteSummaryResponse(shareId, note, ownerId, SharePermission.READ, LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        return new SharedNoteSummaryResponse(shareId, noteId, "preview...", "preview...", "Ada Obi", "viewer", now, now);
     }
 
     private PagedResponse<SharedNoteSummaryResponse> emptyPage() {
@@ -180,7 +182,7 @@ public class SharedNoteControllerTest {
     // ----------------------------------------------------------------
 
     @Test
-    void listSharedWithMe_noParams_usesThePageableDefaultOfSize20SortedByCreatedAtDesc() throws Exception {
+    void listSharedWithMe_noParams_usesThePageableDefaultOfSize20_andLeavesSortingToTheService() throws Exception {
         authenticateAs(1L);
         when(sharedNoteService.listSharedWithMe(eq(1L), any())).thenReturn(emptyPage());
 
@@ -192,9 +194,8 @@ public class SharedNoteControllerTest {
 
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageSize()).isEqualTo(20);
-        Sort.Order order = pageable.getSort().getOrderFor("createdAt");
-        assertThat(order).isNotNull();
-        assertThat(order.getDirection()).isEqualTo(Sort.Direction.DESC);
+        // The order (the note's updatedAt, newest first) is fixed in the query, not requested here.
+        assertThat(pageable.getSort().isUnsorted()).isTrue();
     }
 
     @Test
@@ -224,9 +225,11 @@ public class SharedNoteControllerTest {
         mockMvc.perform(get(BASE_URL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].shareId").value(3))
-                .andExpect(jsonPath("$.content[0].note.id").value(7))
-                .andExpect(jsonPath("$.content[0].ownerId").value(2))
-                .andExpect(jsonPath("$.content[0].permission").value("READ"))
+                .andExpect(jsonPath("$.content[0].noteId").value(7))
+                .andExpect(jsonPath("$.content[0].ownerName").value("Ada Obi"))
+                .andExpect(jsonPath("$.content[0].role").value("viewer"))
+                .andExpect(jsonPath("$.content[0].pinned").doesNotExist())
+                .andExpect(jsonPath("$.content[0].archived").doesNotExist())
                 .andExpect(jsonPath("$.totalElements").value(1));
     }
 
@@ -242,7 +245,11 @@ public class SharedNoteControllerTest {
         mockMvc.perform(get(BASE_URL + "/7"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(7))
-                .andExpect(jsonPath("$.content").value("hello"));
+                .andExpect(jsonPath("$.body").value("hello"))
+                .andExpect(jsonPath("$.role").value("viewer"))
+                .andExpect(jsonPath("$.pinned").doesNotExist())
+                .andExpect(jsonPath("$.archived").doesNotExist())
+                .andExpect(jsonPath("$.version").doesNotExist());
     }
 
     @Test
@@ -270,8 +277,8 @@ public class SharedNoteControllerTest {
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(updateBody("edited", 0L))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content").value("edited"))
-                .andExpect(jsonPath("$.version").value(1));
+                .andExpect(jsonPath("$.body").value("edited"))
+                .andExpect(jsonPath("$.version").doesNotExist());
     }
 
     @Test
@@ -304,7 +311,7 @@ public class SharedNoteControllerTest {
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.version").value(2));
+                .andExpect(jsonPath("$.version").doesNotExist());
     }
 
     // ----------------------------------------------------------------

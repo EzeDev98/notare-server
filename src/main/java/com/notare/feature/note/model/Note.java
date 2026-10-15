@@ -1,5 +1,6 @@
 package com.notare.feature.note.model;
 
+import com.notare.feature.note.enums.BodyMode;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -116,6 +117,21 @@ public class Note {
      */
     @Version
     private Long version;
+
+    /**
+     * Where this note's body lives (step 15b, D-032): LEGACY keeps it in
+     * {@code content}; COLLAB means a Yjs document held as updates and
+     * snapshots, and a content write is refused (15f). A note becomes COLLAB
+     * when its first collaboration update arrives.
+     *
+     * <p>columnDefinition carries the DEFAULT for the same reason lastModifiedBy
+     * is nullable: dev's ddl-auto=update cannot add a NOT NULL column to a table
+     * that already has rows, and prod's Flyway V5 declares exactly this column.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "body_mode", nullable = false, length = 10,
+            columnDefinition = "VARCHAR(10) DEFAULT 'LEGACY' NOT NULL")
+    private BodyMode bodyMode = BodyMode.LEGACY;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)

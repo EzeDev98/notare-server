@@ -1,7 +1,9 @@
 package com.notare.feature.share.mapper;
 
+import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
 import com.notare.feature.share.dto.response.NoteShareResponse;
+import com.notare.feature.share.dto.response.SharedNoteDetailResponse;
 import com.notare.feature.share.dto.response.SharedNoteSummaryResponse;
 import com.notare.feature.share.enums.SharePermission;
 import com.notare.feature.share.model.NoteShare;
@@ -15,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Step 3b of the coverage roadmap.
  *
  * <p>Covers {@link NoteShareMapper#toResponse} and {@link
- * NoteShareMapper#toSharedNote}. The second one is the more interesting of
+ * NoteShareMapper#toSharedSummary}. The second one is the more interesting of
  * the two: its own doc comment says the mapper must stay free of repository
  * calls and just join whatever {@code NoteSummaryResponse} it's handed - so
  * this test asserts the note is passed through BY REFERENCE (proving the
@@ -53,52 +55,56 @@ class NoteShareMapperTest {
     }
 
     @Test
-    void toSharedNote_joinsTheGrantWithTheSuppliedNoteSummary() {
+    void toSharedSummary_shapesTheRowForTheRecipient() {
         LocalDateTime sharedAt = LocalDateTime.of(2026, 1, 1, 10, 0);
+        LocalDateTime changedAt = LocalDateTime.of(2026, 1, 5, 9, 30);
         NoteShare share = new NoteShare();
         share.setId(1L);
         share.setOwnerId(3L);
         share.setPermission(SharePermission.READ);
         share.setCreatedAt(sharedAt);
 
-        NoteSummaryResponse note = new NoteSummaryResponse(2L, "preview", false, false, 1L, sharedAt);
+        NoteSummaryResponse note = new NoteSummaryResponse(2L, "First line\nmore", true, true, 9L, changedAt);
 
-        SharedNoteSummaryResponse result = mapper.toSharedNote(share, note);
+        SharedNoteSummaryResponse result = mapper.toSharedSummary(share, note, "Ada Obi");
 
         assertThat(result.shareId()).isEqualTo(1L);
-        assertThat(result.ownerId()).isEqualTo(3L);
-        assertThat(result.permission()).isEqualTo(SharePermission.READ);
-        // sharedAt comes from the GRANT's createdAt, not the note's own updatedAt.
+        assertThat(result.noteId()).isEqualTo(2L);
+        assertThat(result.title()).isEqualTo("First line");
+        assertThat(result.contentPreview()).isEqualTo("First line\nmore");
+        assertThat(result.ownerName()).isEqualTo("Ada Obi");
+        assertThat(result.role()).isEqualTo("viewer");
+        // updatedAt is the NOTE's; sharedAt is the GRANT's createdAt.
+        assertThat(result.updatedAt()).isEqualTo(changedAt);
         assertThat(result.sharedAt()).isEqualTo(sharedAt);
     }
 
     @Test
-    void toSharedNote_passesTheSuppliedNoteThroughByReference() {
-        // The mapper must not re-fetch or copy the note - it only joins
-        // whatever it was handed, which is what keeps it free of repository
-        // calls (and the N+1 that would come with one).
+    void toSharedSummary_namesAWriteGrantEditor() {
         NoteShare share = new NoteShare();
         share.setId(1L);
-        share.setPermission(SharePermission.READ);
+        share.setPermission(SharePermission.WRITE);
         NoteSummaryResponse note = new NoteSummaryResponse(2L, "preview", false, false, 1L, null);
 
-        SharedNoteSummaryResponse result = mapper.toSharedNote(share, note);
-
-        assertThat(result.note()).isSameAs(note);
+        assertThat(mapper.toSharedSummary(share, note, null).role()).isEqualTo("editor");
     }
 
     @Test
-    void toSharedNote_toleratesANullNoteWithoutThrowing() {
-        // SharedNoteServiceImpl relies on this: a grant whose note has since
-        // been deleted maps to a row with a null note, which the SERVICE then
-        // drops - the mapper itself must not throw or substitute a default.
+    void toDetail_carriesOnlyWhatARecipientNeeds() {
+        LocalDateTime changedAt = LocalDateTime.of(2026, 1, 5, 9, 30);
         NoteShare share = new NoteShare();
         share.setId(1L);
-        share.setPermission(SharePermission.READ);
+        share.setPermission(SharePermission.WRITE);
+        // Pinned, archived and version are set on the note on purpose: none may reach the recipient.
+        NoteResponse note = new NoteResponse(2L, 3L, "Title\nBody text", true, true, 7L, 3L, changedAt, changedAt);
 
-        SharedNoteSummaryResponse result = mapper.toSharedNote(share, null);
+        SharedNoteDetailResponse result = mapper.toDetail(share, note, "Ada Obi");
 
-        assertThat(result.note()).isNull();
-        assertThat(result.shareId()).isEqualTo(1L);
+        assertThat(result.id()).isEqualTo(2L);
+        assertThat(result.title()).isEqualTo("Title");
+        assertThat(result.body()).isEqualTo("Title\nBody text");
+        assertThat(result.role()).isEqualTo("editor");
+        assertThat(result.ownerName()).isEqualTo("Ada Obi");
+        assertThat(result.updatedAt()).isEqualTo(changedAt);
     }
 }

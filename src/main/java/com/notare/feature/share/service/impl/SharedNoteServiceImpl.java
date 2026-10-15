@@ -8,12 +8,15 @@ import com.notare.feature.note.dto.request.UpdateNoteRequest;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
 import com.notare.feature.note.service.NoteService;
+import com.notare.feature.share.dto.response.SharedNoteDetailResponse;
 import com.notare.feature.share.dto.response.SharedNoteSummaryResponse;
 import com.notare.feature.share.enums.SharePermission;
 import com.notare.feature.share.mapper.NoteShareMapper;
 import com.notare.feature.share.model.NoteShare;
 import com.notare.feature.share.repository.NoteShareRepository;
 import com.notare.feature.share.service.SharedNoteService;
+import com.notare.feature.user.dto.response.UserSummaryResponse;
+import com.notare.feature.user.service.UserService;
 import com.notare.feature.voiceshare.dto.request.ShareVoiceNoteRequest;
 import com.notare.feature.voiceshare.service.VoiceShareService;
 import com.notare.feature.voicenote.dto.request.VoiceNoteContent;
@@ -22,6 +25,7 @@ import com.notare.feature.voicenote.service.VoiceNoteService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,7 +33,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -57,85 +64,85 @@ public class SharedNoteServiceImpl implements SharedNoteService {
      */
     private final VoiceShareService voiceShareService;
 
+    /** Cross-module, PUBLIC API. Only to turn an owner id into a display name (step 15g). */
+    private final UserService userService;
+
     /**
-     * Resolves a page of grants into a page of notes with ONE extra query, not
-     * one per row.
+     * Resolves a page of grants into a page of notes with ONE extra query for the
+     * notes and one for the owners, not one per row.
      *
-     * <p>The obvious implementation — loop the grants, fetch each note — is the
-     * N+1 that has been flagged since Step 6: a page of 20 becomes 21 queries,
-     * and it degrades linearly with page size, so it looks fine in dev and hurts
-     * in production. Instead: collect every note id on the page, resolve them all
-     * at once, then join in memory.
+     * <p>The page itself comes from findVisibleSharedWithUser, which joins the note,
+     * so a trashed note is absent from the rows and from the total, and the order is
+     * the note's updatedAt, newest first (step 15g). A client-supplied sort is
+     * ignored on purpose: it could only name grant columns, and the order people want
+     * here is "most recently changed".
      */
     @Override
     @Transactional(readOnly = true)
     public PagedResponse<SharedNoteSummaryResponse> listSharedWithMe(Long userId, Pageable pageable) {
-        Page<NoteShare> page = noteShareRepository.findBySharedWithUserId(userId, pageable);
+        Pageable unsorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        Page<NoteShare> page = noteShareRepository.findVisibleSharedWithUser(userId, unsorted);
 
-        List<Long> noteIds = page.getContent().stream()
-                .map(NoteShare::getNoteId)
-                .toList();
+        List<NoteShare> shares = page.getContent();
+        Map<Long, NoteSummaryResponse> summaries = noteService.getAuthorizedNoteSummaries(
+                shares.stream().map(NoteShare::getNoteId).toList());
+        Map<Long, String> owners = ownerNames(
+                shares.stream().map(NoteShare::getOwnerId).collect(Collectors.toSet()));
 
-        // One batch query for the whole page, keyed by note id so the join below
-        // doesn't depend on the order rows came back in.
-        Map<Long, NoteSummaryResponse> summaries = noteService.getAuthorizedNoteSummaries(noteIds);
-
-        List<SharedNoteSummaryResponse> content = page.getContent().stream()
+        List<SharedNoteSummaryResponse> content = shares.stream()
                 .map(share -> {
                     NoteSummaryResponse summary = summaries.get(share.getNoteId());
-                    // Absent means the note was soft-deleted (or hard-deleted)
-                    // after the grant was made. The grant is stale; drop the row
-                    // rather than render an entry with a hole where the note
-                    // should be. A trashed note is invisible to collaborators for
-                    // the same reason it's invisible in the owner's own list.
-                    return summary == null ? null : noteShareMapper.toSharedNote(share, summary);
+                    // Trashed between the page query and the batch read: skip the row.
+                    return summary == null
+                            ? null
+                            : noteShareMapper.toSharedSummary(share, summary, owners.get(share.getOwnerId()));
                 })
                 .filter(Objects::nonNull)
                 .toList();
 
-        // KNOWN INCONSISTENCY, accepted for the MVP: totalElements counts grants,
-        // including ones whose note has since been trashed, so a page can return
-        // fewer rows than the count implies. The clean fix is to filter in the
-        // database — a JPQL query joining NoteShare to Note on deleted = false —
-        // but that puts the Note entity inside this module's queries, which is a
-        // tighter coupling than the service-call boundary used everywhere else.
-        // Worth doing if trashed shared notes ever become common; not worth the
-        // coupling before then.
         return PagedResponse.of(content, page);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public NoteResponse getSharedNote(Long userId, Long noteId) {
-        requireGrant(userId, noteId, SharePermission.READ);
-        // Only reached once a grant is confirmed — this is the "authorized"
-        // the accessor's name is claiming.
-        return noteService.getAuthorizedNote(noteId);
+    public SharedNoteDetailResponse getSharedNote(Long userId, Long noteId) {
+        NoteShare share = requireGrant(userId, noteId, SharePermission.READ);
+        // Only reached once a grant is confirmed, which is the "authorized" in the accessor's name.
+        return detail(share, noteService.getAuthorizedNote(noteId));
     }
 
     @Override
     @Transactional
-    public NoteResponse updateSharedNote(Long userId, Long noteId, UpdateNoteRequest request) {
-        requireGrant(userId, noteId, SharePermission.WRITE);
-        // Routes into the SAME version-checked write the owner uses, so an owner
-        // and a collaborator editing simultaneously hit Step 2's optimistic lock
-        // and one of them gets a 409 carrying the current version. That race is
-        // no longer hypothetical — this method is what makes it real.
-        return noteService.updateAuthorizedNote(noteId, request);
+    public SharedNoteDetailResponse updateSharedNote(Long userId, Long noteId, UpdateNoteRequest request) {
+        NoteShare share = requireGrant(userId, noteId, SharePermission.WRITE);
+        return detail(share, noteService.updateAuthorizedNote(noteId, request));
     }
 
     @Override
     @Transactional
-    public NoteResponse autoSaveSharedNote(Long userId, Long noteId, AutoSaveNoteRequest request) {
-        // WRITE, same as the full update. The size of the write is not the
-        // question the permission answers.
-        requireGrant(userId, noteId, SharePermission.WRITE);
+    public SharedNoteDetailResponse autoSaveSharedNote(Long userId, Long noteId, AutoSaveNoteRequest request) {
+        // WRITE, same as the full update. The size of the write is not the question the permission answers.
+        NoteShare share = requireGrant(userId, noteId, SharePermission.WRITE);
+        return detail(share, noteService.autoSaveAuthorizedNote(noteId, request));
+    }
 
-        // Routes into the same version-checked partial write the owner's PATCH
-        // uses, so a collaborator's auto-save and an owner's auto-save race
-        // against each other through one optimistic lock rather than two
-        // implementations that agree today.
-        return noteService.autoSaveAuthorizedNote(noteId, request);
+    private SharedNoteDetailResponse detail(NoteShare share, NoteResponse note) {
+        String ownerName = ownerNames(Set.of(share.getOwnerId())).get(share.getOwnerId());
+        return noteShareMapper.toDetail(share, note, ownerName);
+    }
+
+    /** Owner id to display name ("First Last", or the username when both are blank). No email, ever. */
+    private Map<Long, String> ownerNames(Set<Long> ownerIds) {
+        Map<Long, String> names = new HashMap<>();
+        if (ownerIds.isEmpty()) {
+            return names;
+        }
+        for (UserSummaryResponse user : userService.lookupUsers(ownerIds)) {
+            String full = ((user.firstName() == null ? "" : user.firstName()) + " "
+                    + (user.lastName() == null ? "" : user.lastName())).trim();
+            names.put(user.id(), full.isEmpty() ? user.username() : full);
+        }
+        return names;
     }
 
     /**

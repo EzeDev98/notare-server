@@ -4,6 +4,8 @@ import com.notare.feature.share.model.NoteShare;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
@@ -66,4 +68,20 @@ public interface NoteShareRepository extends JpaRepository<NoteShare, Long> {
      * delete is part of 7F.
      */
     void deleteByNoteId(Long noteId);
+
+    /**
+     * "Notes shared with me", counted and ordered in the database (step 15g, B-13).
+     *
+     * <p>Joins the note by id so a trashed note drops out of the rows AND the total,
+     * and orders by the note's own updatedAt, newest first, with the grant id as a
+     * tiebreaker so pages never overlap. The join is written in JPQL, which names the
+     * Note entity as text: this module takes no Java dependency on the note module,
+     * and the page callers pass in must be unsorted, because the order is fixed here.
+     */
+    @Query(value = "select s from NoteShare s, Note n "
+            + "where n.id = s.noteId and n.deleted = false and s.sharedWithUserId = :userId "
+            + "order by n.updatedAt desc, s.id desc",
+            countQuery = "select count(s) from NoteShare s, Note n "
+            + "where n.id = s.noteId and n.deleted = false and s.sharedWithUserId = :userId")
+    Page<NoteShare> findVisibleSharedWithUser(@Param("userId") Long userId, Pageable pageable);
 }

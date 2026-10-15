@@ -7,11 +7,13 @@ import com.notare.feature.note.dto.request.AutoSaveNoteRequest;
 import com.notare.feature.note.dto.request.UpdateNoteRequest;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
+import com.notare.feature.share.dto.response.SharedNoteDetailResponse;
 import com.notare.feature.share.dto.response.SharedNoteSummaryResponse;
 import com.notare.feature.share.enums.SharePermission;
 import com.notare.feature.share.mapper.NoteShareMapper;
 import com.notare.feature.share.model.NoteShare;
 import com.notare.feature.share.repository.NoteShareRepository;
+import com.notare.feature.user.service.UserService;
 import com.notare.feature.voicenote.dto.request.VoiceNoteContent;
 import com.notare.feature.voicenote.dto.response.VoiceNoteResponse;
 import com.notare.feature.voicenote.service.VoiceNoteService;
@@ -79,6 +81,7 @@ class SharedNoteServiceImplTest {
     @Mock private com.notare.feature.note.service.NoteService noteService;
     @Mock private VoiceNoteService voiceNoteService;
     @Mock private VoiceShareService voiceShareService;
+    @Mock private UserService userService;
 
     private final NoteShareMapper noteShareMapper = new NoteShareMapper();
 
@@ -86,7 +89,7 @@ class SharedNoteServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new SharedNoteServiceImpl(noteShareRepository, noteShareMapper, noteService, voiceNoteService, voiceShareService);
+        service = new SharedNoteServiceImpl(noteShareRepository, noteShareMapper, noteService, voiceNoteService, voiceShareService, userService);
     }
 
     private NoteShare share(Long id, Long noteId, Long ownerId, Long sharedWithUserId, SharePermission permission) {
@@ -121,7 +124,7 @@ class SharedNoteServiceImplTest {
         NoteShare s1 = share(1L, 10L, 1L, 2L, SharePermission.READ);
         NoteShare s2 = share(2L, 20L, 1L, 2L, SharePermission.WRITE);
         Page<NoteShare> page = new PageImpl<>(List.of(s1, s2));
-        when(noteShareRepository.findBySharedWithUserId(eq(2L), any())).thenReturn(page);
+        when(noteShareRepository.findVisibleSharedWithUser(eq(2L), any())).thenReturn(page);
         when(noteService.getAuthorizedNoteSummaries(List.of(10L, 20L)))
                 .thenReturn(Map.of(10L, summary(10L, "first"), 20L, summary(20L, "second")));
 
@@ -136,7 +139,7 @@ class SharedNoteServiceImplTest {
     void listSharedWithMe_dropsARow_whoseNoteSummaryIsAbsent_ratherThanRenderingAHole() {
         NoteShare stale = share(1L, 10L, 1L, 2L, SharePermission.READ);
         Page<NoteShare> page = new PageImpl<>(List.of(stale));
-        when(noteShareRepository.findBySharedWithUserId(eq(2L), any())).thenReturn(page);
+        when(noteShareRepository.findVisibleSharedWithUser(eq(2L), any())).thenReturn(page);
         // The note behind this grant was trashed/deleted, so the batch lookup
         // simply omits it from the map.
         when(noteService.getAuthorizedNoteSummaries(List.of(10L))).thenReturn(Map.of());
@@ -162,7 +165,7 @@ class SharedNoteServiceImplTest {
         // PageImpl trusts the 5 we pass in instead of "fixing" it.
         NoteShare stale = share(1L, 10L, 1L, 2L, SharePermission.READ);
         Page<NoteShare> page = new PageImpl<>(List.of(stale), Pageable.ofSize(5), 5);
-        when(noteShareRepository.findBySharedWithUserId(eq(2L), any())).thenReturn(page);
+        when(noteShareRepository.findVisibleSharedWithUser(eq(2L), any())).thenReturn(page);
         when(noteService.getAuthorizedNoteSummaries(List.of(10L))).thenReturn(Map.of());
 
         PagedResponse<SharedNoteSummaryResponse> result = service.listSharedWithMe(2L, Pageable.unpaged());
@@ -189,7 +192,7 @@ class SharedNoteServiceImplTest {
                 .thenReturn(Optional.of(share(1L, 10L, 1L, 2L, SharePermission.READ)));
         when(noteService.getAuthorizedNote(10L)).thenReturn(noteResponse(10L, "content"));
 
-        NoteResponse response = service.getSharedNote(2L, 10L);
+        SharedNoteDetailResponse response = service.getSharedNote(2L, 10L);
 
         assertThat(response.id()).isEqualTo(10L);
     }
@@ -218,9 +221,9 @@ class SharedNoteServiceImplTest {
         request.setContent("new");
         when(noteService.updateAuthorizedNote(10L, request)).thenReturn(noteResponse(10L, "new"));
 
-        NoteResponse response = service.updateSharedNote(2L, 10L, request);
+        SharedNoteDetailResponse response = service.updateSharedNote(2L, 10L, request);
 
-        assertThat(response.content()).isEqualTo("new");
+        assertThat(response.body()).isEqualTo("new");
         verify(noteService).updateAuthorizedNote(10L, request);
     }
 

@@ -1,8 +1,12 @@
 package com.notare.feature.share.mapper;
 
+import com.notare.common.util.NoteLabeler;
+import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
 import com.notare.feature.share.dto.response.NoteShareResponse;
+import com.notare.feature.share.dto.response.SharedNoteDetailResponse;
 import com.notare.feature.share.dto.response.SharedNoteSummaryResponse;
+import com.notare.feature.share.enums.SharePermission;
 import com.notare.feature.share.model.NoteShare;
 import org.springframework.stereotype.Component;
 
@@ -26,25 +30,38 @@ public class NoteShareMapper {
     }
 
     /**
-     * Recipient-side view: a grant joined with its note.
-     *
-     * <p>The note summary is passed IN rather than fetched here. Mappers stay
-     * free of repository calls — a mapper that loads data would turn a loop over
-     * a page of grants into a query per row, which is the N+1 this design has
-     * been avoiding since Step 6. The caller (7D) batch-loads every note for the
-     * page in one query and hands each summary down.
-     *
-     * <p>A null summary is legal and means the note is gone or trashed. The
-     * mapper doesn't decide what that means — 7D drops those rows from the
-     * listing rather than showing a hole.
+     * Recipient-side row: a grant joined with its note, shaped for the person it was
+     * shared with (step 15g). The note summary is passed in rather than fetched, so a
+     * page of grants costs one batch query, not one per row. Pinned, archived and
+     * version stay on the summary and are not copied across.
      */
-    public SharedNoteSummaryResponse toSharedNote(NoteShare share, NoteSummaryResponse note) {
+    public SharedNoteSummaryResponse toSharedSummary(NoteShare share, NoteSummaryResponse note, String ownerName) {
         return new SharedNoteSummaryResponse(
                 share.getId(),
-                note,
-                share.getOwnerId(),
-                share.getPermission(),
+                note.id(),
+                NoteLabeler.deriveLabel(note.contentPreview()),
+                note.contentPreview(),
+                ownerName,
+                roleOf(share.getPermission()),
+                note.updatedAt(),
                 share.getCreatedAt()
         );
+    }
+
+    /** Recipient-side detail: only id, title, body, role, owner name and updatedAt (step 15g). */
+    public SharedNoteDetailResponse toDetail(NoteShare share, NoteResponse note, String ownerName) {
+        return new SharedNoteDetailResponse(
+                note.id(),
+                NoteLabeler.deriveLabel(note.content()),
+                note.content(),
+                roleOf(share.getPermission()),
+                ownerName,
+                note.updatedAt()
+        );
+    }
+
+    /** The same words the live editing session uses: "editor" or "viewer". */
+    private static String roleOf(SharePermission permission) {
+        return permission.satisfies(SharePermission.WRITE) ? "editor" : "viewer";
     }
 }
