@@ -13,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -107,6 +108,12 @@ public interface NoteService {
     NoteResponse createWithClientId(Long ownerId, CreateNoteRequest request, String clientId);
 
     /**
+     * The same idempotent create as {@link #createWithClientId}, also saying whether this call made
+     * the note. POST /notes uses it to answer 201 for a new note and 200 for a repeat (step 17a).
+     */
+    NoteCreation createIdempotent(Long ownerId, CreateNoteRequest request, String clientId);
+
+    /**
      * Finds one of the owner's notes whether it is active OR trashed, without
      * throwing when it's absent.
      *
@@ -137,6 +144,20 @@ public interface NoteService {
      * Pageable is ignored — see the impl for why that isn't merely tidiness.
      */
     Page<NoteChange> findChangesSince(Long ownerId, LocalDateTime since, Pageable pageable);
+
+    /**
+     * Ids of trashed notes whose purge time is before {@code now}, with id greater than
+     * {@code afterId}, oldest id first, at most {@code limit} (step 17e). The job walks these
+     * pages by id so one note that keeps failing cannot hold up the others.
+     */
+    List<Long> findPurgeDueIds(LocalDateTime now, Long afterId, int limit);
+
+    /**
+     * Deletes one expired trashed note for good and publishes NotePermanentlyDeletedEvent, so
+     * shares, clips, transcripts, stored files and the sync tombstone are cleaned up (step 17e).
+     * Each call is its own transaction. Returns false when the note is gone, restored, or not due.
+     */
+    boolean purgeExpiredNote(Long noteId, LocalDateTime now);
 
     // ---------------------------------------------------------------------
     // Pre-authorized access (share module only).

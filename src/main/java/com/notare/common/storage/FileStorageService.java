@@ -27,4 +27,10 @@ public interface FileStorageService {
 
     /** Deletes previously-stored content. A missing key is treated as success. */
     void delete(String storageKey);
+
+    /**
+     * Duplicates a stored object under a new key, inside the backend (step 17f). Nothing is
+     * downloaded or uploaded through the app. The new key is generated here, never taken from input.
+     */
+    String copy(String sourceKey, String originalFilename);
 }

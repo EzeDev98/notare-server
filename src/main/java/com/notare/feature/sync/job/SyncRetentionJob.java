@@ -5,6 +5,7 @@ import com.notare.feature.sync.repository.NoteTombstoneRepository;
 import com.notare.feature.sync.repository.SyncOperationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +48,7 @@ public class SyncRetentionJob {
      * leave them describing different ones.
      */
     @Scheduled(cron = "0 15 3 * * *")
+    @SchedulerLock(name = "syncRetention", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1M")
     @Transactional
     public void sweep() {
         LocalDateTime cutoff = LocalDateTime.now().minusDays(syncProperties.getRetentionDays());

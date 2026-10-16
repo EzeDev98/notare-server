@@ -1,5 +1,9 @@
 package com.notare.feature.voiceshare.repository;
 
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
 import com.notare.feature.voiceshare.model.VoiceShare;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,6 +20,12 @@ import java.util.Optional;
  * note exists.
  */
 public interface VoiceShareRepository extends JpaRepository<VoiceShare, Long> {
+
+    /** Every voice grant this user gave or received (step 17g). */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "delete from voice_shares where owner_id = :userId or shared_with_user_id = :userId", nativeQuery = true)
+    int deleteAllInvolving(@Param("userId") Long userId);
+
 
     /**
      * The access check for the recipient path: "do I have a grant on this

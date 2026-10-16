@@ -32,6 +32,13 @@ public record NoteChange(
         NoteResponse note,
 
         /** The client-generated id this note was created with, or null if it was created online. */
-        String clientId
+        String clientId,
+
+        /** For a tombstone: when the trash job deletes the note for good (step 17e). Null otherwise. */
+        java.time.LocalDateTime purgeAt
 ) {
+
+    public NoteChange(Long noteId, boolean deleted, NoteResponse note, String clientId) {
+        this(noteId, deleted, note, clientId, null);
+    }
 }

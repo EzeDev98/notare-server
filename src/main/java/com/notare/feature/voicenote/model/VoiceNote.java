@@ -8,6 +8,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.SQLRestriction;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -24,6 +25,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Entity
 @EntityListeners(AuditingEntityListener.class)
+@SQLRestriction("deleted = false")
 @Table(
         name = "voice_notes",
         indexes = {
@@ -85,4 +87,28 @@ public class VoiceNote {
     @LastModifiedDate
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    /**
+     * The clip's id on the device (step 17b). Unique per owner: uploading the same one again
+     * returns this clip instead of storing a second. Null for clips uploaded the old way.
+     */
+    @Column(name = "client_id", updatable = false)
+    private String clientId;
+
+    /**
+     * True while the note this clip belongs to is in the trash. The entity-wide restriction above
+     * keeps such a clip out of every query, so it is hidden everywhere without each call asking.
+     */
+    @Column(name = "deleted", nullable = false)
+    private boolean deleted;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    /**
+     * True when the person deleted this clip itself (step 17c). A clip hidden only because its note
+     * is in the trash has deleted = true and removed = false, and comes back with the note.
+     */
+    @Column(name = "removed", nullable = false)
+    private boolean removed;
 }

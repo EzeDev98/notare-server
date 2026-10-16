@@ -6,10 +6,12 @@ import com.notare.common.exception.VoiceNoteNotFoundException;
 import com.notare.common.storage.FileStorageService;
 import com.notare.feature.note.service.NoteService;
 import com.notare.feature.voicenote.dto.request.VoiceNoteContent;
+import com.notare.feature.voicenote.dto.response.ClipChange;
 import com.notare.feature.voicenote.mapper.VoiceNoteMapper;
 import com.notare.feature.voicenote.model.VoiceNote;
 import com.notare.feature.voicenote.repository.VoiceNoteRepository;
 import com.notare.feature.voicenote.dto.response.VoiceNoteResponse;
+import com.notare.feature.voicenote.dto.response.VoiceUpload;
 import com.notare.feature.voicenote.service.VoiceNoteService;
 import com.notare.feature.voicenote.validation.VoiceUploadValidator;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +19,9 @@ import com.notare.feature.voicenote.event.VoiceNoteCreatedEvent;
 import com.notare.feature.voicenote.event.VoiceNoteDeletedEvent;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.io.Resource;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,8 +29,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -51,6 +57,25 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
 
     @Override
     public VoiceNoteResponse upload(Long ownerId, MultipartFile file, Long noteId, Integer durationSeconds) {
+        return store(ownerId, noteId, null, file, durationSeconds).clip();
+    }
+
+    @Override
+    public VoiceUpload uploadForNote(Long uploaderId, Long noteId, MultipartFile file, String clientId,
+                                     Integer durationSeconds) {
+        return store(uploaderId, noteId, clientId, file, durationSeconds);
+    }
+
+    /** The one upload path. A client id makes it idempotent; without one it always stores. */
+    private VoiceUpload store(Long ownerId, Long noteId, String clientId, MultipartFile file, Integer durationSeconds) {
+        // 0. A repeat of a clip already stored answers with that clip, before any bytes are written.
+        if (clientId != null) {
+            Optional<VoiceNote> existing = voiceNoteRepository.findByOwnerIdAndClientId(ownerId, clientId);
+            if (existing.isPresent()) {
+                return new VoiceUpload(voiceNoteMapper.toResponse(existing.get()), false);
+            }
+        }
+
         // 1. Validate before writing anything anywhere.
         voiceUploadValidator.validate(file, durationSeconds);
 
@@ -70,6 +95,7 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
                     ownerId, noteId,
                     file.getOriginalFilename(), file.getContentType(),
                     storageKey, file.getSize(), durationSeconds);
+            entity.setClientId(clientId);
             VoiceNote saved = voiceNoteRepository.save(entity);
 
             // Announce the creation only after the metadata row exists.
@@ -80,7 +106,52 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
                     saved.getOwnerId(),
                     saved.getNoteId()));
 
-            return voiceNoteMapper.toResponse(saved);
+            return new VoiceUpload(voiceNoteMapper.toResponse(saved), true);
+        } catch (DataIntegrityViolationException e) {
+            // Lost a race with a replay of the same upload: uq_voice_notes_owner_client_id fired. The
+            // other attempt stored the clip, so this attempt's bytes are surplus and its clip is the answer.
+            fileStorageService.delete(storageKey);
+            if (clientId == null) {
+                throw e;
+            }
+            return voiceNoteRepository.findByOwnerIdAndClientId(ownerId, clientId)
+                    .map(clip -> new VoiceUpload(voiceNoteMapper.toResponse(clip), false))
+                    .orElseThrow(() -> e);
+        } catch (RuntimeException e) {
+            fileStorageService.delete(storageKey);
+            throw e;
+        }
+    }
+
+    @Override
+    public VoiceUpload copyClip(Long userId, Long sourceVoiceNoteId, Long targetNoteId, String clientId) {
+        Optional<VoiceNote> existing = voiceNoteRepository.findByOwnerIdAndClientId(userId, clientId);
+        if (existing.isPresent()) {
+            return new VoiceUpload(voiceNoteMapper.toResponse(existing.get()), false);
+        }
+
+        // A clip its owner removed on its own is gone for everyone, same as a deleted one.
+        VoiceNote source = voiceNoteRepository.findById(sourceVoiceNoteId)
+                .filter(clip -> !clip.isRemoved())
+                .orElseThrow(() -> new VoiceNoteNotFoundException("Voice note not found."));
+
+        String storageKey = fileStorageService.copy(source.getStorageKey(), source.getOriginalFilename());
+        try {
+            VoiceNote entity = voiceNoteMapper.toEntity(
+                    userId, targetNoteId,
+                    source.getOriginalFilename(), source.getContentType(),
+                    storageKey, source.getSizeBytes(), source.getDurationSeconds());
+            entity.setClientId(clientId);
+            VoiceNote saved = voiceNoteRepository.save(entity);
+
+            eventPublisher.publishEvent(new VoiceNoteCreatedEvent(saved.getId(), saved.getOwnerId(), saved.getNoteId()));
+            return new VoiceUpload(voiceNoteMapper.toResponse(saved), true);
+        } catch (DataIntegrityViolationException e) {
+            // Lost a race with a retry of the same copy: its clip is the answer, this object is surplus.
+            fileStorageService.delete(storageKey);
+            return voiceNoteRepository.findByOwnerIdAndClientId(userId, clientId)
+                    .map(clip -> new VoiceUpload(voiceNoteMapper.toResponse(clip), false))
+                    .orElseThrow(() -> e);
         } catch (RuntimeException e) {
             fileStorageService.delete(storageKey);
             throw e;
@@ -217,6 +288,48 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
         } catch (RuntimeException ignored) {
             // swallow — orphaned file is tolerable; the note is gone as requested
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ClipChange> findClipChangesSince(Long ownerId, LocalDateTime since, Pageable pageable) {
+        // The order is part of the query; only the page number and size are taken from the caller.
+        Pageable paging = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        Page<VoiceNote> page = since == null
+                ? voiceNoteRepository.findByOwnerIdAndNoteIdIsNotNullOrderByUpdatedAtAscIdAsc(ownerId, paging)
+                : voiceNoteRepository.findClipChangesSince(ownerId, since, paging);
+        return page.map(clip -> new ClipChange(
+                clip.getId(), clip.getNoteId(), clip.getClientId(), clip.getDurationSeconds(),
+                clip.getSizeBytes(), clip.getContentType(), clip.isDeleted()));
+    }
+
+    @Override
+    public void removeClip(Long ownerId, Long clipId) {
+        VoiceNote clip = requireOwned(ownerId, clipId);
+        String storageKey = clip.getStorageKey();
+
+        // Hidden, not deleted: the row is what tells the other devices. Auditing moves updatedAt.
+        clip.setDeleted(true);
+        clip.setRemoved(true);
+        clip.setDeletedAt(LocalDateTime.now());
+        voiceNoteRepository.save(clip);
+
+        // Shares of the clip go with it, through the same event a single delete uses.
+        eventPublisher.publishEvent(new VoiceNoteDeletedEvent(clip.getId(), clip.getOriginalFilename(), ownerId));
+
+        // Best-effort, as in deleteVoiceNote: the row is already hidden. A permanent delete of the
+        // note removes the row later and tolerates a file that is already gone.
+        try {
+            fileStorageService.delete(storageKey);
+        } catch (RuntimeException ignored) {
+            // A leftover file is tolerable.
+        }
+    }
+
+    @Override
+    @Transactional
+    public void touchClip(Long clipId) {
+        voiceNoteRepository.touch(clipId, LocalDateTime.now());
     }
 
     private String storeBytes(MultipartFile file) {

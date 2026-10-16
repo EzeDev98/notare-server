@@ -1,5 +1,9 @@
 package com.notare.feature.collaboration.repository;
 
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
 import com.notare.feature.collaboration.enums.CollaborationStatus;
 import com.notare.feature.collaboration.model.Collaboration;
 import org.springframework.data.domain.Page;
@@ -10,6 +14,12 @@ import java.util.List;
 import java.util.Optional;
 
 public interface CollaborationRepository extends JpaRepository<Collaboration, Long> {
+
+    /** Every connection this user is on either side of (step 17g). */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "delete from collaborations where owner_id = :userId or collaborator_id = :userId", nativeQuery = true)
+    int deleteAllInvolving(@Param("userId") Long userId);
+
 
     /**
      * Finds the existing relationship between an owner and collaborator,

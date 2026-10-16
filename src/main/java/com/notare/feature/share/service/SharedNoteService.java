@@ -6,12 +6,15 @@ import com.notare.feature.note.dto.request.UpdateNoteRequest;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.share.dto.response.SharedNoteDetailResponse;
 import com.notare.feature.share.dto.response.SharedNoteSummaryResponse;
+import com.notare.feature.share.enums.NoteAccess;
 import com.notare.feature.voicenote.dto.request.VoiceNoteContent;
 import com.notare.feature.voicenote.dto.response.VoiceNoteResponse;
+import com.notare.feature.voicenote.dto.response.VoiceUpload;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * The RECIPIENT's side of sharing: what I can see and do with notes other
@@ -71,6 +74,15 @@ public interface SharedNoteService {
     VoiceNoteResponse uploadVoiceNote(Long userId, Long noteId, MultipartFile file, Integer durationSeconds);
 
     /**
+     * Records a voice clip onto a note, for the note's owner or anyone with WRITE (step 17b, B-09).
+     * One path for both, idempotent on {@code clientId}; it replaces the two older upload endpoints.
+     * No access at all is a 404, a READ grant is a 403, as everywhere else in this service. When an
+     * Editor records a new clip, the owner is granted READ on it, as {@link #uploadVoiceNote} does.
+     */
+    VoiceUpload uploadVoiceNoteToNote(Long userId, Long noteId, MultipartFile file, String clientId,
+                                      Integer durationSeconds);
+
+    /**
      * A note-attachment's audio bytes, for stream/download. Requires at least
      * READ on the PARENT NOTE — not a VoiceShare grant on the voice note
      * itself. This is the deliberate distinction from
@@ -79,4 +91,25 @@ public interface SharedNoteService {
      * it's attached to was shared.
      */
     VoiceNoteContent getAttachedVoiceNoteAudio(Long userId, Long noteId, Long voiceNoteId);
+
+    /**
+     * What this user may do with a note (step 17d): OWNER for the owner of a note that is not in the
+     * trash, EDITOR or VIEWER for a grant on one, and empty for everyone else, including a grant on a
+     * trashed note. Other modules ask this instead of reading shares themselves.
+     */
+    Optional<NoteAccess> accessTo(Long userId, Long noteId);
+
+    /**
+     * The recipient removes their own grant (step 17f, B-04). Only the grantee can: the grant is
+     * looked up by (note, caller), so anyone else gets 404. Publishes NoteShareRevokedEvent so the
+     * live channel closes and the clips shared with them are cleaned up.
+     */
+    void leaveNote(Long userId, Long noteId);
+
+    /**
+     * Copies a clip into one of the caller's own notes (step 17f, B-05). The caller must be able to
+     * read the source (owner, holder of a grant on its note, or holder of a share on the clip) and
+     * must own the target note. Idempotent on (caller, clientId).
+     */
+    VoiceUpload copyVoiceNote(Long userId, Long voiceNoteId, Long targetNoteId, String clientId);
 }

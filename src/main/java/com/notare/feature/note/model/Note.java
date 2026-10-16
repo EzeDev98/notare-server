@@ -24,6 +24,7 @@ import java.time.LocalDateTime;
         indexes = {
                 @Index(name = "idx_notes_owner_id", columnList = "owner_id"),
                 @Index(name = "idx_notes_owner_deleted", columnList = "owner_id, deleted"),
+                @Index(name = "idx_notes_purge_at", columnList = "purge_at"),
                 // Delta sync: "everything of mine that changed since <cursor>",
                 // ordered by updated_at. Without this the sync pull degrades into
                 // a full scan of the owner's notes on every poll — and sync polls
@@ -109,6 +110,12 @@ public class Note {
      * Useful later for "empty trash after N days" and for audit.
      */
     private LocalDateTime deletedAt;
+
+    /**
+     * When the trash job deletes this note for good (step 17e): deletedAt plus the
+     * retention window. Null while the note is active; cleared again on restore.
+     */
+    private LocalDateTime purgeAt;
 
     /**
      * Optimistic-locking version. Hibernate increments it on every update

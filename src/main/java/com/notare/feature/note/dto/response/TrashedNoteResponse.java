@@ -39,6 +39,13 @@ public record TrashedNoteResponse(
          * together — but nullable in the column, because rows predating the
          * field would have it empty.
          */
-        LocalDateTime deletedAt
+        LocalDateTime deletedAt,
+
+        /** When the trash job deletes it for good (step 17e). The client counts days left from this. */
+        LocalDateTime purgeAt
 ) {
+
+    public TrashedNoteResponse(NoteSummaryResponse note, LocalDateTime deletedAt) {
+        this(note, deletedAt, null);
+    }
 }

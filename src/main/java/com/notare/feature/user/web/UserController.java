@@ -1,5 +1,11 @@
 package com.notare.feature.user.web;
 
+import com.notare.feature.user.dto.request.ChangePasswordRequest;
+import com.notare.feature.user.dto.request.DeleteAccountRequest;
+import com.notare.feature.user.service.AccountService;
+import com.notare.feature.user.service.AccountDeletionService;
+import org.springframework.web.bind.annotation.DeleteMapping;
+
 import com.notare.common.dto.PagedResponse;
 import com.notare.feature.user.dto.request.RegistrationRequest;
 import com.notare.feature.user.dto.response.CurrentUserResponse;
@@ -29,6 +35,8 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
+    private final AccountService accountService;
+    private final AccountDeletionService accountDeletionService;
 
     @PostMapping("/register")
     public ResponseEntity<RegistrationResponse> register(@Valid @RequestBody RegistrationRequest request) {
@@ -52,6 +60,31 @@ public class UserController {
      * segments ahead of templates, the same reason {@code /notes/search} sits
      * safely alongside {@code /notes/{noteId}}.
      */
+    /**
+     * Step 17g (B-02). The auth service checks the current password: wrong is 400 "Incorrect password.".
+     * The caller stays signed in; the auth service holds no other session to end.
+     */
+    @PostMapping("/password/change")
+    public ResponseEntity<Void> changePassword(
+            @AuthenticationPrincipal UserDetail userDetail,
+            @Valid @RequestBody ChangePasswordRequest request) {
+        accountService.changePassword(
+                userDetail.getUser().getUsername(), request.getCurrentPassword(), request.getNewPassword());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Step 17g (B-03). Deletes the account and everything it owns. The body carries the username as
+     * confirmation. If it fails halfway, calling again continues; a scheduled job also continues it.
+     */
+    @DeleteMapping("/me")
+    public ResponseEntity<Void> deleteAccount(
+            @AuthenticationPrincipal UserDetail userDetail,
+            @Valid @RequestBody DeleteAccountRequest request) {
+        accountDeletionService.delete(userDetail.getUser(), request.getUsername());
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/me")
     public ResponseEntity<CurrentUserResponse> getCurrentUser(
             @AuthenticationPrincipal UserDetail userDetail) {

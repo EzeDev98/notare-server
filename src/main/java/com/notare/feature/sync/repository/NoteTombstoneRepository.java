@@ -11,6 +11,12 @@ import java.util.List;
 
 public interface NoteTombstoneRepository extends JpaRepository<NoteTombstone, Long> {
 
+    /** Tombstones of this user's notes (step 17g). */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "delete from note_tombstones where owner_id = :userId", nativeQuery = true)
+    int deleteAllOwnedBy(@Param("userId") Long userId);
+
+
     /**
      * Tombstones in the client's delta window.
      *

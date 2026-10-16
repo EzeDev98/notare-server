@@ -16,6 +16,13 @@ public record NoteShareRevokedEvent(
         Long noteId,
         String noteLabel,
         Long ownerId,
-        Long sharedWithUserId
+        Long sharedWithUserId,
+
+        /** True when the recipient left by themselves (step 17f). They are not notified of their own act. */
+        boolean left
 ) {
+
+    public NoteShareRevokedEvent(Long noteId, String noteLabel, Long ownerId, Long sharedWithUserId) {
+        this(noteId, noteLabel, ownerId, sharedWithUserId, false);
+    }
 }

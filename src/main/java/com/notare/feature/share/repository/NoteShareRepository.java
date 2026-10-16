@@ -1,5 +1,7 @@
 package com.notare.feature.share.repository;
 
+import org.springframework.data.jpa.repository.Modifying;
+
 import com.notare.feature.share.model.NoteShare;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,6 +18,12 @@ import java.util.Optional;
  * API never confirms that someone else's note exists.
  */
 public interface NoteShareRepository extends JpaRepository<NoteShare, Long> {
+
+    /** Every grant this user gave or received (step 17g). */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "delete from note_shares where owner_id = :userId or shared_with_user_id = :userId", nativeQuery = true)
+    int deleteAllInvolving(@Param("userId") Long userId);
+
 
     /**
      * The access check for the recipient path: "do I have a grant on this note,

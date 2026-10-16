@@ -1,5 +1,7 @@
 package com.notare.feature.note.repository;
 
+import org.springframework.data.jpa.repository.Modifying;
+
 import com.notare.feature.note.model.Note;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -13,6 +15,16 @@ import java.util.List;
 import java.util.Optional;
 
 public interface NoteRepository extends JpaRepository<Note, Long> {
+
+    /** Every note this user owns, in the trash or not: what account deletion removes (step 17g). */
+    @Query(value = "select id from notes where owner_id = :userId order by id", nativeQuery = true)
+    List<Long> findAllIdsByOwnerId(@Param("userId") Long userId);
+
+    /** Notes of other people this user last edited: the edit stays, the name goes (step 17g). */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "update notes set last_modified_by = null where last_modified_by = :userId", nativeQuery = true)
+    int clearLastModifiedBy(@Param("userId") Long userId);
+
 
     /**
      * A single active (not soft-deleted) note that belongs to the given owner.
@@ -131,6 +143,19 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
      * globally would let one user's UUID collide with another's.
      */
     Optional<Note> findByOwnerIdAndClientId(Long ownerId, String clientId);
+
+    /** Trashed notes whose purge time has passed, in id order, after the given id (step 17e). */
+    @Query("""
+            SELECT n.id FROM Note n
+            WHERE n.deleted = true
+              AND n.purgeAt IS NOT NULL
+              AND n.purgeAt < :now
+              AND n.id > :afterId
+            ORDER BY n.id
+            """)
+    List<Long> findPurgeDueIds(@Param("now") LocalDateTime now,
+                               @Param("afterId") Long afterId,
+                               Pageable pageable);
 
     /**
      * Keyword search over the owner's active notes' content, case-insensitive

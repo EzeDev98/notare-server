@@ -105,4 +105,15 @@ public class LocalFileStorageService implements FileStorageService {
         int dot = filename.lastIndexOf('.');
         return dot >= 0 ? filename.substring(dot) : "";
     }
+
+    @Override
+    public String copy(String sourceKey, String originalFilename) {
+        String key = UUID.randomUUID() + extension(originalFilename);
+        try {
+            Files.copy(resolve(sourceKey), resolve(key), StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            throw new StorageException("Failed to copy stored file: " + sourceKey, e);
+        }
+        return key;
+    }
 }

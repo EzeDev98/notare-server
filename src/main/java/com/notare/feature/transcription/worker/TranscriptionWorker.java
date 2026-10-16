@@ -55,6 +55,7 @@ public class TranscriptionWorker {
             // Short write #1: flip to PROCESSING so a polling client sees movement.
             transcription.setStatus(TranscriptionStatus.PROCESSING);
             transcriptionRepository.save(transcription);
+            voiceNoteService.touchClip(transcription.getVoiceNoteId()); // the clip's next sync carries it (17c)
 
             // The slow part — deliberately OUTSIDE any transaction, so we don't
             // hold a DB connection open for the whole engine call.
@@ -68,6 +69,7 @@ public class TranscriptionWorker {
             transcription.setErrorMessage(null);
             transcription.setStatus(TranscriptionStatus.COMPLETED);
             transcriptionRepository.save(transcription);
+            voiceNoteService.touchClip(transcription.getVoiceNoteId());
 
             // Tell the owner their transcript is ready.
             //
@@ -86,12 +88,20 @@ public class TranscriptionWorker {
             eventPublisher.publishEvent(new TranscriptionCompletedEvent(
                     transcription.getId(),
                     transcription.getVoiceNoteId(),
-                    transcription.getOwnerId()));
+                    recipientOf(transcription)));
 
         } catch (Exception ex) {
             log.warn("Transcription {} failed", transcriptionId, ex);
             markFailed(transcriptionId, ex);
         }
+    }
+
+    /**
+     * Who is told how the job ended (step 17d): the person who asked, who can be an Editor. Older rows
+     * have no asker, and the owner asked for those. The audio is always loaded as the clip's owner.
+     */
+    private static Long recipientOf(Transcription transcription) {
+        return transcription.getRequestedBy() != null ? transcription.getRequestedBy() : transcription.getOwnerId();
     }
 
     private void markFailed(Long transcriptionId, Exception ex) {
@@ -101,12 +111,13 @@ public class TranscriptionWorker {
             transcription.setStatus(TranscriptionStatus.FAILED);
             transcription.setErrorMessage(ex.getMessage());
             transcriptionRepository.save(transcription);
+            voiceNoteService.touchClip(transcription.getVoiceNoteId());
 
             // Same no-transaction caveat as the completion event above.
             eventPublisher.publishEvent(new TranscriptionFailedEvent(
                     transcription.getId(),
                     transcription.getVoiceNoteId(),
-                    transcription.getOwnerId(),
+                    recipientOf(transcription),
                     ex.getMessage()));
         });
     }

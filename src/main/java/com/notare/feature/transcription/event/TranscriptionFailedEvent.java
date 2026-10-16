@@ -1,7 +1,8 @@
 package com.notare.feature.transcription.event;
 
 /**
- * A transcription failed. Notify the OWNER.
+ * A transcription failed. Notify the person who asked for it (step 17d); {@code ownerId} carries that
+ * person's id.
  *
  * <p>The message is carried so a consumer can surface something better than
  * "it failed", but it comes straight from an exception and is NOT safe to show

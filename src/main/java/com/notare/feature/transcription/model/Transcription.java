@@ -78,6 +78,17 @@ public class Transcription {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
+    /**
+     * Who asked for this transcript (step 17d). It can be an Editor, not the clip's owner, so the
+     * "ready" and "failed" notices go to this person. Null on older rows, which the owner asked for.
+     */
+    @Column(name = "requested_by")
+    private Long requestedBy;
+
+    /** The language asked for. "auto" lets the engine detect it; nothing else is read yet (O-23). */
+    @Column(name = "requested_language", nullable = false, length = 16)
+    private String requestedLanguage = "auto";
+
     /** When the job was submitted. */
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -87,4 +98,20 @@ public class Transcription {
     @LastModifiedDate
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    /** The constructor from before step 17d: the two new fields keep their defaults. */
+    public Transcription(Long id, Long ownerId, Long voiceNoteId, TranscriptionStatus status, String transcript,
+                         Double confidence, String language, String errorMessage,
+                         LocalDateTime createdAt, LocalDateTime updatedAt) {
+        this.id = id;
+        this.ownerId = ownerId;
+        this.voiceNoteId = voiceNoteId;
+        this.status = status;
+        this.transcript = transcript;
+        this.confidence = confidence;
+        this.language = language;
+        this.errorMessage = errorMessage;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+    }
 }

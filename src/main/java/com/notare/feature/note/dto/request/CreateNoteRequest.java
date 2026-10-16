@@ -17,4 +17,11 @@ public class CreateNoteRequest {
      */
     @Size(max = 20_000, message = "Content must not exceed 20,000 characters.")
     private String content;
+
+    /**
+     * Optional: the id the client gave this note locally. Posting the same one again returns the
+     * note it already made (200) instead of a second one (step 17a).
+     */
+    @Size(min = 1, max = 64, message = "clientId must be 1 to 64 characters.")
+    private String clientId;
 }

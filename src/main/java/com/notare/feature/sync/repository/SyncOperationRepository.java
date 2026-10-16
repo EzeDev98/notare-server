@@ -11,6 +11,12 @@ import java.util.Optional;
 
 public interface SyncOperationRepository extends JpaRepository<SyncOperation, Long> {
 
+    /** The operation ledger of this user (step 17g). */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "delete from sync_operations where owner_id = :userId", nativeQuery = true)
+    int deleteAllOwnedBy(@Param("userId") Long userId);
+
+
     /**
      * "Have I already applied this operation?" — the first thing the batch
      * handler asks about every incoming operation.

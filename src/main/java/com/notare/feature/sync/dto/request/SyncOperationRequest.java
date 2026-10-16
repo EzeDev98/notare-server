@@ -48,7 +48,7 @@ public class SyncOperationRequest {
     @Size(max = 64, message = "operationId must be at most 64 characters.")
     private String operationId;
 
-    @NotNull(message = "type is required (CREATE, UPDATE or DELETE).")
+    @NotNull(message = "type is required (CREATE, UPDATE, DELETE or CLIP_DELETE).")
     private SyncOperationType type;
 
     /** CREATE only: the client's local id for the new note. Ignored for other types. */
@@ -60,4 +60,7 @@ public class SyncOperationRequest {
 
     /** CREATE and UPDATE. */
     private String content;
+
+    /** CLIP_DELETE only: the clip's server id. */
+    private Long clipId;
 }

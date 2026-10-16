@@ -9,6 +9,8 @@ import com.notare.feature.sync.dto.response.SyncOperationResult;
 import com.notare.feature.sync.enums.SyncResultStatus;
 import com.notare.feature.sync.model.SyncOperation;
 import com.notare.feature.sync.repository.SyncOperationRepository;
+import com.notare.feature.sync.enums.SyncOperationType;
+import com.notare.feature.voicenote.service.VoiceNoteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -53,6 +55,7 @@ public class SyncOperationApplier {
 
     private final NoteService noteService;
     private final SyncOperationRepository syncOperationRepository;
+    private final VoiceNoteService voiceNoteService;
 
     /**
      * @throws com.notare.common.exception.NoteConflictException  stale version
@@ -60,6 +63,13 @@ public class SyncOperationApplier {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public SyncOperationResult apply(Long ownerId, SyncOperationRequest request) {
+
+        // A clip delete needs no ledger: deleting a clip that is already gone is a 404 the push service
+        // reports as NOT_FOUND, which the client treats as done. It has no note to point a ledger row at.
+        if (request.getType() == SyncOperationType.CLIP_DELETE) {
+            voiceNoteService.removeClip(ownerId, request.getClipId());
+            return applied(request, null);
+        }
 
         // 1. Already done? Replay the recorded result instead of the operation.
         var recorded = syncOperationRepository
@@ -80,6 +90,7 @@ public class SyncOperationApplier {
             case CREATE -> create(ownerId, request);
             case UPDATE -> update(ownerId, request);
             case DELETE -> delete(ownerId, request);
+            case CLIP_DELETE -> throw new IllegalStateException("CLIP_DELETE is handled before the ledger.");
         };
 
         // 3. Record it, in this same transaction.

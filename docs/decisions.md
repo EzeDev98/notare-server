@@ -29,3 +29,12 @@ Full output: `docs/baseline-test.txt`. `./mvnw test`: 822 tests, 0 failures, 6 e
 - **Protocol document.** The protocol lives in one class (`CollabProtocol`) with a short `docs/collab-protocol.md`; the client in step 16 follows it exactly.
 
 **Revisit if** the relay's compaction or awareness handling becomes a maintenance burden, or if we need more than one server instance. Hocuspocus then becomes worth the second deployment. Steps 15g (share-leak fixes, module test) and 15h (contract tests) are the same under either option.
+
+## D-033: Editors can transcribe the clips of a shared note (step 17d, B-11)
+**Who may ask.** The note's owner and anyone with WRITE on it may `POST /voice-notes/{id}/transcription`. A Viewer gets 403 on POST and 200 on GET; someone with no access to the note gets 404, the same as a clip that does not exist. The check asks the share module (`SharedNoteService.accessTo`) and never reads shares itself. A clip that belongs to no note is only its owner's.
+
+**Whose job it is.** `transcriptions.owner_id` stays the clip's owner (the person who recorded it), because the audio is found through that id. The new `requested_by` is who asked. The completed and failed notices go to `requested_by` (the owner for older rows). `requested_language` is added now, default `auto`, so a language picker (O-23) needs no schema change. Nothing reads anything but `auto` yet.
+
+**Stuck jobs.** `StuckTranscriptionRecovery` re-queues every stale PENDING or PROCESSING job whoever owns it, and the worker loads the audio as the clip's owner, so jobs for shared clips are recovered with no change.
+
+**Cost and who pays.** The engine is Deepgram Nova-3, pre-recorded. Its published pay-as-you-go rate is about $0.0043 per minute of audio (about $0.26 an hour), billed per second, at the time of writing. Check Deepgram's pricing page before budgeting; the rate moves. Notare pays for every job, including failed ones and retries. Nothing is charged to the person and there is no per-person limit yet. Because `submit` retries a FAILED job on request, the only way to spend more than one run on a clip is to keep retrying a failing one. Add a per-person cap if that ever shows up in the bill.

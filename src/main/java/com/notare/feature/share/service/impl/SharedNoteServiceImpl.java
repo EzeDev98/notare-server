@@ -10,6 +10,7 @@ import com.notare.feature.note.dto.response.NoteSummaryResponse;
 import com.notare.feature.note.service.NoteService;
 import com.notare.feature.share.dto.response.SharedNoteDetailResponse;
 import com.notare.feature.share.dto.response.SharedNoteSummaryResponse;
+import com.notare.feature.share.enums.NoteAccess;
 import com.notare.feature.share.enums.SharePermission;
 import com.notare.feature.share.mapper.NoteShareMapper;
 import com.notare.feature.share.model.NoteShare;
@@ -21,6 +22,7 @@ import com.notare.feature.voiceshare.dto.request.ShareVoiceNoteRequest;
 import com.notare.feature.voiceshare.service.VoiceShareService;
 import com.notare.feature.voicenote.dto.request.VoiceNoteContent;
 import com.notare.feature.voicenote.dto.response.VoiceNoteResponse;
+import com.notare.feature.voicenote.dto.response.VoiceUpload;
 import com.notare.feature.voicenote.service.VoiceNoteService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -66,6 +69,12 @@ public class SharedNoteServiceImpl implements SharedNoteService {
 
     /** Cross-module, PUBLIC API. Only to turn an owner id into a display name (step 15g). */
     private final UserService userService;
+
+    /** Announces that a recipient left (step 17f). */
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
+
+    /** Cross-module, PUBLIC API. Only to ask whether a clip was shared with the caller (step 17f). */
+    private final com.notare.feature.voiceshare.service.SharedVoiceNoteService sharedVoiceNoteService;
 
     /**
      * Resolves a page of grants into a page of notes with ONE extra query for the
@@ -207,17 +216,77 @@ public class SharedNoteServiceImpl implements SharedNoteService {
         // voice note by hand, or simply re-open the note (the note-attachment
         // listing above finds it regardless of any VoiceShare grant — the
         // grant only matters for the voice note's OWN direct endpoints).
-        try {
-            ShareVoiceNoteRequest grantRequest = new ShareVoiceNoteRequest();
-            grantRequest.setSharedWithUserId(share.getOwnerId());
-            grantRequest.setPermission(SharePermission.READ);
-            voiceShareService.shareVoiceNote(userId, uploaded.id(), grantRequest);
-        } catch (RuntimeException ex) {
-            log.warn("Could not auto-share voice note {} back to note owner {}: {}",
-                    uploaded.id(), share.getOwnerId(), ex.getMessage());
-        }
+        shareBackToOwner(userId, share.getOwnerId(), uploaded.id());
 
         return uploaded;
+    }
+
+    @Override
+    public VoiceUpload uploadVoiceNoteToNote(Long userId, Long noteId, MultipartFile file, String clientId,
+                                             Integer durationSeconds) {
+        boolean owner = ownsActiveNote(userId, noteId);
+        NoteShare share = owner ? null : requireGrant(userId, noteId, SharePermission.WRITE);
+
+        VoiceUpload upload = voiceNoteService.uploadForNote(userId, noteId, file, clientId, durationSeconds);
+
+        // A repeated upload changes nothing, so it grants nothing either.
+        if (share != null && upload.created()) {
+            shareBackToOwner(userId, share.getOwnerId(), upload.clip().id());
+        }
+        return upload;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<NoteAccess> accessTo(Long userId, Long noteId) {
+        if (ownsActiveNote(userId, noteId)) {
+            return Optional.of(NoteAccess.OWNER);
+        }
+        Optional<NoteShare> grant = noteShareRepository.findByNoteIdAndSharedWithUserId(noteId, userId);
+        if (grant.isEmpty() || !isActive(noteId)) {
+            return Optional.empty();
+        }
+        boolean writes = grant.get().getPermission().satisfies(SharePermission.WRITE);
+        return Optional.of(writes ? NoteAccess.EDITOR : NoteAccess.VIEWER);
+    }
+
+    /** True when the note exists and is not in the trash. Only asked once a grant has been found. */
+    private boolean isActive(Long noteId) {
+        try {
+            noteService.getAuthorizedNote(noteId);
+            return true;
+        } catch (com.notare.common.exception.NoteNotFoundException ex) {
+            return false;
+        }
+    }
+
+    /** True when this user owns the note and it is not in the trash. */
+    private boolean ownsActiveNote(Long userId, Long noteId) {
+        try {
+            noteService.getNote(userId, noteId);
+            return true;
+        } catch (com.notare.common.exception.NoteNotFoundException ex) {
+            return false;
+        }
+    }
+
+    /**
+     * Courtesy grant back to the note's owner, best-effort. The recording itself has already
+     * succeeded and stored its bytes by this point; failing the whole request over a grant hiccup
+     * would leave the recorder thinking their clip was lost when it wasn't. Worst case on failure:
+     * the owner still finds the clip, because the note's own listing returns every attachment
+     * regardless of any VoiceShare grant. The grant only matters for the clip's own direct endpoints.
+     */
+    private void shareBackToOwner(Long userId, Long ownerId, Long voiceNoteId) {
+        try {
+            ShareVoiceNoteRequest grantRequest = new ShareVoiceNoteRequest();
+            grantRequest.setSharedWithUserId(ownerId);
+            grantRequest.setPermission(SharePermission.READ);
+            voiceShareService.shareVoiceNote(userId, voiceNoteId, grantRequest);
+        } catch (RuntimeException ex) {
+            log.warn("Could not auto-share voice note {} back to note owner {}: {}",
+                    voiceNoteId, ownerId, ex.getMessage());
+        }
     }
 
     /**
@@ -240,5 +309,53 @@ public class SharedNoteServiceImpl implements SharedNoteService {
         }
 
         return voiceNoteService.getAuthorizedAudio(voiceNoteId);
+    }
+
+    @Override
+    @Transactional
+    public void leaveNote(Long userId, Long noteId) {
+        NoteShare share = noteShareRepository.findByNoteIdAndSharedWithUserId(noteId, userId)
+                .orElseThrow(() -> new NoteShareNotFoundException("Note not found."));
+
+        // The label has to be read before the grant goes. A trashed note has no readable body: no label then.
+        String label = null;
+        try {
+            label = com.notare.common.util.NoteLabeler.deriveLabel(noteService.getAuthorizedNote(noteId).content());
+        } catch (com.notare.common.exception.NoteNotFoundException ex) {
+            log.debug("Note {} is gone; leaving without a label.", noteId);
+        }
+
+        noteShareRepository.delete(share);
+        eventPublisher.publishEvent(
+                new com.notare.feature.share.event.NoteShareRevokedEvent(
+                        noteId, label, share.getOwnerId(), userId, true));
+    }
+
+    @Override
+    public VoiceUpload copyVoiceNote(Long userId, Long voiceNoteId, Long targetNoteId, String clientId) {
+        // The target must be the caller's own, live note. 404 either way: nobody learns another note exists.
+        if (!ownsActiveNote(userId, targetNoteId)) {
+            throw new com.notare.common.exception.NoteNotFoundException("Note not found.");
+        }
+
+        VoiceNoteResponse source = voiceNoteService.getAuthorizedVoiceNote(voiceNoteId);
+        boolean readable = userId.equals(source.ownerId())
+                || (source.noteId() != null && accessTo(userId, source.noteId()).isPresent())
+                || isSharedWithUser(userId, voiceNoteId);
+        if (!readable) {
+            throw new com.notare.common.exception.VoiceNoteNotFoundException("Voice note not found.");
+        }
+
+        return voiceNoteService.copyClip(userId, voiceNoteId, targetNoteId, clientId);
+    }
+
+    /** True when this clip was shared with the user directly. */
+    private boolean isSharedWithUser(Long userId, Long voiceNoteId) {
+        try {
+            sharedVoiceNoteService.getSharedVoiceNote(userId, voiceNoteId);
+            return true;
+        } catch (RuntimeException ex) {
+            return false;
+        }
     }
 }

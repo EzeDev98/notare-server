@@ -2,6 +2,7 @@ package com.notare.feature.sync.service.impl;
 
 import com.notare.common.exception.BodyIsCollaborativeException;
 import com.notare.common.exception.NoteNotFoundException;
+import com.notare.common.exception.VoiceNoteNotFoundException;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.sync.dto.request.SyncBatchRequest;
 import com.notare.feature.sync.dto.request.SyncOperationRequest;
@@ -67,6 +68,10 @@ public class SyncPushServiceImpl implements SyncPushService {
                 // simply moot and the client drops it.
                 results.add(result(operation, SyncResultStatus.NOT_FOUND, null,
                         "This note no longer exists."));
+            } catch (VoiceNoteNotFoundException ex) {
+                // A clip deleted already, here or on another device: the operation is moot.
+                results.add(result(operation, SyncResultStatus.NOT_FOUND, null,
+                        "This clip no longer exists."));
             } catch (BodyIsCollaborativeException ex) {
                 // The note became collaborative while this edit sat in an offline queue.
                 // Retrying can never succeed, so answer INVALID for this operation instead
@@ -111,6 +116,9 @@ public class SyncPushServiceImpl implements SyncPushService {
                     : null;
             case DELETE -> operation.getNoteId() == null
                     ? "noteId is required for a DELETE operation."
+                    : null;
+            case CLIP_DELETE -> operation.getClipId() == null
+                    ? "clipId is required for a CLIP_DELETE operation."
                     : null;
         };
     }

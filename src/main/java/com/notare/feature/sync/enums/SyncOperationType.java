@@ -24,5 +24,12 @@ public enum SyncOperationType {
     UPDATE,
 
     /** Move to trash. Carries noteId. */
-    DELETE
+    DELETE,
+
+    /**
+     * The person deleted one voice clip (step 17c). Carries clipId. A clip is CREATED by uploading its
+     * audio (POST /notes/{noteId}/voice-notes, idempotent on the clip's client id), not by a batch
+     * operation: a JSON batch cannot carry audio.
+     */
+    CLIP_DELETE
 }

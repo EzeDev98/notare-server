@@ -3,11 +3,17 @@ package com.notare.feature.sync.service.impl;
 import com.notare.feature.note.dto.response.NoteChange;
 import com.notare.feature.note.service.NoteService;
 import com.notare.feature.sync.config.SyncProperties;
+import com.notare.feature.sync.dto.response.SyncClipResponse;
 import com.notare.feature.sync.dto.response.SyncNoteResponse;
 import com.notare.feature.sync.dto.response.SyncPullResponse;
+import com.notare.feature.sync.dto.response.SyncTrashedResponse;
 import com.notare.feature.sync.model.NoteTombstone;
 import com.notare.feature.sync.repository.NoteTombstoneRepository;
 import com.notare.feature.sync.service.SyncPullService;
+import com.notare.feature.transcription.dto.response.TranscriptionResponse;
+import com.notare.feature.transcription.service.TranscriptionService;
+import com.notare.feature.voicenote.dto.response.ClipChange;
+import com.notare.feature.voicenote.service.VoiceNoteService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -19,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -28,6 +35,8 @@ public class SyncPullServiceImpl implements SyncPullService {
     private final NoteService noteService;
     private final NoteTombstoneRepository noteTombstoneRepository;
     private final SyncProperties syncProperties;
+    private final VoiceNoteService voiceNoteService;
+    private final TranscriptionService transcriptionService;
 
     @Override
     @Transactional(readOnly = true)
@@ -51,16 +60,24 @@ public class SyncPullServiceImpl implements SyncPullService {
                 ? null
                 : since.minusSeconds(syncProperties.getOverlapSeconds());
 
-        Page<NoteChange> page = noteService.findChangesSince(ownerId, effectiveSince, clamp(pageable));
+        Pageable window = clamp(pageable);
+        Page<NoteChange> page = noteService.findChangesSince(ownerId, effectiveSince, window);
+
+        // Voice clips and their transcripts, paged in step with the notes (step 17c): same window,
+        // same page number and size.
+        Page<ClipChange> clipPage = voiceNoteService.findClipChangesSince(ownerId, effectiveSince, window);
+        List<SyncClipResponse> clips = withTranscripts(clipPage.getContent());
 
         // Split into the two lists the client uses differently: merge these,
         // evict those.
         List<SyncNoteResponse> changed = new ArrayList<>();
         List<Long> deletedIds = new ArrayList<>();
+        List<SyncTrashedResponse> trashed = new ArrayList<>();
 
         for (NoteChange change : page.getContent()) {
             if (change.deleted()) {
                 deletedIds.add(change.noteId());
+                trashed.add(new SyncTrashedResponse(change.noteId(), change.purgeAt()));
             } else {
                 changed.add(new SyncNoteResponse(change.note(), change.clientId()));
             }
@@ -87,9 +104,9 @@ public class SyncPullServiceImpl implements SyncPullService {
             tombstones.forEach(tombstone -> deletedIds.add(tombstone.getNoteId()));
         }
 
-        // hasMore reflects the NOTE page only. Tombstones are returned whole, so
+        // hasMore covers the note page and the clip page. Tombstones are returned whole, so
         // there is never a partial tombstone set to come back for.
-        boolean hasMore = page.hasNext();
+        boolean hasMore = page.hasNext() || clipPage.hasNext();
 
         // While more pages remain, hand back the SAME cursor the client sent.
         //
@@ -105,7 +122,22 @@ public class SyncPullServiceImpl implements SyncPullService {
         // taken above then covers anything written during the walk.
         LocalDateTime nextCursor = hasMore ? since : snapshot;
 
-        return new SyncPullResponse(changed, deletedIds, nextCursor, hasMore);
+        return new SyncPullResponse(changed, deletedIds, nextCursor, hasMore, clips, trashed);
+    }
+
+    /** Attaches each visible clip's transcript state, with one query for the whole page (no N+1). */
+    private List<SyncClipResponse> withTranscripts(List<ClipChange> changes) {
+        List<Long> visible = changes.stream().filter(change -> !change.deleted()).map(ClipChange::id).toList();
+        Map<Long, TranscriptionResponse> transcripts = transcriptionService.getForVoiceNotes(visible);
+
+        return changes.stream().map(change -> {
+            TranscriptionResponse found = change.deleted() ? null : transcripts.get(change.id());
+            SyncClipResponse.Transcript transcript = found == null
+                    ? null
+                    : new SyncClipResponse.Transcript(found.status(), found.transcript(), found.language());
+            return new SyncClipResponse(change.id(), change.noteId(), change.clientId(), change.durationSeconds(),
+                    change.sizeBytes(), change.contentType(), change.deleted(), transcript);
+        }).toList();
     }
 
     /**

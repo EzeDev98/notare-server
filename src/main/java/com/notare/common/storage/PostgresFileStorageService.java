@@ -104,4 +104,23 @@ public class PostgresFileStorageService implements FileStorageService {
         int dot = filename.lastIndexOf('.');
         return dot >= 0 ? filename.substring(dot) : "";
     }
+
+    @Override
+    public String copy(String sourceKey, String originalFilename) {
+        FileBlob source = repository.findById(sourceKey)
+                .orElseThrow(() -> new StorageException("Stored file is missing or unreadable: " + sourceKey));
+
+        String key = UUID.randomUUID() + extension(originalFilename);
+        FileBlob blob = new FileBlob();
+        blob.setStorageKey(key);
+        blob.setContent(source.getContent());
+        blob.setContentType(source.getContentType());
+        blob.setSizeBytes(source.getSizeBytes());
+        try {
+            repository.save(blob);
+        } catch (RuntimeException e) {
+            throw new StorageException("Failed to copy stored file: " + sourceKey, e);
+        }
+        return key;
+    }
 }

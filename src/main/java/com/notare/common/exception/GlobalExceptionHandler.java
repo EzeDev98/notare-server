@@ -254,6 +254,26 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
+    /**
+     * A stale version (step 17a). {@code currentVersion} sits at the root of the body, per
+     * RFC 9457, so the client can adopt it without a second request. {@code code} lets a client
+     * tell this 409 from BODY_IS_COLLABORATIVE without parsing prose.
+     */
+    @ExceptionHandler(NoteConflictException.class)
+    public ProblemDetail handleNoteConflict(NoteConflictException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+                "This note has been modified since you loaded it.");
+        problem.setTitle("Conflict");
+        problem.setProperty("code", "STALE_VERSION");
+        problem.setProperty("currentVersion", ex.getCurrentVersion());
+        return problem;
+    }
+
+    @ExceptionHandler(InvalidAccountRequestException.class)
+    public ProblemDetail handleInvalidAccountRequest(InvalidAccountRequestException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     public ProblemDetail handleOptimisticLockingFailure(ObjectOptimisticLockingFailureException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,

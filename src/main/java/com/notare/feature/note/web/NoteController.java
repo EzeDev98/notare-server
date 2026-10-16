@@ -7,6 +7,7 @@ import com.notare.feature.note.dto.request.UpdateNoteRequest;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
 import com.notare.feature.note.dto.response.TrashedNoteResponse;
+import com.notare.feature.note.service.NoteCreation;
 import com.notare.feature.note.service.NoteService;
 import com.notare.feature.user.model.UserDetail;
 import jakarta.validation.Valid;
@@ -43,7 +44,16 @@ public class NoteController {
             @AuthenticationPrincipal UserDetail userDetail,
             @Valid @RequestBody CreateNoteRequest request) {
 
-        NoteResponse response = noteService.createNote(userDetail.getUser().getId(), request);
+        Long ownerId = userDetail.getUser().getId();
+        NoteCreation creation = request.getClientId() == null
+                ? new NoteCreation(noteService.createNote(ownerId, request), true)
+                : noteService.createIdempotent(ownerId, request, request.getClientId());
+        NoteResponse response = creation.note();
+
+        // The same clientId again returns the note it already made: 200, nothing new created.
+        if (!creation.created()) {
+            return ResponseEntity.ok(response);
+        }
 
         // 201 Created with a Location header pointing at the new resource.
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()

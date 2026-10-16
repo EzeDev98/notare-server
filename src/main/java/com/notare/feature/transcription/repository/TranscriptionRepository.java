@@ -1,5 +1,7 @@
 package com.notare.feature.transcription.repository;
 
+import org.springframework.data.jpa.repository.Modifying;
+
 import com.notare.feature.transcription.enums.TranscriptionStatus;
 import com.notare.feature.transcription.model.Transcription;
 import org.springframework.data.domain.Page;
@@ -9,10 +11,22 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 public interface TranscriptionRepository extends JpaRepository<Transcription, Long> {
+
+    /** Transcripts of this user's own clips (step 17g). */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "delete from transcriptions where owner_id = :userId", nativeQuery = true)
+    int deleteAllOwnedBy(@Param("userId") Long userId);
+
+    /** Transcripts this user asked for on other people's clips: they stay, the name goes (step 17g). */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "update transcriptions set requested_by = null where requested_by = :userId", nativeQuery = true)
+    int clearRequestedBy(@Param("userId") Long userId);
+
 
     /** Ownership-scoped fetch by transcription id (get status by job id). */
     Optional<Transcription> findByIdAndOwnerId(Long id, Long ownerId);
@@ -23,6 +37,9 @@ public interface TranscriptionRepository extends JpaRepository<Transcription, Lo
      * read status when the client polls by voice-note id.
      */
     Optional<Transcription> findByVoiceNoteIdAndOwnerId(Long voiceNoteId, Long ownerId);
+
+    /** The transcriptions of a batch of voice notes, for the sync pull (step 17c). */
+    List<Transcription> findByVoiceNoteIdIn(Collection<Long> voiceNoteIds);
 
     /**
      * Keyword search over the owner's transcripts, partial and case-insensitive.

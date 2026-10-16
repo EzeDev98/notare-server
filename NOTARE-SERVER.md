@@ -172,6 +172,7 @@ RFC 9457 `ProblemDetail`, produced by a single `@RestControllerAdvice` (`GlobalE
   "status": 409,
   "detail": "This note has been modified since you loaded it.",
   "instance": "/api/v1/notes/1",
+  "code": "STALE_VERSION",
   "currentVersion": 6
 }
 ```
@@ -205,7 +206,7 @@ Indexes: `(owner_id)`, `(owner_id, deleted)`, `(owner_id, updated_at)`. Unique: 
 
 ### Optimistic locking — two layers
 
-**Layer 1 — explicit version check.** `requireMatchingVersion` compares the client's version to the row's, and throws `NoteConflictException` carrying `currentVersion`. Catches the common case (client editing from stale state) with a clean 409.
+**Layer 1 — explicit version check.** `requireMatchingVersion` compares the client's version to the row's, and throws `NoteConflictException` carrying `currentVersion`. Catches the common case (client editing from stale state) with a clean 409, body code `STALE_VERSION`. Applies to legacy-mode notes only: a collaborative note's text is refused earlier with 409 `BODY_IS_COLLABORATIVE`. PUT and PATCH without a `version` are a 400. The sync path sends no version and relies on its operation ledger.
 
 **Layer 2 — Hibernate `@Version`.** `saveAndFlush` forces the UPDATE immediately; a genuinely concurrent write that passed layer 1 fails Hibernate's own check → `ObjectOptimisticLockingFailureException` → 409.
 
@@ -304,6 +305,8 @@ POST /voice-notes/{id}/transcription
 ```
 
 **`submit` is idempotent.** `PENDING`/`PROCESSING`/`COMPLETED` return as-is; `FAILED` resets to `PENDING` and republishes.
+
+**Who may ask (step 17d, B-11).** `POST` is for the note's owner and anyone with WRITE on it; a Viewer gets 403, and anyone with no access gets 404. `GET` is open to Viewers too. The job belongs to the clip's owner (`owner_id`), so the audio is found; `requested_by` is who asked, and the "ready" or "failed" notice goes to them. `requested_language` defaults to `auto`. `StuckTranscriptionRecovery` re-queues stale jobs for every owner and the worker never uses the asker to find the audio, so shared clips are covered.
 
 **`AsyncConfig` defines a dedicated bounded executor** (`transcriptionExecutor`, core 2 / max 4 / queue 50) rather than using Spring's default. That's bulkhead isolation — transcription can saturate its own pool without starving request handling, and the bounded queue provides backpressure instead of unbounded thread creation.
 
@@ -511,6 +514,19 @@ Soft delete gives tombstones free (the row still exists). **Permanent delete lea
 
 Tombstones are unpaginated and sent only on incremental syncs. A first-sync client has nothing to evict, and paginating would mean merging two independently paged sources — hard to get right, impossible to page consistently.
 
+### Clips and transcripts (step 17c)
+
+`GET /sync` also returns `clips[]`: id, noteId, clientId, durationSeconds, sizeBytes, mimeType, `deleted`, and `transcript` (`status`, `text`, `language`; null when the clip has none). It is paged with the notes — same page number and size, `hasMore` true while either list has more — so the cursor rules above are unchanged.
+
+- **What moves a clip's `updatedAt`:** the upload, a delete, a trash or restore of its note (the native updates set it explicitly), and every transcription status change (`touchClip`). One marker, one query: a transcript finishing on device A reaches device B on its next pull.
+- **`deleted` means hidden**, for either reason: the note is in the trash (the clip comes back with the note), or the person deleted the clip alone (`removed`, which never comes back; its file is removed at once). A hard-deleted clip leaves with its note's tombstone.
+- **Batch:** `CLIP_DELETE` with `clipId`. No ledger entry: deleting an already-deleted clip is `NOT_FOUND`, which the client treats as done.
+- **Scope:** the caller's own clips (`owner_id`). A clip an Editor adds to someone else's note belongs to the Editor and reaches the note's owner through the shared-note path, not this feed. Revisit if the owner's devices must receive Editors' clips.
+
+### Trash purge (step 17e)
+
+`TrashPurgeJob` (`feature/note/job`, 03:30 daily) deletes notes whose `purge_at` has passed, one transaction per note, publishing `NotePermanentlyDeletedEvent` so shares, clips, transcripts, stored files, collaboration data and the sync tombstone go with it. `purge_at` is set on soft delete and cleared on restore. It is returned as `purgeAt` in `TrashedNoteResponse` and, for trashed notes, in the sync pull's `trashed[]`. ShedLock (`shedlock` table, `SchedulerLockConfig`) lets only one instance run `TrashPurgeJob` and `SyncRetentionJob`.
+
 ### Retention
 
 `SyncRetentionJob` (`@Scheduled(cron = "0 15 3 * * *")`) sweeps both tables in one transaction, using `notare.sync.retention-days` (default 30).
@@ -522,7 +538,7 @@ Tombstones are unpaginated and sent only on incremental syncs. A first-sync clie
 ### What sync deliberately excludes
 
 - **Shared notes** stay online-only. Offline collaborator edits multiply the conflict surface, and recipients don't have auto-save anyway.
-- **Voice notes** stay out. Binary uploads queue as ordinary uploads.
+- **Audio bytes** stay out. A JSON batch cannot carry audio, so a clip is created by the multipart upload (`POST /notes/{noteId}/voice-notes`, idempotent on the clip's client id). Everything else about clips syncs (see *Clips and transcripts* above).
 - **CRDT/OT auto-merge** is out of scope — a different architecture, not a feature.
 
 ---
@@ -612,7 +628,7 @@ All paths are prefixed `/api/v1`. Everything requires a Bearer token except wher
 
 | Method | Path | Success | Notes |
 |---|---|---|---|
-| POST | `/notes` | 201 + `Location` | |
+| POST | `/notes` | 201 + `Location` | optional `clientId` (1 to 64 chars): posting the same one again returns the existing note with **200** |
 | GET | `/notes/{noteId}` | 200 | |
 | GET | `/notes?page=&size=&sort=` | 200 | default sort `pinned,updatedAt` DESC |
 | GET | `/notes/search?q=&page=&size=` | 200 | blank `q` matches all |
@@ -817,6 +833,8 @@ That's a cycle, and it defeats the boundary the events were introduced to preser
 | `notare.sync.default-page-size` | `100` | |
 | `notare.sync.max-page-size` | `500` | |
 | `notare.sync.retention-days` | `30` | Ledger + tombstone sweep window |
+| `notare.trash.retention-days` | `30` | Days a trashed note stays in Recently deleted (`purge_at = deleted_at + this`) |
+| `notare.trash.purge-batch-size` | `200` | Notes `TrashPurgeJob` reads per page |
 | `app.otp.*` | length 6, 10 min, 5 attempts, 60s cooldown | |
 | `app.jwt.secret` | *(required)* | Base64, ≥ 32 bytes. No default — startup fails fast |
 | `app.jwt.expiration-ms` | `900000` | 15 minutes |
@@ -858,3 +876,33 @@ The deciding question is always: *what does it cost for this side-effect to succ
 ---
 
 *Last updated: 7 August 2026 — after Step 10, before cross-cutting hardening.*
+
+---
+
+## Voice clips as children of a note (step 17b)
+
+| Method | Path | Success | Notes |
+|---|---|---|---|
+| POST | `/notes/{noteId}/voice-notes` | 201 + `Location`, or 200 | multipart: `file`, `clientId` (1 to 64 chars, required), `durationSeconds`. Owner or Editor. The same `clientId` again returns the stored clip with **200** and stores nothing. No access is 404, a Viewer is 403. |
+
+- **Schema (V6):** `voice_notes.client_id` (unique per owner, `uq_voice_notes_owner_client_id`), `deleted`, `deleted_at`. `VoiceNote` carries `@SQLRestriction("deleted = false")`, so a hidden clip is absent from every query; the three life-cycle queries are native so they can reach it.
+- **Clips follow their note** (`VoiceNoteLifecycleListener`, BEFORE_COMMIT, same transaction as the note change): trashing a note hides its clips, `NoteRestoredEvent` brings them back, a permanent delete removes the rows and publishes `VoiceNoteDeletedEvent` per clip (voice shares go with them). The stored files (R2 or Postgres storage) are removed after the commit, best effort.
+- **Older endpoints** `POST /voice-notes` and `POST /shared-notes/{noteId}/voice-notes` still work. They are removed, and `voice_notes.note_id` becomes NOT NULL, after the data migration of step 18.
+
+### Leave a note and copy a clip (step 17f)
+
+`DELETE /shared-notes/{noteId}/access` removes the caller's own grant (404 for anyone without one) and publishes `NoteShareRevokedEvent` with `left = true`: the live channel closes and clip access is cleaned up, but the leaver gets no notification. `POST /voice-notes/{id}/copy` with `{ targetNoteId, clientId }` copies a clip the caller can read (owner, grant on its note, or a share on the clip) into one of their own notes, duplicating the stored object inside the storage backend (`FileStorageService.copy`). Idempotent on `(owner, clientId)`: 201 first time, 200 on a repeat.
+
+---
+
+## Change password and delete account (step 17g)
+
+| Method | Path | Success | Notes |
+|---|---|---|---|
+| POST | `/user/password/change` | 204 | `{ currentPassword, newPassword }`. Forwarded to the auth service's `POST /auth/change-password`. A wrong current password is **400 "Incorrect password."**; a new password that breaks the rules is a 400 with the reason. The caller stays signed in: the auth service keeps one session per user, so there is no other session to end. |
+| DELETE | `/user/me` | 204 | `{ username }` as confirmation (400 "The username does not match." otherwise). Deletes the account and everything it owns. |
+
+**Account deletion is resumable.** `account_deletions` records the step, and each step runs in its own transaction:
+`STARTED` (publish `UserDeletionRequested`: notes go through the normal permanent delete, so shares, collaboration data, clips, stored files and tombstones cascade; this user's clips, grants, connections and transcripts go), then `DATA_DELETED` (publish `UserDeletionSweep`: tombstones and ledger, notifications, authorship columns on other people's rows), then `SWEPT` (delete the auth user; already gone counts), then `AUTH_DELETED` (delete the local user and the progress row, so nothing keeps the id). A failure keeps the row: calling again continues, and `AccountDeletionRecoveryJob` continues any deletion stuck for 10 minutes.
+
+Edits this person made to other people's collaborative notes stay with the note, credited to its owner. Voice clips they added to other people's notes are deleted with their stored files.

@@ -18,6 +18,17 @@ import java.util.Optional;
  */
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
+    /** Everything this user was notified about (step 17g). */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "delete from notifications where recipient_id = :userId", nativeQuery = true)
+    int deleteAllForRecipient(@Param("userId") Long userId);
+
+    /** Notices other people received about this user's actions: they stay, the name goes (step 17g). */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "update notifications set actor_id = null where actor_id = :userId", nativeQuery = true)
+    int clearActor(@Param("userId") Long userId);
+
+
     /** The full list for one user. */
     Page<Notification> findByRecipientId(Long recipientId, Pageable pageable);
 

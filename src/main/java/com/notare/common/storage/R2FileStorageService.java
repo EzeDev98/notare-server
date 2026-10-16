@@ -13,6 +13,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
@@ -167,5 +168,22 @@ public class R2FileStorageService implements FileStorageService {
         }
         int dot = filename.lastIndexOf('.');
         return dot >= 0 ? filename.substring(dot) : "";
+    }
+
+    @Override
+    public String copy(String sourceKey, String originalFilename) {
+        String key = UUID.randomUUID() + extension(originalFilename);
+        try {
+            // The bucket copies the object itself. The bytes never pass through this server.
+            s3.copyObject(CopyObjectRequest.builder()
+                    .sourceBucket(bucket)
+                    .sourceKey(sourceKey)
+                    .destinationBucket(bucket)
+                    .destinationKey(key)
+                    .build());
+        } catch (S3Exception e) {
+            throw new StorageException("Failed to copy stored file: " + sourceKey, e);
+        }
+        return key;
     }
 }

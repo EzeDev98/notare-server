@@ -43,6 +43,28 @@ public record SyncPullResponse(
          * the payload is what stops "I got a full page, I'm done" from
          * silently losing the tail of a large first sync.
          */
-        boolean hasMore
+        boolean hasMore,
+
+        /**
+         * Voice clips created, changed or hidden since the cursor, with their transcript state
+         * (step 17c). Paged in step with {@code changed}: the same page number and size, and hasMore is
+         * true while either list has more.
+         */
+        List<SyncClipResponse> clips,
+
+        /** Notes in Recently deleted with their purge date (step 17e). A subset of deletedIds. */
+        List<SyncTrashedResponse> trashed
 ) {
+
+    /** The shape before the purge dates were added. */
+    public SyncPullResponse(List<SyncNoteResponse> changed, List<Long> deletedIds,
+                            LocalDateTime nextCursor, boolean hasMore, List<SyncClipResponse> clips) {
+        this(changed, deletedIds, nextCursor, hasMore, clips, List.of());
+    }
+
+    /** The shape before clips were added. */
+    public SyncPullResponse(List<SyncNoteResponse> changed, List<Long> deletedIds,
+                            LocalDateTime nextCursor, boolean hasMore) {
+        this(changed, deletedIds, nextCursor, hasMore, List.of(), List.of());
+    }
 }

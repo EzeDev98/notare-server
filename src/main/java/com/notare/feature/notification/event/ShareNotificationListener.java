@@ -74,6 +74,9 @@ public class ShareNotificationListener {
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onNoteShareRevoked(NoteShareRevokedEvent event) {
+        if (event.left()) {
+            return;
+        }
         dispatcher.dispatch(new CreateNotificationCommand(
                 event.sharedWithUserId(),
                 NotificationType.NOTE_SHARE_REVOKED,

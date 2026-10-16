@@ -20,6 +20,9 @@ import java.net.URI;
  * sub-resource of the voice note: /voice-notes/{voiceNoteId}/transcription.
  * The controller lives in the transcription module even though its URL nests
  * under voice-notes — URL shape and module ownership are allowed to differ.
+ *
+ * <p>Step 17d: POST is for the note's owner and anyone with WRITE on it (a Viewer gets 403); GET is
+ * open to Viewers too. Someone with no access to the note gets 404.
  */
 @RequiredArgsConstructor
 @RestController

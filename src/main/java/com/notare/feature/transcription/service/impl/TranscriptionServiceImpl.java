@@ -1,8 +1,12 @@
 package com.notare.feature.transcription.service.impl;
 
 import com.notare.common.dto.PagedResponse;
+import com.notare.common.exception.InsufficientNotePermissionException;
 import com.notare.common.exception.TranscriptionNotFoundException;
+import com.notare.common.exception.VoiceNoteNotFoundException;
 import com.notare.common.util.LikeEscaper;
+import com.notare.feature.share.enums.NoteAccess;
+import com.notare.feature.share.service.SharedNoteService;
 import com.notare.feature.transcription.dto.response.TranscriptionResponse;
 import com.notare.feature.transcription.enums.TranscriptionStatus;
 import com.notare.feature.transcription.event.TranscriptionRequestedEvent;
@@ -10,6 +14,7 @@ import com.notare.feature.transcription.mapper.TranscriptionMapper;
 import com.notare.feature.transcription.model.Transcription;
 import com.notare.feature.transcription.repository.TranscriptionRepository;
 import com.notare.feature.transcription.service.TranscriptionService;
+import com.notare.feature.voicenote.dto.response.VoiceNoteResponse;
 import com.notare.feature.voicenote.service.VoiceNoteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -18,7 +23,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -27,16 +36,16 @@ public class TranscriptionServiceImpl implements TranscriptionService {
     private final TranscriptionRepository transcriptionRepository;
     private final TranscriptionMapper transcriptionMapper;
     private final VoiceNoteService voiceNoteService;
+    private final SharedNoteService sharedNoteService;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
-    public TranscriptionResponse submit(Long ownerId, Long voiceNoteId) {
-        // Cross-module ownership/existence check through the voicenote module's
-        // PUBLIC service (not its repository). Throws VoiceNoteNotFound (404) if
-        // the voice note isn't the caller's. This is the clean Spring Modulith
-        // way for one module to consult another — via its API, not its internals.
-        voiceNoteService.getVoiceNote(ownerId, voiceNoteId);
+    public TranscriptionResponse submit(Long userId, Long voiceNoteId) {
+        // The note's owner and anyone with WRITE on it may ask (step 17d, B-11). The job belongs to the
+        // clip's owner, so the audio can be found; the asker is remembered for the notice that tells
+        // them the transcript is ready. Both checks go through other modules' PUBLIC services.
+        Long ownerId = authorise(userId, voiceNoteId, true);
 
         Transcription transcription = transcriptionRepository
                 .findByVoiceNoteIdAndOwnerId(voiceNoteId, ownerId)
@@ -49,13 +58,15 @@ public class TranscriptionServiceImpl implements TranscriptionService {
                     // current state and start nothing new.
                     return transcriptionMapper.toResponse(transcription);
                 }
-                case FAILED -> resetToPending(transcription);
+                case FAILED -> resetToPending(transcription, userId);
             }
         } else {
-            transcription = createPending(ownerId, voiceNoteId);
+            transcription = createPending(ownerId, userId, voiceNoteId);
         }
 
         Transcription saved = transcriptionRepository.save(transcription);
+        // The clip's next sync carries the new status (step 17c). Same transaction as the save.
+        voiceNoteService.touchClip(voiceNoteId);
 
         // Publish INSIDE this transaction. The listener consumes it AFTER_COMMIT,
         // so the async worker never queries for this row before it's committed.
@@ -66,12 +77,24 @@ public class TranscriptionServiceImpl implements TranscriptionService {
 
     @Override
     @Transactional(readOnly = true)
-    public TranscriptionResponse getByVoiceNote(Long ownerId, Long voiceNoteId) {
+    public TranscriptionResponse getByVoiceNote(Long userId, Long voiceNoteId) {
+        // Anyone who can see the note may read the transcript, Viewers included.
+        Long ownerId = authorise(userId, voiceNoteId, false);
         Transcription transcription = transcriptionRepository
                 .findByVoiceNoteIdAndOwnerId(voiceNoteId, ownerId)
                 .orElseThrow(() -> new TranscriptionNotFoundException(
                         "No transcription found for this voice note."));
         return transcriptionMapper.toResponse(transcription);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, TranscriptionResponse> getForVoiceNotes(Collection<Long> voiceNoteIds) {
+        if (voiceNoteIds == null || voiceNoteIds.isEmpty()) {
+            return Map.of();
+        }
+        return transcriptionRepository.findByVoiceNoteIdIn(voiceNoteIds).stream()
+                .collect(Collectors.toMap(Transcription::getVoiceNoteId, transcriptionMapper::toResponse));
     }
 
     @Override
@@ -88,16 +111,42 @@ public class TranscriptionServiceImpl implements TranscriptionService {
         return PagedResponse.of(content, page);
     }
 
-    private Transcription createPending(Long ownerId, Long voiceNoteId) {
+    /**
+     * Checks that this user may touch the clip's transcript and returns the clip's owner. A clip on a
+     * note is open to whoever may open the note: the owner and Editors may ask, Viewers may only read
+     * (403). Anyone else gets the same 404 as a clip that does not exist. A clip that belongs to no
+     * note is only its owner's.
+     */
+    private Long authorise(Long userId, Long voiceNoteId, boolean needsWrite) {
+        VoiceNoteResponse clip = voiceNoteService.getAuthorizedVoiceNote(voiceNoteId);
+        if (clip.noteId() == null) {
+            if (clip.ownerId().equals(userId)) {
+                return clip.ownerId();
+            }
+            throw new VoiceNoteNotFoundException("Voice note not found.");
+        }
+        Optional<NoteAccess> access = sharedNoteService.accessTo(userId, clip.noteId());
+        if (access.isEmpty()) {
+            throw new VoiceNoteNotFoundException("Voice note not found.");
+        }
+        if (needsWrite && !access.get().canWrite()) {
+            throw new InsufficientNotePermissionException("You have read-only access to this note.");
+        }
+        return clip.ownerId();
+    }
+
+    private Transcription createPending(Long ownerId, Long requestedBy, Long voiceNoteId) {
         Transcription t = new Transcription();
         t.setOwnerId(ownerId);
+        t.setRequestedBy(requestedBy);
         t.setVoiceNoteId(voiceNoteId);
         t.setStatus(TranscriptionStatus.PENDING);
         return t;
     }
 
-    private void resetToPending(Transcription t) {
+    private void resetToPending(Transcription t, Long requestedBy) {
         t.setStatus(TranscriptionStatus.PENDING);
+        t.setRequestedBy(requestedBy);
         t.setErrorMessage(null);
         t.setTranscript(null);
         t.setConfidence(null);

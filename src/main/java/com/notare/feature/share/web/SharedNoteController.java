@@ -25,6 +25,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -280,5 +281,15 @@ public class SharedNoteController {
                 .header(HttpHeaders.ACCEPT_RANGES, "bytes")
                 .contentType(mediaType)
                 .body(region);
+    }
+
+    /** Leave a note shared with you (step 17f, B-04). Only the grantee can; anyone else gets 404. */
+    @DeleteMapping("/{noteId}/access")
+    public ResponseEntity<Void> leaveNote(
+            @AuthenticationPrincipal UserDetail userDetail,
+            @PathVariable Long noteId) {
+
+        sharedNoteService.leaveNote(userDetail.getUser().getId(), noteId);
+        return ResponseEntity.noContent().build();
     }
 }

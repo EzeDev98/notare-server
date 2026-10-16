@@ -262,6 +262,21 @@ public class InternalAuthClient {
         return response != null && response.getData() != null && response.getData().isActive();
     }
 
+    /**
+     * A signed-in user changes their own password (step 17g, B-02). A wrong current password comes
+     * back as a 400 "Incorrect password." and is passed through as it is, by the same 4xx rule as
+     * every other call here.
+     */
+    public void changePassword(com.notare.client.dto.request.InternalChangePasswordRequest request) {
+        restClient.post()
+                .uri("/auth/change-password")
+                .header(HttpHeaders.AUTHORIZATION, basicAuthHeader)
+                .body(request)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, this::handleDownstreamError)
+                .body(new ParameterizedTypeReference<InternalAuthApiResponse<Void>>() {});
+    }
+
     public void deleteUser(String internalAuthUserId) {
         restClient.delete()
                 .uri(uriBuilder -> uriBuilder
