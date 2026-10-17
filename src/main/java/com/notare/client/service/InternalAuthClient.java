@@ -251,6 +251,16 @@ public class InternalAuthClient {
                 .body(new ParameterizedTypeReference<InternalAuthApiResponse<java.util.List<SessionResponse>>>() {});
     }
 
+    /** Signs out one of the caller's own devices (step 17h). internal-auth answers 404 when it is not theirs. */
+    public InternalAuthApiResponse<Void> revokeSession(String accessToken, String sessionId) {
+        return restClient.delete()
+                .uri("/session/{sessionId}", sessionId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, this::handleDownstreamError)
+                .body(new ParameterizedTypeReference<InternalAuthApiResponse<Void>>() {});
+    }
+
     public boolean isSessionLive(String username) {
         InternalAuthApiResponse<SessionStatusResponse> response = restClient.post()
                 .uri("/auth/session-status")

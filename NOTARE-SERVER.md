@@ -613,8 +613,8 @@ All paths are prefixed `/api/v1`. Everything requires a Bearer token except wher
 | POST | `/password/reset-password` | **public** |
 | POST | `/logout/logout` | |
 | POST | `/logout/logout-all` | |
-| GET | `/session/sessions` | |
-| DELETE | `/session/sessions/{sessionId}` | |
+| GET | `/session/sessions` | one entry per signed-in device (step 17h) |
+| DELETE | `/session/sessions/{sessionId}` | signs out that device only; 404 if it is not the caller's (step 17h) |
 
 ### Operator and internal
 
@@ -780,7 +780,7 @@ That's a cycle, and it defeats the boundary the events were introduced to preser
 
 | Item | Why it matters |
 |---|---|
-| **Flyway: built, needs V5 onward** | Flyway runs in prod (`src/main/resources/db/migration`, V1 to V4: baseline schema, Modulith event publication, `users.internal_auth_id`, drop local password and OTP tables). Prod runs `ddl-auto=validate`; dev has Flyway off and uses `ddl-auto=update`. Every entity change from now on needs a new `V5__...` file. The manual DDL in `docs/` (`file_blobs_manual_ddl.sql`, `voice_shares_manual_ddl.sql`) must be folded into migrations before they are relied on. |
+| **Flyway: built (V1 to V11, see Migrations)** | Flyway runs in prod (`src/main/resources/db/migration`, V1 to V4 were the first four: baseline schema, Modulith event publication, `users.internal_auth_id`, drop local password and OTP tables). Prod runs `ddl-auto=validate`; dev has Flyway off and uses `ddl-auto=update`. Every entity change needs a new migration file with the next number. The manual DDL in `docs/` (`file_blobs_manual_ddl.sql`, `voice_shares_manual_ddl.sql`) must be folded into migrations before they are relied on. |
 | **File storage: built, needs a staging test** | `R2FileStorageService` and `PostgresFileStorageService` exist for prod, chosen by `STORAGE_BACKEND` (see §6). Test the chosen backend on staging before release. |
 
 ### Correctness and security
@@ -822,7 +822,6 @@ That's a cycle, and it defeats the boundary the events were introduced to preser
 | `spring.servlet.multipart.max-request-size` | `30MB` | |
 | `notare.voice.max-size` | `20MB` | App-level limit; must stay ≤ multipart ceiling |
 | `notare.voice.max-duration-seconds` | `600` | Only checked when the client supplies a duration |
-| `notare.voice.allowed-content-types` | *(code default)* | Now unset in properties so the Java default governs |
 | `notare.storage.local.location` | `./uploads/voice-notes` | Local storage root (dev); env `VOICE_STORAGE_LOCATION` |
 | `notare.storage.backend` | `r2` | Prod only: `r2` or `postgres`; env `STORAGE_BACKEND` |
 | `notare.storage.r2.*` | *(empty)* | `endpoint`, `bucket`, `access-key-id`, `secret-access-key`, `region` (default `auto`); env `R2_*`, falling back to `AWS_*` |
@@ -906,3 +905,108 @@ The deciding question is always: *what does it cost for this side-effect to succ
 `STARTED` (publish `UserDeletionRequested`: notes go through the normal permanent delete, so shares, collaboration data, clips, stored files and tombstones cascade; this user's clips, grants, connections and transcripts go), then `DATA_DELETED` (publish `UserDeletionSweep`: tombstones and ledger, notifications, authorship columns on other people's rows), then `SWEPT` (delete the auth user; already gone counts), then `AUTH_DELETED` (delete the local user and the progress row, so nothing keeps the id). A failure keeps the row: calling again continues, and `AccountDeletionRecoveryJob` continues any deletion stuck for 10 minutes.
 
 Edits this person made to other people's collaborative notes stay with the note, credited to its owner. Voice clips they added to other people's notes are deleted with their stored files.
+
+---
+
+## Sessions (step 17h)
+
+`GET /session/sessions` returns one entry per device the account is signed in on:
+`{ sessionId, deviceLabel, userAgent, ipAddress, createdAt, lastActiveAt, expiresAt, current }`.
+
+- `current` is true for the session whose token made the request.
+- `deviceLabel` is "Mac, Chrome", parsed from the User-Agent when the session is created.
+- `lastActiveAt` is the last sign-in or token refresh.
+- `DELETE /session/sessions/{sessionId}` signs out that one device. The others keep working.
+
+internal-auth-server owns all of this. The limit is its `max_active_sessions` setting on the client application, 1 by default, so other apps are unchanged. Notare is set to 5 with `PATCH {app.title}/client-applications/{clientId}` and `{ "revokePriorSessionsOnLogin": false, "maxActiveSessions": 5 }`. Both are needed: the auth server refuses more than one session while a sign-in still revokes the others. The 6th sign-in signs out the device used least recently.
+
+---
+
+## Notifications (step 17i)
+
+`GET /notifications` returns each notification as `{ id, type, actorId, targetType, targetId, targetLabel, previousPermission, newPermission, readAt, createdAt }`.
+
+`previousPermission` and `newPermission` (`READ` or `WRITE`) are set only on the two permission-changed types. They are null on everything else and on rows created before V11. The client says Viewer for `READ` and Editor for `WRITE`, and tells promotion from demotion by comparing the pair.
+
+**Types.** Names are stable and never removed. Clients show "Something new happened" for a type they do not know.
+
+| Type | Recipient | Actor | Target |
+|---|---|---|---|
+| `COLLABORATION_INVITED` | invitee | owner | collaboration |
+| `COLLABORATION_ACCEPTED` | owner | invitee | collaboration |
+| `COLLABORATION_REJECTED` | owner | invitee | collaboration |
+| `COLLABORATION_REMOVED` | removed collaborator | owner | none |
+| `NOTE_SHARED` | person shared with | owner | note |
+| `NOTE_SHARE_PERMISSION_CHANGED` | person shared with | owner | note |
+| `NOTE_SHARE_REVOKED` | person shared with | owner | none |
+| `TRANSCRIPTION_COMPLETED` | clip owner | none | note |
+| `TRANSCRIPTION_FAILED` | clip owner | none | note |
+| `VOICE_NOTE_SHARED` | person shared with | owner | voice note |
+| `VOICE_NOTE_SHARE_PERMISSION_CHANGED` | person shared with | owner | voice note |
+| `VOICE_NOTE_SHARE_REVOKED` | person shared with | owner | none |
+
+`COLLABORATION_REMOVED` is sent only when an owner removes an accepted collaborator. Withdrawing a pending invitation sends nothing.
+
+---
+
+## Safety and hygiene (step 17j)
+
+**Rate limits (B-15).** Per user, per minute, counted in Redis. Over the limit is **429** with a `Retry-After` header in seconds.
+
+| Endpoint | Setting | Starting value |
+|---|---|---|
+| `GET /sync` | `notare.rate-limit.sync-per-minute` | 30 |
+| `GET /user/lookup` and `GET /user/search` (one shared counter) | `notare.rate-limit.lookup-per-minute` | 20 |
+
+The window opens on a user's first request and lasts a minute. If Redis cannot be reached, requests are let through and a warning is logged.
+
+**Search (B-18).** `%`, `_` and the escape character are escaped in the term before the `LIKE` in note, transcript and user search (`LikeEscaper`, `ESCAPE '!'`).
+
+**Note text cap (B-19).** One setting, `notare.note.max-content-length` (default 100000 characters), applied by `@MaxNoteLength` to create, autosave and update. It is an abuse cap. The product limit of 20,000 and its counter live in the client. Notes have no `title` in the request, response or sync contract; shared-note responses still return a `title` derived from the first line of the body.
+
+**Voice uploads (B-22).** The format is decided by the file's first bytes, not the declared type: WebM (`1A 45 DF A3`), Ogg (`OggS`), MP4/M4A (`ftyp` at byte 4), WAV (`RIFF` and `WAVE`) and MP3 (`ID3` or `FF FB`). Anything else is a 400. The 20 MB and 10-minute caps are unchanged. `notare.voice.allowed-content-types` is removed.
+
+---
+
+## Minimum client version (step 17k)
+
+The client sends its version in the `X-Notare-Client-Version` header (for example `0.1.0`). If it is lower than `notare.client.min-version` (environment variable `CLIENT_MIN_VERSION`, default `0.0.0`, which turns nobody away), the server answers **426** with a problem body:
+
+```json
+{ "title": "Update required", "status": 426, "code": "CLIENT_TOO_OLD", "minimumVersion": "0.2.0" }
+```
+
+- It applies to every client endpoint. It does not apply to `/internal/**`, `/admin/**`, `/keep-alive` or the WebSocket.
+- A request with no header, or a header that is not a version, is let through.
+- Missing minor and patch parts count as 0, and a leading `v` or a suffix such as `-beta.1` is ignored.
+- A malformed `notare.client.min-version` stops the application from starting.
+- It runs before the rate limits, so an outdated client does not use up its allowance.
+- `Retry-After` is an exposed CORS header, so the browser client can read it on a 429.
+
+---
+
+## Migrations
+
+Flyway runs in prod (`src/main/resources/db/migration`) with `ddl-auto=validate`. Dev has Flyway off and uses `ddl-auto=update`. Every entity change needs the next numbered file.
+
+| Version | What it does | Step |
+|---|---|---|
+| V1 | Baseline schema | 1 |
+| V2 | Spring Modulith event publication | 1 |
+| V3 | `users.internal_auth_id` | 11 |
+| V4 | Drop local password and OTP tables | 11 |
+| V5 | Collaboration: body mode, persisted updates and snapshots | 15 |
+| V6 | Voice clips as children of a note, with client ids | 17b |
+| V7 | Clip sync | 17c |
+| V8 | Transcription for editors (`requested_by`) | 17d |
+| V9 | Trash and purge (`purge_at`) | 17e |
+| V10 | Account deletions (resumable progress) | 17g |
+| V11 | Notification permission columns (`previous_permission`, `new_permission`) | 17i |
+
+---
+
+## Real-time editing ticket (step 15)
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/notes/{noteId}/collab-ticket` | returns a short-lived ticket the client presents when opening the collaboration WebSocket; the protocol is in `docs/collab-protocol.md` |

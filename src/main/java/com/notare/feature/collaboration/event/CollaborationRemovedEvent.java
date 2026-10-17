@@ -21,6 +21,9 @@ package com.notare.feature.collaboration.event;
  * publisher states a fact about its own domain; whoever cares subscribes. The
  * publisher must never need to know who that is, and it cannot avoid knowing if
  * the type it constructs lives in the subscriber's package.
+ *
+ * <p>{@code wasAccepted} is true when an accepted collaborator was removed and false when a pending
+ * invitation was withdrawn. Only the first is told about it (step 17i).
  */
-public record CollaborationRemovedEvent(Long ownerId, Long collaboratorId) {
+public record CollaborationRemovedEvent(Long ownerId, Long collaboratorId, boolean wasAccepted) {
 }

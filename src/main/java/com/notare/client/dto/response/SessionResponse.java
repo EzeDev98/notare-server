@@ -16,10 +16,11 @@ import java.time.Instant;
 @AllArgsConstructor
 public class SessionResponse {
     private String sessionId;
+    private String deviceLabel;
     private String userAgent;
     private String ipAddress;
     private Instant createdAt;
-    private Instant lastUsedAt;
+    private Instant lastActiveAt;
     private Instant expiresAt;
     private boolean current;
 }

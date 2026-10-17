@@ -1,5 +1,6 @@
 package com.notare.feature.note.dto.request;
 
+import com.notare.feature.note.validation.MaxNoteLength;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -12,10 +13,9 @@ public class CreateNoteRequest {
 
     /**
      * Optional: the spec allows creating an empty note, so there is no
-     * @NotBlank here. The 20,000-character ceiling is tied to the TEXT
-     * column on the Note entity (see the note in step 1C's writeup).
+     * @NotBlank here. The size ceiling is notare.note.max-content-length (step 17j).
      */
-    @Size(max = 20_000, message = "Content must not exceed 20,000 characters.")
+    @MaxNoteLength
     private String content;
 
     /**

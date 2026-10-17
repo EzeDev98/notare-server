@@ -1,7 +1,7 @@
 package com.notare.feature.note.dto.request;
 
+import com.notare.feature.note.validation.MaxNoteLength;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -21,7 +21,7 @@ import lombok.Setter;
 @NoArgsConstructor
 public class AutoSaveNoteRequest {
 
-    @Size(max = 20_000, message = "Content must not exceed 20,000 characters.")
+    @MaxNoteLength
     private String content;
 
     /**

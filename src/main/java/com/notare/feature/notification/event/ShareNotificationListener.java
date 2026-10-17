@@ -38,16 +38,8 @@ public class ShareNotificationListener {
     }
 
     /**
-     * My access level changed.
-     *
-     * <p>The event carries both the old and new permission, and neither is
-     * stored: the Notification entity has nowhere to put them. That's a
-     * deliberate limitation, not an oversight — the client currently renders
-     * "your access to X changed" without saying whether it was a promotion or a
-     * demotion, which is genuinely less useful. Fixing it properly means a
-     * payload column on the entity (a small JSON blob, or a typed detail table),
-     * and that's a bigger decision than Step 8 needs to make. The event already
-     * carries the data, so nothing has to be re-plumbed when it happens.
+     * My access level changed. Both the old and the new permission are stored on the notification
+     * (step 17i, B-12), so the client can say Viewer or Editor and tell a promotion from a demotion.
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onNoteSharePermissionChanged(NoteSharePermissionChangedEvent event) {
@@ -57,7 +49,9 @@ public class ShareNotificationListener {
                 event.ownerId(),
                 NotificationTargetType.NOTE,
                 event.noteId(),
-                event.noteLabel()));
+                event.noteLabel(),
+                event.previousPermission(),
+                event.newPermission()));
     }
 
     /**

@@ -2,6 +2,7 @@ package com.notare.feature.notification.dto.response;
 
 import com.notare.feature.notification.enums.NotificationTargetType;
 import com.notare.feature.notification.enums.NotificationType;
+import com.notare.feature.share.enums.SharePermission;
 
 import java.time.LocalDateTime;
 
@@ -27,6 +28,8 @@ public record NotificationResponse(
         NotificationTargetType targetType,
         Long targetId,
         String targetLabel,
+        SharePermission previousPermission,
+        SharePermission newPermission,
         LocalDateTime readAt,
         LocalDateTime createdAt
 ) {

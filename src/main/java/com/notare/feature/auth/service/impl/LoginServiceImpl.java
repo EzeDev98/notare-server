@@ -46,7 +46,7 @@ public class LoginServiceImpl implements LoginService {
         }
 
         InternalAuthApiResponse<InternalAuthLoginResponse> response =
-                authClient.login(new com.notare.client.dto.request.LoginRequest(user.getUsername(), request.getPassword()));
+                authClient.login(new com.notare.client.dto.request.LoginRequest(user.getUsername(), request.getPassword(), userAgent));
 
         InternalAuthLoginResponse data = response == null ? null : response.getData();
         if (data == null || data.isMfaRequired() || data.getAccessToken() == null) {

@@ -141,7 +141,8 @@ public class WebSecurityConfig {
         // header that promises something the server never sends.
         configuration.setExposedHeaders(List.of(
                 "Content-Disposition",
-                "Location"
+                "Location",
+                "Retry-After"
         ));
 
         // Retained, though nothing currently needs it: this API authenticates

@@ -13,4 +13,14 @@ import lombok.Setter;
 public class LoginRequest {
     private String username;
     private String password;
+
+    /**
+     * Step 17h: the person's own browser User-Agent. internal-auth-server labels the session with it
+     * ("Mac, Chrome"); without it every device would be labelled with this server's HTTP client.
+     */
+    private String userAgent;
+
+    public LoginRequest(String username, String password) {
+        this(username, password, null);
+    }
 }

@@ -2,6 +2,7 @@ package com.notare.feature.notification.dto.command;
 
 import com.notare.feature.notification.enums.NotificationTargetType;
 import com.notare.feature.notification.enums.NotificationType;
+import com.notare.feature.share.enums.SharePermission;
 
 /**
  * Everything needed to create one notification.
@@ -35,6 +36,18 @@ public record CreateNotificationCommand(
         Long targetId,
 
         /** The subject's name AS IT IS NOW — snapshotted onto the row. May be null. */
-        String targetLabel
+        String targetLabel,
+
+        /** Step 17i: access before a permission change. Null for every other type. */
+        SharePermission previousPermission,
+
+        /** Step 17i: access after a permission change. Null for every other type. */
+        SharePermission newPermission
 ) {
+
+    /** For every notification that carries no permission change. */
+    public CreateNotificationCommand(Long recipientId, NotificationType type, Long actorId,
+                                     NotificationTargetType targetType, Long targetId, String targetLabel) {
+        this(recipientId, type, actorId, targetType, targetId, targetLabel, null, null);
+    }
 }

@@ -38,10 +38,8 @@ public class VoiceShareNotificationListener {
     }
 
     /**
-     * My access level changed. Same deliberate limitation as
-     * ShareNotificationListener#onNoteSharePermissionChanged: the event
-     * carries both old and new permission, and neither is stored — the
-     * Notification entity has nowhere to put them yet.
+     * My access level changed. Both the old and the new permission are stored on the notification
+     * (step 17i, B-12), same as the note version.
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onVoiceSharePermissionChanged(VoiceSharePermissionChangedEvent event) {
@@ -51,7 +49,9 @@ public class VoiceShareNotificationListener {
                 event.ownerId(),
                 NotificationTargetType.VOICE_NOTE,
                 event.voiceNoteId(),
-                event.voiceNoteTitle()));
+                event.voiceNoteTitle(),
+                event.previousPermission(),
+                event.newPermission()));
     }
 
     /**

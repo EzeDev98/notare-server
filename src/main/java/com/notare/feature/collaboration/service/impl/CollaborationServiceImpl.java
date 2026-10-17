@@ -195,7 +195,8 @@ public class CollaborationServiceImpl implements CollaborationService {
         // Where this line sits in the method is immaterial: a BEFORE_COMMIT
         // listener fires during commit preparation, after everything here has
         // run. Publishing is registering an intent, not invoking a callback.
-        eventPublisher.publishEvent(new CollaborationRemovedEvent(ownerId, collaboratorId));
+        eventPublisher.publishEvent(new CollaborationRemovedEvent(
+                ownerId, collaboratorId, collaboration.getStatus() == CollaborationStatus.ACCEPTED));
     }
 
     @Override

@@ -29,6 +29,13 @@ public enum NotificationType {
     /** Someone declined my invitation. Actor: the invitee. */
     COLLABORATION_REJECTED,
 
+    /**
+     * Someone removed me from their connections (step 17i). Actor: the owner who removed me. Sent only
+     * for an accepted connection; withdrawing a pending invitation tells no one. No target: the
+     * connection no longer exists.
+     */
+    COLLABORATION_REMOVED,
+
     /** A note was shared with me (Step 7). Actor: the note's owner. */
     NOTE_SHARED,
 

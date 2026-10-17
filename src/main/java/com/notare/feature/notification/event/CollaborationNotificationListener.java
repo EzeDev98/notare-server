@@ -3,6 +3,7 @@ package com.notare.feature.notification.event;
 import com.notare.feature.collaboration.event.CollaborationAcceptedEvent;
 import com.notare.feature.collaboration.event.CollaborationInvitedEvent;
 import com.notare.feature.collaboration.event.CollaborationRejectedEvent;
+import com.notare.feature.collaboration.event.CollaborationRemovedEvent;
 import com.notare.feature.notification.dto.command.CreateNotificationCommand;
 import com.notare.feature.notification.enums.NotificationTargetType;
 import com.notare.feature.notification.enums.NotificationType;
@@ -68,6 +69,25 @@ public class CollaborationNotificationListener {
                 event.collaboratorId(),
                 NotificationTargetType.COLLABORATION,
                 event.collaborationId(),
+                null));
+    }
+
+    /**
+     * Owner removed me from their connections -> tell the COLLABORATOR. Actor is the owner. Only for an
+     * accepted connection: withdrawing a pending invitation tells no one. No target, because the
+     * collaboration row is gone and a link would 404 (step 17i, B-12).
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onCollaborationRemoved(CollaborationRemovedEvent event) {
+        if (!event.wasAccepted()) {
+            return;
+        }
+        dispatcher.dispatch(new CreateNotificationCommand(
+                event.collaboratorId(),
+                NotificationType.COLLABORATION_REMOVED,
+                event.ownerId(),
+                null,
+                null,
                 null));
     }
 }

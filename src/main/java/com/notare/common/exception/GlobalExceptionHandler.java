@@ -4,7 +4,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
@@ -402,4 +404,24 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleSessionNotFoundException(SessionNotFoundException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
+
+    /** Step 17j (B-15): a per-user rate limit was exceeded. Retry-After tells the client when to try again. */
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ProblemDetail> handleTooManyRequestsException(TooManyRequestsException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+                .body(ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage()));
+    }
+
+
+    /** Step 17k: the client is older than the configured minimum. The client shows its blocking "Update required" modal. */
+    @ExceptionHandler(ClientTooOldException.class)
+    public ProblemDetail handleClientTooOldException(ClientTooOldException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UPGRADE_REQUIRED, ex.getMessage());
+        problem.setTitle("Update required");
+        problem.setProperty("code", "CLIENT_TOO_OLD");
+        problem.setProperty("minimumVersion", ex.getMinimumVersion());
+        return problem;
+    }
+
 }
