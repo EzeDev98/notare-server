@@ -72,3 +72,16 @@ Full output: `docs/baseline-test.txt`. `./mvnw test`: 822 tests, 0 failures, 6 e
 **Default 0.0.0.** Nobody is blocked until the setting is raised for a release.
 
 **Revisit if** clients that never send the header must be blocked too. That needs the header required on a path every client uses, such as login.
+
+## D-038: Voice shares migrate to a copy of the clip, never to the owner's note (step 18c)
+**Rule.** Master 9.8 says a voice share becomes a share of "the note that now holds the clip". That is safe only when the clip is standalone, because its new note holds nothing else. A clip attached to a note with text would expose the whole note to someone who was only given one recording.
+
+**What the migration does.**
+- **Standalone clip** (`voice_notes.note_id` is NULL): it becomes its own note, "Voice clip, {date}", holding only that clip. Its shares become Viewer shares of that note.
+- **Clip attached to a note**: the job creates a new note "Voice clip, {date}" holding a server-side copy of the clip (the copy endpoint from 17f), and shares that note as Viewer with the same people. The owner's original note and clip are unchanged.
+- **Permission.** Every migrated voice share becomes Viewer. Voice shares never carried edit rights.
+- **Never silent.** If an owner's note itself should be shared, that is done only after asking that owner. The job never does it.
+
+**Cost.** An attached shared clip is stored twice (the original and the copy). That is accepted for the privacy guarantee. The copy is deleted with the share's note like any other clip.
+
+**Idempotence.** Each processed `voice_shares` row is marked `migrated_at` and skipped on a second run (step 18e).

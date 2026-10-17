@@ -130,4 +130,11 @@ public interface VoiceNoteService {
      * The caller has already been checked: this method does not decide who may read the source.
      */
     VoiceUpload copyClip(Long userId, Long sourceVoiceNoteId, Long targetNoteId, String clientId);
+
+    /**
+     * Step 18e (legacy migration): moves the owner's standalone clip into a note. Returns false when
+     * the clip is not theirs or already belongs to a note, so a repeat is harmless. The caller has
+     * already made sure the note is the owner's.
+     */
+    boolean attachStandaloneClip(Long ownerId, Long clipId, Long noteId);
 }

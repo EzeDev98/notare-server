@@ -30,7 +30,7 @@ public class CollabWebSocketHandler extends BinaryWebSocketHandler {
     public void afterConnectionEstablished(WebSocketSession session) {
         sessions.register(session);
         CollabAttributes.touch(session);
-        log.debug("Collab socket opened: note={} user={} role={}",
+        log.info("Collab socket opened: note={} user={} role={}",
                 CollabAttributes.noteId(session),
                 CollabAttributes.userId(session),
                 CollabAttributes.role(session));
@@ -49,12 +49,22 @@ public class CollabWebSocketHandler extends BinaryWebSocketHandler {
 
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) {
-        log.debug("Collab socket transport error: {}", exception.toString());
+        log.warn("Collab socket transport error: note={} user={}: {}",
+                CollabAttributes.noteId(session), CollabAttributes.userId(session), exception.toString());
         sessions.remove(session.getId());
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        // Code only, never the reason text. 1011 is a server error and is what the alert watches for.
+        if (status.getCode() == CloseStatus.SERVER_ERROR.getCode()) {
+            log.warn("Collab socket closed with 1011: note={} user={} role={}",
+                    CollabAttributes.noteId(session), CollabAttributes.userId(session), CollabAttributes.role(session));
+        } else {
+            log.info("Collab socket closed: note={} user={} role={} code={}",
+                    CollabAttributes.noteId(session), CollabAttributes.userId(session), CollabAttributes.role(session),
+                    status.getCode());
+        }
         sessions.remove(session.getId());
     }
 }

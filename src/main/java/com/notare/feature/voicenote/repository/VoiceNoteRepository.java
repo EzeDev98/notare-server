@@ -48,6 +48,16 @@ public interface VoiceNoteRepository extends JpaRepository<VoiceNote, Long> {
             nativeQuery = true)
     int restoreByNoteId(@Param("noteId") Long noteId, @Param("at") LocalDateTime at);
 
+    /**
+     * Step 18e: gives a clip that belongs to no note a note to live in. Only touches an owner's own
+     * standalone clip, so a repeat or a wrong id changes nothing. updated_at moves for the next pull.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "update voice_notes set note_id = :noteId, updated_at = :at "
+            + "where id = :id and owner_id = :ownerId and note_id is null", nativeQuery = true)
+    int attachStandalone(@Param("id") Long id, @Param("ownerId") Long ownerId,
+                         @Param("noteId") Long noteId, @Param("at") LocalDateTime at);
+
     /** The clip's transcript changed: move its change marker so the next pull carries the new state. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = "update voice_notes set updated_at = :at where id = :id", nativeQuery = true)

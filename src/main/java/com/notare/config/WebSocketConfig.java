@@ -32,12 +32,15 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Value("${app.title}")
     private String appTitle;
 
+    /** Step 19c: the same setting WebSecurityConfig uses for REST. */
+    @Value("${app.cors.allowed-origin-patterns:https://*.onrender.com,http://localhost:*}")
+    private String[] allowedOriginPatterns;
+
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(collabHandler, "/" + appTitle + "/ws/collab")
                 .addInterceptors(collabHandshakeInterceptor)
-                // Keep in step with WebSecurityConfig.corsConfigurationSource().
-                .setAllowedOriginPatterns("https://*.onrender.com", "http://localhost:*");
+                .setAllowedOriginPatterns(allowedOriginPatterns);
     }
 
     /**

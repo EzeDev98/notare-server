@@ -33,4 +33,14 @@ public interface FileStorageService {
      * downloaded or uploaded through the app. The new key is generated here, never taken from input.
      */
     String copy(String sourceKey, String originalFilename);
+
+    /** True when {@link #list} works on this backend (step 19b). Only the R2 backend lists its files. */
+    default boolean supportsListing() {
+        return false;
+    }
+
+    /** Up to {@code limit} objects after {@code afterKey} in key order (null starts at the beginning). */
+    default java.util.List<StoredObject> list(String afterKey, int limit) {
+        throw new UnsupportedOperationException("This storage backend cannot list its files.");
+    }
 }

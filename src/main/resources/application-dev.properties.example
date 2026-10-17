@@ -3,7 +3,7 @@
 #####################################################
 spring.datasource.url=jdbc:mysql://localhost:3306/notare_db?serverTimezone=Africa/Lagos
 spring.datasource.username=root
-spring.datasource.password=#@oLuJm+CX_v6oitP8Y7*Iwh
+spring.datasource.password=CHANGE_ME
 spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
 
 #####################################################
@@ -47,12 +47,12 @@ base-url=http://localhost:2001
 #####################################################
 # JWT (dev-only convenience default ? never reused in prod)
 #####################################################
-app.jwt.secret=${JWT_SECRET:LwSLcQtHvcftoLG0iYauXlhjldYRJjKRS0zQLbkb+rw=}
+app.jwt.secret=${JWT_SECRET:CHANGE_ME}
 
 #####################################################
 # Admin wipe secret (dev-only convenience default — never reused in prod)
 #####################################################
-app.admin.wipe-secret=${ADMIN_WIPE_SECRET:MFWnK6xuOjs5QNYj1Q2KiUrLe1FfBwxW4Vr/+0zAamBSR2q8Z5zeIH20agtu7CZfeD9wfhh82PAtSHfaa1W6lg==}
+app.admin.wipe-secret=${ADMIN_WIPE_SECRET:CHANGE_ME}
 
 #####################################################
 # Redis (sessions/refresh tokens)

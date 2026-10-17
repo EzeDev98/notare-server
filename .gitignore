@@ -47,3 +47,6 @@ application-test.properties
 ## nothing here needs a tracked placeholder file.
 uploads/
 .DS_Store
+
+# Local config with real values (copy application-dev.properties.example)
+src/main/resources/application-dev.properties

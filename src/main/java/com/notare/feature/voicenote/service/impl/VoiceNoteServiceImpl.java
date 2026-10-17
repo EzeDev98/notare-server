@@ -159,6 +159,12 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
     }
 
     @Override
+    @Transactional
+    public boolean attachStandaloneClip(Long ownerId, Long clipId, Long noteId) {
+        return voiceNoteRepository.attachStandalone(clipId, ownerId, noteId, java.time.LocalDateTime.now()) > 0;
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public VoiceNoteResponse getVoiceNote(Long ownerId, Long voiceNoteId) {
         return voiceNoteMapper.toResponse(requireOwned(ownerId, voiceNoteId));

@@ -162,6 +162,28 @@ public class R2FileStorageService implements FileStorageService {
         }
     }
 
+    @Override
+    public boolean supportsListing() {
+        return true;
+    }
+
+    @Override
+    public java.util.List<StoredObject> list(String afterKey, int limit) {
+        try {
+            software.amazon.awssdk.services.s3.model.ListObjectsV2Request.Builder request =
+                    software.amazon.awssdk.services.s3.model.ListObjectsV2Request.builder()
+                            .bucket(bucket).maxKeys(Math.min(limit, 1000));
+            if (afterKey != null) {
+                request.startAfter(afterKey);
+            }
+            return s3.listObjectsV2(request.build()).contents().stream()
+                    .map(object -> new StoredObject(object.key(), object.lastModified()))
+                    .toList();
+        } catch (S3Exception e) {
+            throw new StorageException("Failed to list stored files.", e);
+        }
+    }
+
     private String extension(String filename) {
         if (filename == null) {
             return "";

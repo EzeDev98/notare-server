@@ -109,15 +109,17 @@ public class WebSecurityConfig {
         };
     }
 
+    /** Step 19c: one list for REST (CORS) and the WebSocket handshake (WebSocketConfig reads the same setting). */
+    @org.springframework.beans.factory.annotation.Value(
+            "${app.cors.allowed-origin-patterns:https://*.onrender.com,http://localhost:*}")
+    private String[] allowedOriginPatterns;
+
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
 
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOriginPatterns(List.of(
-                "https://*.onrender.com",
-                "http://localhost:*"
-        ));
+        configuration.setAllowedOriginPatterns(List.of(allowedOriginPatterns));
 
         configuration.setAllowedMethods(List.of(
                 "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"

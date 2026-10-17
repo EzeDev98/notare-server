@@ -8,6 +8,7 @@ import com.notare.feature.sync.service.SyncPushService;
 import com.notare.feature.user.model.UserDetail;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -33,6 +34,7 @@ import java.time.LocalDateTime;
  * <p>Both endpoints are scoped to the caller and carry no user id. Protected by
  * default through the security allowlist's closing anyRequest().authenticated().
  */
+@Slf4j
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("${app.title}/sync")
@@ -74,7 +76,9 @@ public class SyncController {
         // it lives.
         SyncPullResponse response = syncPullService.pull(
                 userDetail.getUser().getId(), since, PageRequest.of(page, Math.max(size, 1)));
-
+        log.info("sync pull user={} page={} changed={} deleted={} clips={} hasMore={}",
+                userDetail.getUser().getId(), page, count(response.changed()), count(response.deletedIds()),
+                count(response.clips()), response.hasMore());
         return ResponseEntity.ok(response);
     }
 
@@ -108,6 +112,12 @@ public class SyncController {
             @Valid @RequestBody SyncBatchRequest request) {
 
         SyncBatchResponse response = syncPushService.push(userDetail.getUser().getId(), request);
+        log.info("sync push user={} operations={} results={}",
+                userDetail.getUser().getId(), count(request.getOperations()), count(response.results()));
         return ResponseEntity.ok(response);
+    }
+
+    private static int count(java.util.List<?> list) {
+        return list == null ? 0 : list.size();
     }
 }
