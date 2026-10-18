@@ -84,6 +84,9 @@ class SyncOperationApplierTest {
     @Mock
     private SyncOperationRepository syncOperationRepository;
 
+    @Mock
+    private com.notare.feature.voicenote.service.VoiceNoteService voiceNoteService;
+
     @Captor
     private ArgumentCaptor<SyncOperation> ledgerCaptor;
 
@@ -91,7 +94,7 @@ class SyncOperationApplierTest {
 
     @BeforeEach
     void setUp() {
-        applier = new SyncOperationApplier(noteService, syncOperationRepository);
+        applier = new SyncOperationApplier(noteService, syncOperationRepository, voiceNoteService);
     }
 
     private NoteResponse note(Long id, Long version) {

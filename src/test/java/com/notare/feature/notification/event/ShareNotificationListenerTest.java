@@ -97,13 +97,14 @@ class ShareNotificationListenerTest {
                 OWNER_ID,
                 NotificationTargetType.NOTE,
                 NOTE_ID,
-                NOTE_LABEL));
+                NOTE_LABEL,
+                SharePermission.READ, SharePermission.WRITE));
     }
 
     @Test
     void onNoteSharePermissionChanged_demotion_dispatchesTheIdenticalCommandShape() {
         // Same handler, opposite direction of change — the dispatched command
-        // must not differ, since neither old nor new permission is stored.
+        // carries the previous and new permission, which is what tells a demotion apart.
         listener.onNoteSharePermissionChanged(new NoteSharePermissionChangedEvent(
                 SHARE_ID, NOTE_ID, NOTE_LABEL, OWNER_ID, RECIPIENT_ID,
                 SharePermission.WRITE, SharePermission.READ));
@@ -114,7 +115,8 @@ class ShareNotificationListenerTest {
                 OWNER_ID,
                 NotificationTargetType.NOTE,
                 NOTE_ID,
-                NOTE_LABEL));
+                NOTE_LABEL,
+                SharePermission.WRITE, SharePermission.READ));
     }
 
     @Test

@@ -87,6 +87,9 @@ class TranscriptionServiceImplTest {
     private VoiceNoteService voiceNoteService;
 
     @Mock
+    private com.notare.feature.share.service.SharedNoteService sharedNoteService;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private TranscriptionServiceImpl service;
@@ -94,7 +97,15 @@ class TranscriptionServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new TranscriptionServiceImpl(
-                transcriptionRepository, transcriptionMapper, voiceNoteService, eventPublisher);
+                transcriptionRepository, transcriptionMapper, voiceNoteService, sharedNoteService, eventPublisher);
+    }
+
+    private VoiceNoteResponse clipOwnedBy(Long ownerId) {
+        return new VoiceNoteResponse(VOICE_NOTE_ID, ownerId, null, "clip.m4a", "audio/mp4", 1024L, 30, null, null);
+    }
+
+    private VoiceNoteResponse ownClip() {
+        return clipOwnedBy(OWNER_ID);
     }
 
     private Transcription existing(TranscriptionStatus status) {
@@ -112,8 +123,7 @@ class TranscriptionServiceImplTest {
 
     @Test
     void submit_callerDoesNotOwnTheVoiceNote_isRejectedBeforeAnyRepositoryOrEventWork() {
-        when(voiceNoteService.getVoiceNote(OWNER_ID, VOICE_NOTE_ID))
-                .thenThrow(new VoiceNoteNotFoundException("Voice note not found."));
+        when(voiceNoteService.getAuthorizedVoiceNote(VOICE_NOTE_ID)).thenReturn(clipOwnedBy(2L));
 
         assertThatThrownBy(() -> service.submit(OWNER_ID, VOICE_NOTE_ID))
                 .isInstanceOf(VoiceNoteNotFoundException.class);
@@ -129,7 +139,7 @@ class TranscriptionServiceImplTest {
 
     @Test
     void submit_noExistingJob_createsPendingJobAndPublishesRequestedEvent() {
-        when(voiceNoteService.getVoiceNote(OWNER_ID, VOICE_NOTE_ID)).thenReturn(mock(VoiceNoteResponse.class));
+        when(voiceNoteService.getAuthorizedVoiceNote(VOICE_NOTE_ID)).thenReturn(ownClip());
         when(transcriptionRepository.findByVoiceNoteIdAndOwnerId(VOICE_NOTE_ID, OWNER_ID))
                 .thenReturn(Optional.empty());
 
@@ -158,7 +168,7 @@ class TranscriptionServiceImplTest {
 
     @Test
     void submit_existingPendingJob_isIdempotent_returnsCurrentStateAndPublishesNothing() {
-        when(voiceNoteService.getVoiceNote(OWNER_ID, VOICE_NOTE_ID)).thenReturn(mock(VoiceNoteResponse.class));
+        when(voiceNoteService.getAuthorizedVoiceNote(VOICE_NOTE_ID)).thenReturn(ownClip());
         Transcription pending = existing(TranscriptionStatus.PENDING);
         when(transcriptionRepository.findByVoiceNoteIdAndOwnerId(VOICE_NOTE_ID, OWNER_ID))
                 .thenReturn(Optional.of(pending));
@@ -175,7 +185,7 @@ class TranscriptionServiceImplTest {
 
     @Test
     void submit_existingProcessingJob_isIdempotent_doesNotStartASecondRun() {
-        when(voiceNoteService.getVoiceNote(OWNER_ID, VOICE_NOTE_ID)).thenReturn(mock(VoiceNoteResponse.class));
+        when(voiceNoteService.getAuthorizedVoiceNote(VOICE_NOTE_ID)).thenReturn(ownClip());
         Transcription processing = existing(TranscriptionStatus.PROCESSING);
         when(transcriptionRepository.findByVoiceNoteIdAndOwnerId(VOICE_NOTE_ID, OWNER_ID))
                 .thenReturn(Optional.of(processing));
@@ -192,7 +202,7 @@ class TranscriptionServiceImplTest {
 
     @Test
     void submit_existingCompletedJob_isIdempotent_returnsTheFinishedResultWithoutRequeuing() {
-        when(voiceNoteService.getVoiceNote(OWNER_ID, VOICE_NOTE_ID)).thenReturn(mock(VoiceNoteResponse.class));
+        when(voiceNoteService.getAuthorizedVoiceNote(VOICE_NOTE_ID)).thenReturn(ownClip());
         Transcription completed = existing(TranscriptionStatus.COMPLETED);
         completed.setTranscript("hello world");
         completed.setConfidence(0.9);
@@ -218,7 +228,7 @@ class TranscriptionServiceImplTest {
 
     @Test
     void submit_existingFailedJob_resetsEveryResultFieldToPendingAndRepublishesRequested() {
-        when(voiceNoteService.getVoiceNote(OWNER_ID, VOICE_NOTE_ID)).thenReturn(mock(VoiceNoteResponse.class));
+        when(voiceNoteService.getAuthorizedVoiceNote(VOICE_NOTE_ID)).thenReturn(ownClip());
         Transcription failed = existing(TranscriptionStatus.FAILED);
         failed.setErrorMessage("engine timed out");
         failed.setTranscript("partial garbage");
@@ -253,6 +263,7 @@ class TranscriptionServiceImplTest {
 
     @Test
     void getByVoiceNote_existingJob_returnsMappedResponse() {
+        when(voiceNoteService.getAuthorizedVoiceNote(VOICE_NOTE_ID)).thenReturn(ownClip());
         Transcription t = existing(TranscriptionStatus.COMPLETED);
         when(transcriptionRepository.findByVoiceNoteIdAndOwnerId(VOICE_NOTE_ID, OWNER_ID))
                 .thenReturn(Optional.of(t));
@@ -266,6 +277,7 @@ class TranscriptionServiceImplTest {
 
     @Test
     void getByVoiceNote_noJobExists_throwsTranscriptionNotFound() {
+        when(voiceNoteService.getAuthorizedVoiceNote(VOICE_NOTE_ID)).thenReturn(ownClip());
         when(transcriptionRepository.findByVoiceNoteIdAndOwnerId(VOICE_NOTE_ID, OWNER_ID))
                 .thenReturn(Optional.empty());
 

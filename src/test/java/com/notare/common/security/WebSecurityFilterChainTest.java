@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import com.notare.support.WebSliceSupport;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -47,6 +48,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * keys, and CustomUserDetailsService) are mocked. NoteController sits behind
  * anyRequest().authenticated(); LoginController behind an explicit permitAll().
  */
+@WebSliceSupport
 @WebMvcTest(controllers = {NoteController.class, LoginController.class})
 @Import({WebSecurityConfig.class, ProblemDetailAuthenticationEntryPoint.class, ProblemDetailAccessDeniedHandler.class})
 @AutoConfigureMockMvc

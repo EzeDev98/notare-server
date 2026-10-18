@@ -19,6 +19,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import com.notare.support.WebSliceSupport;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -90,6 +91,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * NOT asserted as a 400 here - it would come back as an INVALID result inside a
  * 200, which is Step 9c/13's concern, not this controller's).
  */
+@WebSliceSupport
 @WebMvcTest(
         controllers = SyncController.class,
         excludeFilters = @ComponentScan.Filter(

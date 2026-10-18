@@ -63,7 +63,7 @@ class VoiceShareCleanupListenerTest {
     }
     @Test
     void onCollaborationRemoved_deletesOnlyTheGrantsFromThatOwnerToThatCollaborator() {
-        listener.onCollaborationRemoved(new CollaborationRemovedEvent(1L, 2L));
+        listener.onCollaborationRemoved(new CollaborationRemovedEvent(1L, 2L, true));
 
         verify(voiceShareRepository).deleteByOwnerIdAndSharedWithUserId(1L, 2L);
         verifyNoMoreInteractions(voiceShareRepository);
@@ -71,7 +71,7 @@ class VoiceShareCleanupListenerTest {
 
     @Test
     void onCollaborationRemoved_doesNotTouchDeleteByVoiceNoteId() {
-        listener.onCollaborationRemoved(new CollaborationRemovedEvent(1L, 2L));
+        listener.onCollaborationRemoved(new CollaborationRemovedEvent(1L, 2L, true));
 
         verify(voiceShareRepository, never()).deleteByVoiceNoteId(any());
     }

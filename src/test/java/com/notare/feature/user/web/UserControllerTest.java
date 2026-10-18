@@ -20,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import com.notare.support.WebSliceSupport;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -103,6 +104,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * the service's own javadoc - not this controller's concern to enforce),
  * and the {@link PagedResponse} envelope.
  */
+@WebSliceSupport
 @WebMvcTest(
         controllers = UserController.class,
         excludeFilters = @ComponentScan.Filter(
@@ -123,6 +125,12 @@ class UserControllerTest {
 
     @MockBean
     private UserService userService;
+
+    @MockBean
+    private com.notare.feature.user.service.AccountService accountService;
+
+    @MockBean
+    private com.notare.feature.user.service.AccountDeletionService accountDeletionService;
 
     @AfterEach
     void clearSecurityContext() {

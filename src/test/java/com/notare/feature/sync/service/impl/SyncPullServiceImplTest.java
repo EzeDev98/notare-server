@@ -78,6 +78,12 @@ class SyncPullServiceImplTest {
     @Mock
     private NoteTombstoneRepository noteTombstoneRepository;
 
+    @Mock
+    private com.notare.feature.voicenote.service.VoiceNoteService voiceNoteService;
+
+    @Mock
+    private com.notare.feature.transcription.service.TranscriptionService transcriptionService;
+
     @Captor
     private ArgumentCaptor<LocalDateTime> sinceCaptor;
 
@@ -94,7 +100,13 @@ class SyncPullServiceImplTest {
         syncProperties.setDefaultPageSize(100);
         syncProperties.setMaxPageSize(500);
         syncProperties.setRetentionDays(30);
-        service = new SyncPullServiceImpl(noteService, noteTombstoneRepository, syncProperties);
+        org.mockito.Mockito.lenient()
+                .when(voiceNoteService.findClipChangesSince(any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of()));
+        org.mockito.Mockito.lenient()
+                .when(transcriptionService.getForVoiceNotes(any()))
+                .thenReturn(java.util.Map.of());
+        service = new SyncPullServiceImpl(noteService, noteTombstoneRepository, syncProperties, voiceNoteService, transcriptionService);
     }
 
     private NoteResponse note(Long id) {

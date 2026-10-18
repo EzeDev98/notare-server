@@ -304,7 +304,7 @@ class CollaborationServiceImplTest {
         service.cancel(1L, 10L);
 
         verify(collaborationRepository).delete(invitation);
-        verify(eventPublisher).publishEvent(new CollaborationRemovedEvent(1L, 2L));
+        verify(eventPublisher).publishEvent(new CollaborationRemovedEvent(1L, 2L, true));
     }
 
     // ---- listSent / listReceived -------------------------------------------------

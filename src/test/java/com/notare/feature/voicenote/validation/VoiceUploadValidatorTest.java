@@ -9,7 +9,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -22,8 +24,8 @@ import static org.mockito.Mockito.when;
  * Step 2b of the coverage roadmap.
  *
  * <p>Covers {@link VoiceUploadValidator#validate}: the fail-fast order
- * (missing/empty file, then content type, then size, then duration), the
- * case-insensitive content-type match, and both edges of the size and
+ * (missing/empty file, then size, then duration, then format), the
+ * magic-byte format check (the declared content type is ignored), and both edges of the size and
  * duration ceilings - "at exactly the limit" is documented by the code as
  * allowed ({@code >}, not {@code >=}), which is exactly the kind of
  * off-by-one a test needs to pin down rather than assume.
@@ -41,17 +43,26 @@ class VoiceUploadValidatorTest {
     @BeforeEach
     void setUp() {
         properties = new VoiceNoteProperties();
-        properties.setAllowedContentTypes(List.of("audio/mpeg", "audio/wav"));
         properties.setMaxSize(DataSize.ofMegabytes(5));
         properties.setMaxDurationSeconds(120);
         validator = new VoiceUploadValidator(properties);
     }
 
+    private static final byte[] MP3 = {0x49, 0x44, 0x33, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+    private static void stubContent(MultipartFile file, byte[] bytes) {
+        try {
+            when(file.getInputStream()).thenReturn(new ByteArrayInputStream(bytes));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     private MultipartFile validFile() {
         MultipartFile file = mock(MultipartFile.class);
         when(file.isEmpty()).thenReturn(false);
-        when(file.getContentType()).thenReturn("audio/mpeg");
         when(file.getSize()).thenReturn(1024L);
+        stubContent(file, MP3);
         return file;
     }
 
@@ -73,47 +84,44 @@ class VoiceUploadValidatorTest {
     }
 
     @Test
-    void validate_emptyFileIsRejectedBeforeContentTypeIsEverInspected() {
-        // Fail-fast ordering: an empty file shouldn't even trigger a
-        // getContentType() call.
+    void validate_emptyFileIsRejectedBeforeTheFileIsEverRead() throws IOException {
         MultipartFile file = mock(MultipartFile.class);
         when(file.isEmpty()).thenReturn(true);
 
         assertThatThrownBy(() -> validator.validate(file, null))
                 .isInstanceOf(InvalidVoiceUploadException.class);
 
-        verify(file, never()).getContentType();
+        verify(file, never()).getInputStream();
     }
 
     @Test
-    void validate_missingContentTypeThrowsUnsupportedAudioFormatException() {
+    void validate_unrecognisedBytesThrowUnsupportedAudioFormatExceptionWhateverTheDeclaredType() {
         MultipartFile file = mock(MultipartFile.class);
         when(file.isEmpty()).thenReturn(false);
-        when(file.getContentType()).thenReturn(null);
+        when(file.getSize()).thenReturn(1024L);
+        when(file.getContentType()).thenReturn("audio/mpeg");
+        stubContent(file, "not audio at all".getBytes());
+
+        assertThatThrownBy(() -> validator.validate(file, null))
+                .isInstanceOf(UnsupportedAudioFormatException.class)
+                .hasMessageContaining("Unsupported audio format");
+    }
+
+    @Test
+    void validate_headerShorterThanAnySignatureThrowsUnsupportedAudioFormatException() {
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.isEmpty()).thenReturn(false);
+        when(file.getSize()).thenReturn(1L);
+        stubContent(file, new byte[] {0x49});
 
         assertThatThrownBy(() -> validator.validate(file, null))
                 .isInstanceOf(UnsupportedAudioFormatException.class);
     }
 
     @Test
-    void validate_disallowedContentTypeThrowsUnsupportedAudioFormatExceptionListingAllowedTypes() {
-        MultipartFile file = mock(MultipartFile.class);
-        when(file.isEmpty()).thenReturn(false);
+    void validate_declaredContentTypeIsIgnoredWhenTheBytesAreSupportedAudio() {
+        MultipartFile file = validFile();
         when(file.getContentType()).thenReturn("video/mp4");
-
-        assertThatThrownBy(() -> validator.validate(file, null))
-                .isInstanceOf(UnsupportedAudioFormatException.class)
-                .hasMessageContaining("video/mp4")
-                .hasMessageContaining("audio/mpeg")
-                .hasMessageContaining("audio/wav");
-    }
-
-    @Test
-    void validate_contentTypeMatchIsCaseInsensitive() {
-        MultipartFile file = mock(MultipartFile.class);
-        when(file.isEmpty()).thenReturn(false);
-        when(file.getContentType()).thenReturn("AUDIO/MPEG");
-        when(file.getSize()).thenReturn(1024L);
 
         assertThatCode(() -> validator.validate(file, null)).doesNotThrowAnyException();
     }
@@ -122,8 +130,8 @@ class VoiceUploadValidatorTest {
     void validate_fileSizeAtExactlyTheLimitIsAllowed() {
         MultipartFile file = mock(MultipartFile.class);
         when(file.isEmpty()).thenReturn(false);
-        when(file.getContentType()).thenReturn("audio/mpeg");
         when(file.getSize()).thenReturn(properties.getMaxSize().toBytes());
+        stubContent(file, MP3);
 
         assertThatCode(() -> validator.validate(file, null)).doesNotThrowAnyException();
     }
@@ -132,7 +140,6 @@ class VoiceUploadValidatorTest {
     void validate_fileSizeOneByteOverTheLimitThrowsVoiceFileTooLargeException() {
         MultipartFile file = mock(MultipartFile.class);
         when(file.isEmpty()).thenReturn(false);
-        when(file.getContentType()).thenReturn("audio/mpeg");
         when(file.getSize()).thenReturn(properties.getMaxSize().toBytes() + 1);
 
         assertThatThrownBy(() -> validator.validate(file, null))

@@ -22,6 +22,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import com.notare.support.WebSliceSupport;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;
@@ -116,6 +117,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * with the whole body and {@code Accept-Ranges}; a {@code Range} header -&gt; 206
  * with a slice, capped at the controller's 1&nbsp;MB {@code CHUNK_SIZE}.
  */
+@WebSliceSupport
 @WebMvcTest(
         controllers = SharedNoteController.class,
         excludeFilters = @ComponentScan.Filter(

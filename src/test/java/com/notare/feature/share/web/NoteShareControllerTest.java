@@ -17,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import com.notare.support.WebSliceSupport;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -93,6 +94,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * .../shares/{sharedWithUserId}} - 204, delegating with the authenticated
  * owner's id (never anything else), and the same 404 for an unknown grant.
  */
+@WebSliceSupport
 @WebMvcTest(
         controllers = NoteShareController.class,
         excludeFilters = @ComponentScan.Filter(

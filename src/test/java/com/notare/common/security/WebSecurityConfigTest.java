@@ -41,6 +41,12 @@ public class WebSecurityConfigTest {
 
     private final WebSecurityConfig config = new WebSecurityConfig(null, null, null);
 
+    @org.junit.jupiter.api.BeforeEach
+    void injectValueFields() {
+        org.springframework.test.util.ReflectionTestUtils.setField(config, "allowedOriginPatterns",
+                new String[]{"https://*.onrender.com", "http://localhost:*"});
+    }
+
     private CorsConfiguration corsConfigurationFor(String path) {
         CorsConfigurationSource source = config.corsConfigurationSource();
         return source.getCorsConfiguration(new org.springframework.mock.web.MockHttpServletRequest("GET", path));
@@ -77,7 +83,7 @@ public class WebSecurityConfigTest {
         CorsConfiguration configuration = corsConfigurationFor("/api/v1/notes");
 
         assertThat(configuration.getExposedHeaders())
-                .containsExactlyInAnyOrder("Content-Disposition", "Location");
+                .containsExactlyInAnyOrder("Content-Disposition", "Location", "Retry-After");
     }
 
     @Test

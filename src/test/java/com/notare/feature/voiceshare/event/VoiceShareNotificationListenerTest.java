@@ -94,13 +94,14 @@ class VoiceShareNotificationListenerTest {
                 OWNER_ID,
                 NotificationTargetType.VOICE_NOTE,
                 VOICE_NOTE_ID,
-                VOICE_NOTE_TITLE));
+                VOICE_NOTE_TITLE,
+                SharePermission.READ, SharePermission.WRITE));
     }
 
     @Test
     void onVoiceSharePermissionChanged_demotion_dispatchesTheIdenticalCommandShape() {
         // Same handler, opposite direction of change — the dispatched command
-        // must not differ, since neither old nor new permission is stored.
+        // carries the previous and new permission, which is what tells a demotion apart.
         listener.onVoiceSharePermissionChanged(new VoiceSharePermissionChangedEvent(
                 SHARE_ID, VOICE_NOTE_ID, VOICE_NOTE_TITLE, OWNER_ID, RECIPIENT_ID,
                 SharePermission.WRITE, SharePermission.READ));
@@ -111,7 +112,8 @@ class VoiceShareNotificationListenerTest {
                 OWNER_ID,
                 NotificationTargetType.VOICE_NOTE,
                 VOICE_NOTE_ID,
-                VOICE_NOTE_TITLE));
+                VOICE_NOTE_TITLE,
+                SharePermission.WRITE, SharePermission.READ));
     }
 
     @Test

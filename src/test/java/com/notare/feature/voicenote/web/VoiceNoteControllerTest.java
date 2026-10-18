@@ -18,6 +18,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import com.notare.support.WebSliceSupport;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;
@@ -99,6 +100,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * resource; a {@code Range} header -&gt; 206 slice. {@code DELETE
  * /voice-notes/{id}} - 204, and the same 404.
  */
+@WebSliceSupport
 @WebMvcTest(
         controllers = VoiceNoteController.class,
         excludeFilters = @ComponentScan.Filter(

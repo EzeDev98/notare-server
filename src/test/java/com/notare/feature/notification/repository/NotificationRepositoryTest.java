@@ -202,6 +202,8 @@ class NotificationRepositoryTest {
                 targetType,
                 targetId,
                 targetLabel,
+                null,
+                null,
                 readAt,
                 createdAt
         );

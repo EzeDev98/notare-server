@@ -82,6 +82,8 @@ class SharedNoteServiceImplTest {
     @Mock private VoiceNoteService voiceNoteService;
     @Mock private VoiceShareService voiceShareService;
     @Mock private UserService userService;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
+    @Mock private com.notare.feature.voiceshare.service.SharedVoiceNoteService sharedVoiceNoteService;
 
     private final NoteShareMapper noteShareMapper = new NoteShareMapper();
 
@@ -89,7 +91,7 @@ class SharedNoteServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new SharedNoteServiceImpl(noteShareRepository, noteShareMapper, noteService, voiceNoteService, voiceShareService, userService);
+        service = new SharedNoteServiceImpl(noteShareRepository, noteShareMapper, noteService, voiceNoteService, voiceShareService, userService, eventPublisher, sharedVoiceNoteService);
     }
 
     private NoteShare share(Long id, Long noteId, Long ownerId, Long sharedWithUserId, SharePermission permission) {
@@ -128,7 +130,7 @@ class SharedNoteServiceImplTest {
         when(noteService.getAuthorizedNoteSummaries(List.of(10L, 20L)))
                 .thenReturn(Map.of(10L, summary(10L, "first"), 20L, summary(20L, "second")));
 
-        PagedResponse<SharedNoteSummaryResponse> result = service.listSharedWithMe(2L, Pageable.unpaged());
+        PagedResponse<SharedNoteSummaryResponse> result = service.listSharedWithMe(2L, org.springframework.data.domain.PageRequest.of(0, 20));
 
         assertThat(result.content()).hasSize(2);
         // One batch call, not one per row.
@@ -144,7 +146,7 @@ class SharedNoteServiceImplTest {
         // simply omits it from the map.
         when(noteService.getAuthorizedNoteSummaries(List.of(10L))).thenReturn(Map.of());
 
-        PagedResponse<SharedNoteSummaryResponse> result = service.listSharedWithMe(2L, Pageable.unpaged());
+        PagedResponse<SharedNoteSummaryResponse> result = service.listSharedWithMe(2L, org.springframework.data.domain.PageRequest.of(0, 20));
 
         assertThat(result.content()).isEmpty();
     }
@@ -168,7 +170,7 @@ class SharedNoteServiceImplTest {
         when(noteShareRepository.findVisibleSharedWithUser(eq(2L), any())).thenReturn(page);
         when(noteService.getAuthorizedNoteSummaries(List.of(10L))).thenReturn(Map.of());
 
-        PagedResponse<SharedNoteSummaryResponse> result = service.listSharedWithMe(2L, Pageable.unpaged());
+        PagedResponse<SharedNoteSummaryResponse> result = service.listSharedWithMe(2L, org.springframework.data.domain.PageRequest.of(0, 20));
 
         assertThat(result.content()).isEmpty();
         assertThat(result.totalElements()).isEqualTo(5L);

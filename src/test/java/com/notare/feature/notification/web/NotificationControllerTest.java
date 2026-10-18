@@ -17,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import com.notare.support.WebSliceSupport;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -77,6 +78,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * including the zero case. {@code DELETE /notifications/{id}} - 204, and
  * unknown/not-mine -&gt; 404.
  */
+@WebSliceSupport
 @WebMvcTest(
         controllers = NotificationController.class,
         excludeFilters = @ComponentScan.Filter(
@@ -117,7 +119,7 @@ class NotificationControllerTest {
     private NotificationResponse sampleNotification(Long id, LocalDateTime readAt) {
         return new NotificationResponse(
                 id, NotificationType.NOTE_SHARED, 2L, NotificationTargetType.NOTE, 10L,
-                "Project Plan", readAt, LocalDateTime.now());
+                "Project Plan", null, null, readAt, LocalDateTime.now());
     }
 
     private PagedResponse<NotificationResponse> emptyPage() {

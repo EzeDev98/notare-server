@@ -57,7 +57,7 @@ class NoteShareCleanupListenerTest {
     }
     @Test
     void onCollaborationRemoved_deletesOnlyTheGrantsFromThatOwnerToThatCollaborator() {
-        listener.onCollaborationRemoved(new CollaborationRemovedEvent(1L, 2L));
+        listener.onCollaborationRemoved(new CollaborationRemovedEvent(1L, 2L, true));
 
         verify(noteShareRepository).deleteByOwnerIdAndSharedWithUserId(1L, 2L);
         verifyNoMoreInteractions(noteShareRepository);

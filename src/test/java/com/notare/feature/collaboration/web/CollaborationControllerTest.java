@@ -19,6 +19,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import com.notare.support.WebSliceSupport;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -98,6 +99,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * params are given; an explicit page/size/sort request overrides it,
  * and the {@link PagedResponse} envelope round-trips through JSON.
  */
+@WebSliceSupport
 @WebMvcTest(
         controllers = CollaborationController.class,
         excludeFilters = @ComponentScan.Filter(

@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import com.notare.support.WebSliceSupport;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;
@@ -78,6 +79,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * assert on, rather than a Mockito stub whose reported length
  * and actual streamed bytes could silently disagree.
  */
+@WebSliceSupport
 @WebMvcTest(
         controllers = SharedVoiceNoteController.class,
         excludeFilters = @ComponentScan.Filter(

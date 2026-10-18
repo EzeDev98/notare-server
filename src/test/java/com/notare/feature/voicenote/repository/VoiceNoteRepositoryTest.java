@@ -143,7 +143,11 @@ class VoiceNoteRepositoryTest {
                 1024L,
                 30,
                 LocalDateTime.now(),
-                LocalDateTime.now()
+                LocalDateTime.now(),
+                null,
+                false,
+                null,
+                false
         );
     }
 }
