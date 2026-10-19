@@ -1,6 +1,5 @@
 package com.notare.feature.note.dto.request;
 
-import com.notare.feature.note.validation.MaxNoteLength;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -13,9 +12,8 @@ public class CreateNoteRequest {
 
     /**
      * Optional: the spec allows creating an empty note, so there is no
-     * @NotBlank here. The size ceiling is notare.note.max-content-length (step 17j).
+     * @NotBlank here. Note text has no length limit.
      */
-    @MaxNoteLength
     private String content;
 
     /**

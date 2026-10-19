@@ -1,6 +1,5 @@
 package com.notare.feature.note.dto.request;
 
-import com.notare.feature.note.validation.MaxNoteLength;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -11,7 +10,6 @@ import lombok.Setter;
 @NoArgsConstructor
 public class UpdateNoteRequest {
 
-    @MaxNoteLength
     private String content;
 
     /**
