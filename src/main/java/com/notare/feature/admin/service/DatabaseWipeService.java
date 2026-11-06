@@ -14,24 +14,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * Wipes every row from every table in whichever database this instance is
- * connected to.
- *
- * <p>Dialect-aware, not profile-aware: dev runs local MySQL and prod (Neon)
- * runs PostgreSQL — see application-dev.properties / application-prod.
- * properties. This detects the dialect from the live JDBC connection's own
- * metadata rather than from the active Spring profile, so it keeps working
- * unmodified if either environment's database ever changes.
- *
- * <p>{@code flyway_schema_history} is always excluded — wiping it would make
- * Flyway believe no migration has ever run, and it would try to replay every
- * migration against a schema that already has the tables they create.
- *
- * <p>Does not touch Redis. Sessions and refresh tokens live there (see
- * application.properties' session settings), not in this relational
- * database — this method clears application data, not active sessions.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
