@@ -33,10 +33,7 @@ import java.nio.charset.StandardCharsets;
  * client cannot parse with the same code as every other error. One shape for
  * everything is worth eleven lines.
  *
- * <p>This is a FILTER-CHAIN denial and is distinct from
- * {@code InsufficientNotePermissionException}, which is the domain's own 403
- * (a READ collaborator attempting a write) and still comes from
- * {@code GlobalExceptionHandler} with a specific, useful message. Nothing in
+ * <p>This is a FILTER-CHAIN denial. Nothing in
  * the current security config reaches this handler, since the chain only
  * distinguishes authenticated from not — it exists so that the day a role or
  * scope check is added, the denial does not silently become the one unparseable

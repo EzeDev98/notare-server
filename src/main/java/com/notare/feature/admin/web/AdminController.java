@@ -2,7 +2,6 @@ package com.notare.feature.admin.web;
 
 import com.notare.client.service.InternalAuthClient;
 import com.notare.feature.admin.service.DatabaseWipeService;
-import com.notare.feature.admin.service.LegacyDataMigrationJob;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,18 +37,9 @@ public class AdminController {
 
     private final DatabaseWipeService databaseWipeService;
     private final InternalAuthClient authClient;
-    private final LegacyDataMigrationJob legacyDataMigrationJob;
-
-    /** Only one migration run at a time; the last result is kept for the status call. */
-    private final AtomicBoolean migrationRunning = new AtomicBoolean(false);
-    private volatile String lastMigrationResult = "never run";
 
     @Value("${app.admin.wipe-secret}")
     private String wipeSecret;
-
-    /** Empty (the default) switches the migration endpoints off. */
-    @Value("${app.admin.migration-secret:}")
-    private String migrationSecret;
 
     /**
      * Deletes every row from every table in the connected database — dev's
@@ -78,43 +68,6 @@ public class AdminController {
                             + ". Call this endpoint again to retry.");
         }
         return ResponseEntity.ok("All data wiped (notare database and internal-auth tenant data).");
-    }
-
-    /**
-     * Step 18e: starts the legacy data migration (LegacyDataMigrationJob) in the background. Own secret,
-     * never the wipe secret. 202 when started, 409 when a run is already going. Safe to call again:
-     * a second run changes nothing it has already migrated. Counts per table are logged and kept for the status call.
-     */
-    @PostMapping("/migration/legacy")
-    public ResponseEntity<String> runLegacyMigration(@RequestHeader("X-Admin-Secret") String providedSecret) {
-        if (migrationSecret.isBlank() || !matches(providedSecret, migrationSecret)) {
-            log.warn("Rejected legacy migration attempt: invalid secret, or the migration secret is not set.");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid admin secret.");
-        }
-        if (!migrationRunning.compareAndSet(false, true)) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body("A migration run is already in progress.");
-        }
-        lastMigrationResult = "running";
-        CompletableFuture.runAsync(() -> {
-            try {
-                lastMigrationResult = legacyDataMigrationJob.run().toString();
-            } catch (RuntimeException e) {
-                log.error("Legacy data migration failed", e);
-                lastMigrationResult = "failed: " + e.getMessage();
-            } finally {
-                migrationRunning.set(false);
-            }
-        });
-        return ResponseEntity.accepted().body("Migration started. Call /admin/migration/legacy/status for the result.");
-    }
-
-    /** The result of the last run (counts per table), or "running" / "never run". POST so it matches the permit rule. */
-    @PostMapping("/migration/legacy/status")
-    public ResponseEntity<Map<String, String>> legacyMigrationStatus(@RequestHeader("X-Admin-Secret") String providedSecret) {
-        if (migrationSecret.isBlank() || !matches(providedSecret, migrationSecret)) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-        return ResponseEntity.ok(Map.of("running", String.valueOf(migrationRunning.get()), "result", lastMigrationResult));
     }
 
     private boolean matches(String provided, String expected) {

@@ -1,12 +1,8 @@
 package com.notare.feature.transcription.service.impl;
 
 import com.notare.common.dto.PagedResponse;
-import com.notare.common.exception.InsufficientNotePermissionException;
 import com.notare.common.exception.TranscriptionNotFoundException;
-import com.notare.common.exception.VoiceNoteNotFoundException;
 import com.notare.common.util.LikeEscaper;
-import com.notare.feature.share.enums.NoteAccess;
-import com.notare.feature.share.service.SharedNoteService;
 import com.notare.feature.transcription.dto.response.TranscriptionResponse;
 import com.notare.feature.transcription.enums.TranscriptionStatus;
 import com.notare.feature.transcription.event.TranscriptionRequestedEvent;
@@ -14,7 +10,6 @@ import com.notare.feature.transcription.mapper.TranscriptionMapper;
 import com.notare.feature.transcription.model.Transcription;
 import com.notare.feature.transcription.repository.TranscriptionRepository;
 import com.notare.feature.transcription.service.TranscriptionService;
-import com.notare.feature.voicenote.dto.response.VoiceNoteResponse;
 import com.notare.feature.voicenote.service.VoiceNoteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -26,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,7 +30,6 @@ public class TranscriptionServiceImpl implements TranscriptionService {
     private final TranscriptionRepository transcriptionRepository;
     private final TranscriptionMapper transcriptionMapper;
     private final VoiceNoteService voiceNoteService;
-    private final SharedNoteService sharedNoteService;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
@@ -45,7 +38,7 @@ public class TranscriptionServiceImpl implements TranscriptionService {
         // The note's owner and anyone with WRITE on it may ask (step 17d, B-11). The job belongs to the
         // clip's owner, so the audio can be found; the asker is remembered for the notice that tells
         // them the transcript is ready. Both checks go through other modules' PUBLIC services.
-        Long ownerId = authorise(userId, voiceNoteId, true);
+        Long ownerId = authorise(userId, voiceNoteId);
 
         Transcription transcription = transcriptionRepository
                 .findByVoiceNoteIdAndOwnerId(voiceNoteId, ownerId)
@@ -79,7 +72,7 @@ public class TranscriptionServiceImpl implements TranscriptionService {
     @Transactional(readOnly = true)
     public TranscriptionResponse getByVoiceNote(Long userId, Long voiceNoteId) {
         // Anyone who can see the note may read the transcript, Viewers included.
-        Long ownerId = authorise(userId, voiceNoteId, false);
+        Long ownerId = authorise(userId, voiceNoteId);
         Transcription transcription = transcriptionRepository
                 .findByVoiceNoteIdAndOwnerId(voiceNoteId, ownerId)
                 .orElseThrow(() -> new TranscriptionNotFoundException(
@@ -112,27 +105,11 @@ public class TranscriptionServiceImpl implements TranscriptionService {
     }
 
     /**
-     * Checks that this user may touch the clip's transcript and returns the clip's owner. A clip on a
-     * note is open to whoever may open the note: the owner and Editors may ask, Viewers may only read
-     * (403). Anyone else gets the same 404 as a clip that does not exist. A clip that belongs to no
-     * note is only its owner's.
+     * Checks that the clip is this user's and returns its owner. Anyone else gets the same 404 as a
+     * clip that does not exist.
      */
-    private Long authorise(Long userId, Long voiceNoteId, boolean needsWrite) {
-        VoiceNoteResponse clip = voiceNoteService.getAuthorizedVoiceNote(voiceNoteId);
-        if (clip.noteId() == null) {
-            if (clip.ownerId().equals(userId)) {
-                return clip.ownerId();
-            }
-            throw new VoiceNoteNotFoundException("Voice note not found.");
-        }
-        Optional<NoteAccess> access = sharedNoteService.accessTo(userId, clip.noteId());
-        if (access.isEmpty()) {
-            throw new VoiceNoteNotFoundException("Voice note not found.");
-        }
-        if (needsWrite && !access.get().canWrite()) {
-            throw new InsufficientNotePermissionException("You have read-only access to this note.");
-        }
-        return clip.ownerId();
+    private Long authorise(Long userId, Long voiceNoteId) {
+        return voiceNoteService.getVoiceNote(userId, voiceNoteId).ownerId();
     }
 
     private Transcription createPending(Long ownerId, Long requestedBy, Long voiceNoteId) {

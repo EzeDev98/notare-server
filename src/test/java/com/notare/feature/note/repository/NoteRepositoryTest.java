@@ -49,7 +49,6 @@ class NoteRepositoryTest {
                         "Alpha",
                         false,
                         false,
-                        false,
                         base.plusHours(1)
                 ),
                 note(
@@ -57,7 +56,6 @@ class NoteRepositoryTest {
                         "a2",
                         "Beta",
                         false,
-                        true,
                         false,
                         base.plusHours(2)
                 ),
@@ -65,7 +63,6 @@ class NoteRepositoryTest {
                         1L,
                         "a3",
                         "Deleted Alpha",
-                        false,
                         false,
                         true,
                         base.plusHours(3)
@@ -76,14 +73,12 @@ class NoteRepositoryTest {
                         "Deleted Archive",
                         false,
                         true,
-                        true,
                         base.plusHours(4)
                 ),
                 note(
                         2L,
                         "b1",
                         "Other owner",
-                        false,
                         false,
                         false,
                         base.plusHours(5)
@@ -106,85 +101,6 @@ class NoteRepositoryTest {
                     .executeUpdate();
         }
         testEntityManager.getEntityManager().clear();
-    }
-
-    @Test
-    void owner_and_deleted_state_finders_scope_correctly() {
-        Note active = repository.findByOwnerIdAndClientId(1L, "a1")
-                .orElseThrow();
-
-        assertThat(
-                repository.findByIdAndOwnerIdAndDeletedFalse(
-                        active.getId(),
-                        1L
-                )
-        ).isPresent();
-
-        assertThat(
-                repository.findByIdAndOwnerIdAndDeletedFalse(
-                        active.getId(),
-                        2L
-                )
-        ).isEmpty();
-
-        Note deleted = repository.findByOwnerIdAndClientId(1L, "a3")
-                .orElseThrow();
-
-        assertThat(
-                repository.findByIdAndOwnerIdAndDeletedTrue(
-                        deleted.getId(),
-                        1L
-                )
-        ).isPresent();
-
-        assertThat(
-                repository.findByIdAndOwnerId(
-                        deleted.getId(),
-                        1L
-                )
-        ).isPresent();
-    }
-
-    @Test
-    void active_trash_main_and_archive_pages_have_expected_members() {
-        PageRequest page =
-                PageRequest.of(0, 20, Sort.by("id"));
-
-        assertThat(
-                repository.findByOwnerIdAndDeletedFalse(1L, page)
-                        .getContent()
-        )
-                .extracting(Note::getClientId)
-                .containsExactly("a1", "a2");
-
-        assertThat(
-                repository.findByOwnerIdAndDeletedTrue(1L, page)
-                        .getContent()
-        )
-                .extracting(Note::getClientId)
-                .containsExactly("a3", "a4");
-
-        assertThat(
-                repository
-                        .findByOwnerIdAndDeletedFalseAndArchivedFalse(
-                                1L,
-                                page
-                        )
-                        .getContent()
-        )
-                .extracting(Note::getClientId)
-                .containsExactly("a1");
-
-        assertThat(
-                repository
-                        .findByOwnerIdAndDeletedFalseAndArchivedTrue(
-                                1L,
-                                page
-                        )
-                        .getContent()
-        )
-                .extracting(Note::getClientId)
-                .containsExactly("a2");
     }
 
     @Test
@@ -260,7 +176,6 @@ class NoteRepositoryTest {
             String clientId,
             String content,
             boolean pinned,
-            boolean archived,
             boolean deleted,
             LocalDateTime updatedAt
     ) {
@@ -270,7 +185,6 @@ class NoteRepositoryTest {
         note.setClientId(clientId);
         note.setContent(content);
         note.setPinned(pinned);
-        note.setArchived(archived);
         note.setDeleted(deleted);
         note.setDeletedAt(deleted ? updatedAt : null);
         note.setCreatedAt(updatedAt.minusHours(1));

@@ -189,11 +189,6 @@ public class GlobalExceptionHandler {
                 "Authentication service is unavailable. Please try again later.");
     }
 
-    @ExceptionHandler(InvalidUserLookupException.class)
-    public ProblemDetail handleInvalidUserLookupException(InvalidUserLookupException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
-    }
-
     @ExceptionHandler(NotarianIdGenerationException.class)
     public ProblemDetail handleNotarianIdGenerationException(NotarianIdGenerationException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage());
@@ -229,18 +224,6 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
-    /**
-     * A plain-text write to a collaborative note (step 15f). The {@code code} member
-     * lets a client tell this 409 from a stale-version conflict without parsing prose.
-     */
-    @ExceptionHandler(BodyIsCollaborativeException.class)
-    public ProblemDetail handleBodyIsCollaborative(BodyIsCollaborativeException ex) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
-        problem.setTitle("Body is collaborative");
-        problem.setProperty("code", "BODY_IS_COLLABORATIVE");
-        return problem;
-    }
-
     @ExceptionHandler(VoiceNoteNotFoundException.class)
     public ProblemDetail handleVoiceNoteNotFoundException(VoiceNoteNotFoundException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
@@ -248,11 +231,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(TranscriptionNotFoundException.class)
     public ProblemDetail handleTranscriptionNotFoundException(TranscriptionNotFoundException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
-    }
-
-    @ExceptionHandler(CollaborationNotFoundException.class)
-    public ProblemDetail handleCollaborationNotFoundException(CollaborationNotFoundException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
@@ -280,67 +258,6 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleOptimisticLockingFailure(ObjectOptimisticLockingFailureException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
                 "This note was modified by another request. Please reload and try again.");
-    }
-
-    @ExceptionHandler(CollaborationAlreadyExistsException.class)
-    public ProblemDetail handleCollaborationAlreadyExistsException(CollaborationAlreadyExistsException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
-    }
-
-    @ExceptionHandler(InvalidCollaborationException.class)
-    public ProblemDetail handleInvalidCollaborationException(InvalidCollaborationException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
-    }
-
-    @ExceptionHandler(NoteShareNotFoundException.class)
-    public ProblemDetail handleNoteShareNotFoundException(NoteShareNotFoundException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
-    }
-
-    @ExceptionHandler(NoteAlreadySharedException.class)
-    public ProblemDetail handleNoteAlreadySharedException(NoteAlreadySharedException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
-    }
-
-    @ExceptionHandler(InvalidNoteShareException.class)
-    public ProblemDetail handleInvalidNoteShareException(InvalidNoteShareException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
-    }
-
-    /**
-     * The only domain 403 in the application. Everything else that a caller has
-     * no business touching is answered with 404, which hides existence; this one
-     * fires only after a grant has been found, so the caller already knows the
-     * note is there and a 404 would just be confusing. See the exception's own
-     * javadoc for the full rule.
-     */
-    @ExceptionHandler(InsufficientNotePermissionException.class)
-    public ProblemDetail handleInsufficientNotePermissionException(InsufficientNotePermissionException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
-    }
-
-    @ExceptionHandler(VoiceShareNotFoundException.class)
-    public ProblemDetail handleVoiceShareNotFoundException(VoiceShareNotFoundException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
-    }
-
-    @ExceptionHandler(VoiceAlreadySharedException.class)
-    public ProblemDetail handleVoiceAlreadySharedException(VoiceAlreadySharedException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
-    }
-
-    @ExceptionHandler(InvalidVoiceShareException.class)
-    public ProblemDetail handleInvalidVoiceShareException(InvalidVoiceShareException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
-    }
-
-    /**
-     * Mirrors InsufficientNotePermissionException's handler: the only other
-     * domain 403, fired only after a grant has been found for the voice note.
-     */
-    @ExceptionHandler(InsufficientVoiceNotePermissionException.class)
-    public ProblemDetail handleInsufficientVoiceNotePermissionException(InsufficientVoiceNotePermissionException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
     @ExceptionHandler(NotificationNotFoundException.class)

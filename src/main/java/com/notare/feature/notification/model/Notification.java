@@ -2,7 +2,6 @@ package com.notare.feature.notification.model;
 
 import com.notare.feature.notification.enums.NotificationTargetType;
 import com.notare.feature.notification.enums.NotificationType;
-import com.notare.feature.share.enums.SharePermission;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -107,20 +106,6 @@ public class Notification {
      */
     @Column(name = "target_label", length = 255, updatable = false)
     private String targetLabel;
-
-    /**
-     * Step 17i (B-12): what the recipient's access was before a permission change. Set only on the
-     * *_SHARE_PERMISSION_CHANGED types, null otherwise. With newPermission it tells a promotion
-     * from a demotion. Snapshotted like targetLabel: a record of what happened, not a live view.
-     */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "previous_permission", length = 20, updatable = false)
-    private SharePermission previousPermission;
-
-    /** Step 17i (B-12): what the recipient's access became. See previousPermission. */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "new_permission", length = 20, updatable = false)
-    private SharePermission newPermission;
 
     /**
      * When the recipient read it. NULL means unread — so "unread" is

@@ -3,10 +3,8 @@ package com.notare.feature.note.web;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.notare.common.dto.PagedResponse;
 import com.notare.common.exception.NoteNotFoundException;
-import com.notare.feature.auth.web.AuthControllerTest;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
-import com.notare.feature.note.dto.response.TrashedNoteResponse;
 import com.notare.feature.note.service.NoteService;
 import com.notare.feature.user.enums.UserStatus;
 import com.notare.feature.user.model.User;
@@ -41,7 +39,6 @@ import static org.hamcrest.Matchers.endsWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -83,8 +80,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@code GET /notes/{id}} - 200, and {@link NoteNotFoundException} -&gt; 404
  * via {@code GlobalExceptionHandler} (Step 14a), asserted once here and
  * assumed for the other id-based endpoints since they all delegate the same
- * lookup to the service. {@code GET /notes} - the {@code archived=false}
- * default and its {@code @PageableDefault} (size 20, sort
+ * lookup to the service. {@code GET /notes} - its {@code @PageableDefault} (size 20, sort
  * {@code pinned,updatedAt} DESC) versus an explicit override, and the
  * {@link PagedResponse} envelope. {@code GET /notes/trash} - its distinct
  * default sort ({@code deletedAt} DESC). {@code GET /notes/search} - the
@@ -95,8 +91,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * /notes/{id}} (auto-save) - happy path with no content (partial update) and
  * the same missing-version 400. {@code DELETE /notes/{id}} - 204.
  * {@code POST /notes/{id}/restore} - 200 with the restored note.
- * {@code POST}/{@code DELETE /notes/{id}/pin} and {@code /archive} - each
- * delegates to {@code NoteService#setPinned}/{@code #setArchived} with the
+ * {@code POST}/{@code DELETE /notes/{id}/pin} and - each
+ * delegates to {@code NoteService#setPinned} with the
  * right boolean. {@code DELETE /notes/{id}/permanent} - 204.
  */
 @WebSliceSupport
@@ -142,20 +138,15 @@ class NoteControllerTest {
 
     private NoteResponse sampleNote(Long id, Long ownerId, String content, Long version) {
         LocalDateTime now = LocalDateTime.now();
-        return new NoteResponse(id, ownerId, content, false, false, version, ownerId, now, now);
+        return new NoteResponse(id, ownerId, content, false, version, ownerId, now, now);
     }
 
     private NoteSummaryResponse sampleSummary(Long id) {
-        return new NoteSummaryResponse(id, "preview...", false, false, 1L, LocalDateTime.now());
+        return new NoteSummaryResponse(id, "preview...", false, 1L, LocalDateTime.now());
     }
 
     private PagedResponse<NoteSummaryResponse> emptySummaryPage() {
         Page<NoteSummaryResponse> page = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
-        return PagedResponse.of(List.of(), page);
-    }
-
-    private PagedResponse<TrashedNoteResponse> emptyTrashPage() {
-        Page<TrashedNoteResponse> page = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
         return PagedResponse.of(List.of(), page);
     }
 
@@ -241,16 +232,14 @@ class NoteControllerTest {
     @Test
     void listNotes_noParams_defaultsToActiveOnlyAndPageableDefaultOfSize20SortedByPinnedThenUpdatedAtDesc() throws Exception {
         authenticateAs(1L);
-        when(noteService.listNotes(eq(1L), eq(false), any())).thenReturn(emptySummaryPage());
+        when(noteService.listNotes(eq(1L), any())).thenReturn(emptySummaryPage());
 
         mockMvc.perform(get(BASE_URL))
                 .andExpect(status().isOk());
 
-        ArgumentCaptor<Boolean> archivedCaptor = ArgumentCaptor.forClass(Boolean.class);
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(noteService).listNotes(eq(1L), archivedCaptor.capture(), pageableCaptor.capture());
+        verify(noteService).listNotes(eq(1L), pageableCaptor.capture());
 
-        assertThat(archivedCaptor.getValue()).isFalse();
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageSize()).isEqualTo(20);
         Sort.Order pinnedOrder = pageable.getSort().getOrderFor("pinned");
@@ -262,22 +251,11 @@ class NoteControllerTest {
     }
 
     @Test
-    void listNotes_archivedTrue_isForwardedToTheService() throws Exception {
-        authenticateAs(1L);
-        when(noteService.listNotes(eq(1L), eq(true), any())).thenReturn(emptySummaryPage());
-
-        mockMvc.perform(get(BASE_URL).param("archived", "true"))
-                .andExpect(status().isOk());
-
-        verify(noteService).listNotes(eq(1L), eq(true), any());
-    }
-
-    @Test
     void listNotes_returnsThePagedResponseEnvelopeFromTheService() throws Exception {
         authenticateAs(1L);
         NoteSummaryResponse row = sampleSummary(5L);
         Page<NoteSummaryResponse> page = new PageImpl<>(List.of(row), PageRequest.of(0, 20), 1);
-        when(noteService.listNotes(eq(1L), eq(false), any()))
+        when(noteService.listNotes(eq(1L), any()))
                 .thenReturn(PagedResponse.of(List.of(row), page));
 
         mockMvc.perform(get(BASE_URL))
@@ -290,36 +268,6 @@ class NoteControllerTest {
     // ----------------------------------------------------------------
     // GET /notes/trash
     // ----------------------------------------------------------------
-
-    @Test
-    void listTrashedNotes_noParams_usesThePageableDefaultOfSize20SortedByDeletedAtDesc() throws Exception {
-        authenticateAs(1L);
-        when(noteService.listTrashedNotes(eq(1L), any())).thenReturn(emptyTrashPage());
-
-        mockMvc.perform(get(BASE_URL + "/trash"))
-                .andExpect(status().isOk());
-
-        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(noteService).listTrashedNotes(eq(1L), pageableCaptor.capture());
-
-        Pageable pageable = pageableCaptor.getValue();
-        assertThat(pageable.getPageSize()).isEqualTo(20);
-        Sort.Order order = pageable.getSort().getOrderFor("deletedAt");
-        assertThat(order).isNotNull();
-        assertThat(order.getDirection()).isEqualTo(Sort.Direction.DESC);
-    }
-
-    @Test
-    void listTrashedNotes_neverConflictsWithTheIdRoute() throws Exception {
-        // Literal /trash must win over the /{noteId} template.
-        authenticateAs(1L);
-        when(noteService.listTrashedNotes(eq(1L), any())).thenReturn(emptyTrashPage());
-
-        mockMvc.perform(get(BASE_URL + "/trash"))
-                .andExpect(status().isOk());
-
-        verifyNoInteractions_getNoteOnly();
-    }
 
     private void verifyNoInteractions_getNoteOnly() {
         org.mockito.Mockito.verify(noteService, org.mockito.Mockito.never()).getNote(anyLong(), anyLong());
@@ -409,46 +357,12 @@ class NoteControllerTest {
     // DELETE /notes/{id} (soft delete)
     // ----------------------------------------------------------------
 
-    @Test
-    void softDeleteNote_validRequest_returns204() throws Exception {
-        authenticateAs(1L);
-        doNothing().when(noteService).softDeleteNote(1L, 5L);
-
-        mockMvc.perform(delete(BASE_URL + "/5"))
-                .andExpect(status().isNoContent())
-                .andExpect(jsonPath("$").doesNotExist());
-
-        verify(noteService).softDeleteNote(1L, 5L);
-    }
-
-    @Test
-    void softDeleteNote_unknownNote_returns404ViaGlobalExceptionHandler() throws Exception {
-        authenticateAs(1L);
-        org.mockito.Mockito.doThrow(new NoteNotFoundException("Note not found."))
-                .when(noteService).softDeleteNote(1L, 999L);
-
-        mockMvc.perform(delete(BASE_URL + "/999"))
-                .andExpect(status().isNotFound());
-    }
-
     // ----------------------------------------------------------------
     // POST /notes/{id}/restore
     // ----------------------------------------------------------------
 
-    @Test
-    void restoreNote_validRequest_returns200WithTheRestoredNote() throws Exception {
-        authenticateAs(1L);
-        when(noteService.restoreNote(1L, 5L)).thenReturn(sampleNote(5L, 1L, "back", 1L));
-
-        mockMvc.perform(post(BASE_URL + "/5/restore"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content").value("back"));
-
-        verify(noteService).restoreNote(1L, 5L);
-    }
-
     // ----------------------------------------------------------------
-    // Pin / unpin / archive / unarchive
+    // Pin / unpin
     // ----------------------------------------------------------------
 
     @Test
@@ -473,52 +387,9 @@ class NoteControllerTest {
         verify(noteService).setPinned(1L, 5L, false);
     }
 
-    @Test
-    void archiveNote_delegatesToSetArchivedWithTrue() throws Exception {
-        authenticateAs(1L);
-        when(noteService.setArchived(1L, 5L, true)).thenReturn(sampleNote(5L, 1L, "x", 1L));
-
-        mockMvc.perform(post(BASE_URL + "/5/archive"))
-                .andExpect(status().isOk());
-
-        verify(noteService).setArchived(1L, 5L, true);
-    }
-
-    @Test
-    void unarchiveNote_delegatesToSetArchivedWithFalse() throws Exception {
-        authenticateAs(1L);
-        when(noteService.setArchived(1L, 5L, false)).thenReturn(sampleNote(5L, 1L, "x", 1L));
-
-        mockMvc.perform(delete(BASE_URL + "/5/archive"))
-                .andExpect(status().isOk());
-
-        verify(noteService).setArchived(1L, 5L, false);
-    }
-
     // ----------------------------------------------------------------
     // DELETE /notes/{id}/permanent
     // ----------------------------------------------------------------
-
-    @Test
-    void permanentlyDeleteNote_validRequest_returns204() throws Exception {
-        authenticateAs(1L);
-        doNothing().when(noteService).permanentlyDeleteNote(1L, 5L);
-
-        mockMvc.perform(delete(BASE_URL + "/5/permanent"))
-                .andExpect(status().isNoContent());
-
-        verify(noteService).permanentlyDeleteNote(1L, 5L);
-    }
-
-    @Test
-    void permanentlyDeleteNote_unknownNote_returns404ViaGlobalExceptionHandler() throws Exception {
-        authenticateAs(1L);
-        org.mockito.Mockito.doThrow(new NoteNotFoundException("Note not found."))
-                .when(noteService).permanentlyDeleteNote(1L, 999L);
-
-        mockMvc.perform(delete(BASE_URL + "/999/permanent"))
-                .andExpect(status().isNotFound());
-    }
 
     private Map<String, String> createBody(String content) {
         Map<String, String> body = new HashMap<>();

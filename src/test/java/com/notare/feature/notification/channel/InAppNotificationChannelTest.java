@@ -62,7 +62,7 @@ class InAppNotificationChannelTest {
     @Test
     void deliver_passesTheCommandStraightThroughToNotificationServiceCreate() {
         CreateNotificationCommand command = new CreateNotificationCommand(
-                1L, NotificationType.NOTE_SHARED, 2L, NotificationTargetType.NOTE, 42L, "Q3 Plan");
+                1L, NotificationType.TRANSCRIPTION_COMPLETED, 2L, NotificationTargetType.NOTE, 42L, "Q3 Plan");
 
         channel.deliver(command);
 
@@ -72,7 +72,7 @@ class InAppNotificationChannelTest {
     @Test
     void deliver_doesNotCatchAFailureFromNotificationService_letsItPropagate() {
         CreateNotificationCommand command = new CreateNotificationCommand(
-                1L, NotificationType.NOTE_SHARED, 2L, NotificationTargetType.NOTE, 42L, "Q3 Plan");
+                1L, NotificationType.TRANSCRIPTION_COMPLETED, 2L, NotificationTargetType.NOTE, 42L, "Q3 Plan");
         RuntimeException failure = new RuntimeException("constraint violation");
         doThrow(failure).when(notificationService).create(command);
 

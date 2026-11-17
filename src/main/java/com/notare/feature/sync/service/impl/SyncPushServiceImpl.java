@@ -1,6 +1,5 @@
 package com.notare.feature.sync.service.impl;
 
-import com.notare.common.exception.BodyIsCollaborativeException;
 import com.notare.common.exception.NoteNotFoundException;
 import com.notare.common.exception.VoiceNoteNotFoundException;
 import com.notare.feature.note.dto.response.NoteResponse;
@@ -72,12 +71,6 @@ public class SyncPushServiceImpl implements SyncPushService {
                 // A clip deleted already, here or on another device: the operation is moot.
                 results.add(result(operation, SyncResultStatus.NOT_FOUND, null,
                         "This clip no longer exists."));
-            } catch (BodyIsCollaborativeException ex) {
-                // The note became collaborative while this edit sat in an offline queue.
-                // Retrying can never succeed, so answer INVALID for this operation instead
-                // of failing the batch with a 500 the client would resend forever.
-                results.add(result(operation, SyncResultStatus.INVALID, null,
-                        "This note is edited live; the change was not applied."));
             }
 
             // Note what is NOT caught: anything unexpected. It propagates and

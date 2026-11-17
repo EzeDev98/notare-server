@@ -5,7 +5,7 @@ package com.notare.feature.notification.enums;
  * (targetType, targetId) into a route without a switch over every
  * NotificationType.
  *
- * <p>It IS derivable from the type — NOTE_SHARED always points at a note. It's
+ * <p>It IS derivable from the type — TRANSCRIPTION_COMPLETED always points at a voice note. It's
  * stored anyway, because deriving it means every client reimplements the same
  * mapping, and each one has to be updated when a type is added. Storing it
  * costs one short column and lets a client handle a type it has never seen:
@@ -19,8 +19,5 @@ public enum NotificationTargetType {
     NOTE,
 
     /** targetId is a voice note id. */
-    VOICE_NOTE,
-
-    /** targetId is a collaboration id. */
-    COLLABORATION
+    VOICE_NOTE
 }

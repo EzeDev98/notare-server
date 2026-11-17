@@ -7,9 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -57,54 +54,6 @@ class UserRepositoryTest {
 
         assertThat(repository.existsByNotarianId("NTR-003")).isTrue();
         assertThat(repository.existsByNotarianId("NTR-999")).isFalse();
-    }
-
-    @Test
-    void findByIdIn_returns_matching_users_only() {
-        List<User> users = repository.findAll(Sort.by("id"));
-
-        Long firstId = users.get(0).getId();
-        Long thirdId = users.get(2).getId();
-
-        assertThat(repository.findByIdIn(List.of(firstId, thirdId, 999999L)))
-                .extracting(User::getId)
-                .containsExactlyInAnyOrder(firstId, thirdId);
-    }
-
-    @Test
-    void searchUsers_is_case_insensitive_partial_and_excludes_caller() {
-        Long adaId = repository.findByUsername("adal")
-                .orElseThrow()
-                .getId();
-
-        Page<User> result = repository.searchUsers(
-                adaId,
-                "GRACE",
-                PageRequest.of(0, 10, Sort.by("id"))
-        );
-
-        assertThat(result.getContent())
-                .extracting(User::getUsername)
-                .containsExactly("ghopper");
-
-        assertThat(result.getTotalElements()).isEqualTo(1);
-    }
-
-    @Test
-    void searchUsers_matches_full_display_name() {
-        Long graceId = repository.findByUsername("ghopper")
-                .orElseThrow()
-                .getId();
-
-        Page<User> result = repository.searchUsers(
-                graceId,
-                "ada lov",
-                PageRequest.of(0, 10)
-        );
-
-        assertThat(result.getContent())
-                .extracting(User::getUsername)
-                .containsExactly("adal");
     }
 
     private static User user(

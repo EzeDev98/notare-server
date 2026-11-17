@@ -1,6 +1,5 @@
 package com.notare.feature.note.model;
 
-import com.notare.feature.note.enums.BodyMode;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -89,9 +88,6 @@ public class Note {
     @Column(nullable = false)
     private boolean pinned;
 
-    @Column(nullable = false)
-    private boolean archived;
-
     /**
      * Soft-delete flag. We keep the row and just mark it, so the note
      * can be restored later (spec: "Restore deleted note").
@@ -125,21 +121,6 @@ public class Note {
     @Version
     private Long version;
 
-    /**
-     * Where this note's body lives (step 15b, D-032): LEGACY keeps it in
-     * {@code content}; COLLAB means a Yjs document held as updates and
-     * snapshots, and a content write is refused (15f). A note becomes COLLAB
-     * when its first collaboration update arrives.
-     *
-     * <p>columnDefinition carries the DEFAULT for the same reason lastModifiedBy
-     * is nullable: dev's ddl-auto=update cannot add a NOT NULL column to a table
-     * that already has rows, and prod's Flyway V5 declares exactly this column.
-     */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "body_mode", nullable = false, length = 10,
-            columnDefinition = "VARCHAR(10) DEFAULT 'LEGACY' NOT NULL")
-    private BodyMode bodyMode = BodyMode.LEGACY;
-
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -150,12 +131,6 @@ public class Note {
     /**
      * Who last wrote to this note.
      *
-     * <p>The ONE audit column in this codebase that records something not
-     * already knowable. Until Step 7 the answer was always ownerId, because the
-     * owner was the only person who could reach a note — the column would have
-     * been a copy of a field sitting three lines above it. SHARING is what made
-     * the question real: a collaborator with WRITE can now edit a note they do
-     * not own, and nothing else anywhere records that they did.
      *
      * <p>There is deliberately NO matching createdBy. A note is only ever
      * created by its owner, through createNote or createWithClientId, both of

@@ -272,15 +272,6 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void handleInvalidUserLookupException_passesMessageThrough() {
-        ProblemDetail problem = handler.handleInvalidUserLookupException(
-                new InvalidUserLookupException("At least one id is required."));
-
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-        assertThat(problem.getDetail()).isEqualTo("At least one id is required.");
-    }
-
-    @Test
     void handleInvalidOtpException_passesMessageThrough() {
         ProblemDetail problem = handler.handleInvalidOtpException(
                 new InvalidOtpException("The code you entered is incorrect."));
@@ -296,33 +287,6 @@ class GlobalExceptionHandlerTest {
 
         assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
         assertThat(problem.getDetail()).isEqualTo("This code has expired.");
-    }
-
-    @Test
-    void handleInvalidCollaborationException_passesMessageThrough() {
-        ProblemDetail problem = handler.handleInvalidCollaborationException(
-                new InvalidCollaborationException("You cannot invite yourself."));
-
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-        assertThat(problem.getDetail()).isEqualTo("You cannot invite yourself.");
-    }
-
-    @Test
-    void handleInvalidNoteShareException_passesMessageThrough() {
-        ProblemDetail problem = handler.handleInvalidNoteShareException(
-                new InvalidNoteShareException("Cannot share a note with yourself."));
-
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-        assertThat(problem.getDetail()).isEqualTo("Cannot share a note with yourself.");
-    }
-
-    @Test
-    void handleInvalidVoiceShareException_passesMessageThrough() {
-        ProblemDetail problem = handler.handleInvalidVoiceShareException(
-                new InvalidVoiceShareException("Cannot share a voice note with yourself."));
-
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-        assertThat(problem.getDetail()).isEqualTo("Cannot share a voice note with yourself.");
     }
 
     @Test
@@ -375,33 +339,6 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void handleCollaborationNotFoundException_returns404WithMessage() {
-        ProblemDetail problem = handler.handleCollaborationNotFoundException(
-                new CollaborationNotFoundException("Collaboration not found."));
-
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
-        assertThat(problem.getDetail()).isEqualTo("Collaboration not found.");
-    }
-
-    @Test
-    void handleNoteShareNotFoundException_returns404WithMessage() {
-        ProblemDetail problem = handler.handleNoteShareNotFoundException(
-                new NoteShareNotFoundException("Share not found."));
-
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
-        assertThat(problem.getDetail()).isEqualTo("Share not found.");
-    }
-
-    @Test
-    void handleVoiceShareNotFoundException_returns404WithMessage() {
-        ProblemDetail problem = handler.handleVoiceShareNotFoundException(
-                new VoiceShareNotFoundException("Voice share not found."));
-
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
-        assertThat(problem.getDetail()).isEqualTo("Voice share not found.");
-    }
-
-    @Test
     void handleNotificationNotFoundException_returns404WithMessage() {
         ProblemDetail problem = handler.handleNotificationNotFoundException(
                 new NotificationNotFoundException("Notification not found."));
@@ -433,33 +370,6 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void handleCollaborationAlreadyExistsException_returns409WithMessage() {
-        ProblemDetail problem = handler.handleCollaborationAlreadyExistsException(
-                new CollaborationAlreadyExistsException("Collaboration already exists."));
-
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
-        assertThat(problem.getDetail()).isEqualTo("Collaboration already exists.");
-    }
-
-    @Test
-    void handleNoteAlreadySharedException_returns409WithMessage() {
-        ProblemDetail problem = handler.handleNoteAlreadySharedException(
-                new NoteAlreadySharedException("This note is already shared with that user."));
-
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
-        assertThat(problem.getDetail()).isEqualTo("This note is already shared with that user.");
-    }
-
-    @Test
-    void handleVoiceAlreadySharedException_returns409WithMessage() {
-        ProblemDetail problem = handler.handleVoiceAlreadySharedException(
-                new VoiceAlreadySharedException("This voice note is already shared with that user."));
-
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
-        assertThat(problem.getDetail()).isEqualTo("This voice note is already shared with that user.");
-    }
-
-    @Test
     void handleOptimisticLockingFailure_returns409WithFixedMessage() {
         ObjectOptimisticLockingFailureException ex =
                 new ObjectOptimisticLockingFailureException("Note", 5L);
@@ -472,29 +382,6 @@ class GlobalExceptionHandlerTest {
         // identifier) to the client.
         assertThat(problem.getDetail())
                 .isEqualTo("This note was modified by another request. Please reload and try again.");
-    }
-
-    // ----------------------------------------------------------------
-    // 403 Forbidden handlers - the only two domain 403s in the app, per
-    // the class's own javadoc on InsufficientNotePermissionException.
-    // ----------------------------------------------------------------
-
-    @Test
-    void handleInsufficientNotePermissionException_returns403WithMessage() {
-        ProblemDetail problem = handler.handleInsufficientNotePermissionException(
-                new InsufficientNotePermissionException("You do not have write access to this note."));
-
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.FORBIDDEN.value());
-        assertThat(problem.getDetail()).isEqualTo("You do not have write access to this note.");
-    }
-
-    @Test
-    void handleInsufficientVoiceNotePermissionException_returns403WithMessage() {
-        ProblemDetail problem = handler.handleInsufficientVoiceNotePermissionException(
-                new InsufficientVoiceNotePermissionException("You do not have write access to this voice note."));
-
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.FORBIDDEN.value());
-        assertThat(problem.getDetail()).isEqualTo("You do not have write access to this voice note.");
     }
 
     // ----------------------------------------------------------------

@@ -23,15 +23,4 @@ public class LogoutServiceImpl implements LogoutService {
         authClient.logout(accessToken);
         return new LogoutResponse(HttpServletResponse.SC_OK, "Logout successfully");
     }
-
-    @Override
-    public LogoutResponse logoutAll(String accessToken) {
-
-        if (accessToken == null || accessToken.isBlank()) {
-            return new LogoutResponse(HttpServletResponse.SC_BAD_REQUEST, "Access token is missing");
-        }
-
-        authClient.logoutAll(accessToken);
-        return new LogoutResponse(HttpServletResponse.SC_OK, "Signed out everywhere");
-    }
 }

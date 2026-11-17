@@ -118,7 +118,7 @@ class NotificationControllerTest {
 
     private NotificationResponse sampleNotification(Long id, LocalDateTime readAt) {
         return new NotificationResponse(
-                id, NotificationType.NOTE_SHARED, 2L, NotificationTargetType.NOTE, 10L,
+                id, NotificationType.TRANSCRIPTION_COMPLETED, 2L, NotificationTargetType.NOTE, 10L,
                 "Project Plan", null, null, readAt, LocalDateTime.now());
     }
 
@@ -195,7 +195,7 @@ class NotificationControllerTest {
         mockMvc.perform(get(BASE_URL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(9))
-                .andExpect(jsonPath("$.content[0].type").value("NOTE_SHARED"))
+                .andExpect(jsonPath("$.content[0].type").value("TRANSCRIPTION_COMPLETED"))
                 .andExpect(jsonPath("$.content[0].readAt").doesNotExist())
                 .andExpect(jsonPath("$.totalElements").value(1));
     }

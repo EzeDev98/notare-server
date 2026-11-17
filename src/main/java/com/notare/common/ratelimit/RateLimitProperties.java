@@ -21,8 +21,4 @@ public class RateLimitProperties {
     /** GET /sync per user per minute. */
     @Positive
     private int syncPerMinute;
-
-    /** GET /user/lookup and GET /user/search together, per user per minute. */
-    @Positive
-    private int lookupPerMinute;
 }

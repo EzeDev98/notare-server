@@ -110,7 +110,7 @@ class SyncPullServiceImplTest {
     }
 
     private NoteResponse note(Long id) {
-        return new NoteResponse(id, OWNER_ID, "hello", false, false, 1L, OWNER_ID, null, null);
+        return new NoteResponse(id, OWNER_ID, "hello", false, 1L, OWNER_ID, null, null);
     }
 
     private NoteChange changed(Long noteId, String clientId) {

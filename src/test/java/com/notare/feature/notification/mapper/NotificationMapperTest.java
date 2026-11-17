@@ -31,12 +31,12 @@ class NotificationMapperTest {
     @Test
     void toEntity_mapsEveryFieldFromTheCommandWithoutTransposingIds() {
         CreateNotificationCommand command = new CreateNotificationCommand(
-                100L, NotificationType.NOTE_SHARED, 200L, NotificationTargetType.NOTE, 300L, "My Note");
+                100L, NotificationType.TRANSCRIPTION_COMPLETED, 200L, NotificationTargetType.NOTE, 300L, "My Note");
 
         Notification entity = mapper.toEntity(command);
 
         assertThat(entity.getRecipientId()).isEqualTo(100L);
-        assertThat(entity.getType()).isEqualTo(NotificationType.NOTE_SHARED);
+        assertThat(entity.getType()).isEqualTo(NotificationType.TRANSCRIPTION_COMPLETED);
         assertThat(entity.getActorId()).isEqualTo(200L);
         assertThat(entity.getTargetType()).isEqualTo(NotificationTargetType.NOTE);
         assertThat(entity.getTargetId()).isEqualTo(300L);
@@ -77,7 +77,7 @@ class NotificationMapperTest {
     void toResponse_mapsEveryFieldFromTheEntityWithoutTransposingIds() {
         Notification entity = new Notification();
         entity.setId(1L);
-        entity.setType(NotificationType.VOICE_NOTE_SHARED);
+        entity.setType(NotificationType.TRANSCRIPTION_COMPLETED);
         entity.setActorId(200L);
         entity.setTargetType(NotificationTargetType.VOICE_NOTE);
         entity.setTargetId(300L);
@@ -96,7 +96,7 @@ class NotificationMapperTest {
     @Test
     void toResponse_carriesReadAtThrough() {
         Notification entity = new Notification();
-        entity.setType(NotificationType.NOTE_SHARE_REVOKED);
+        entity.setType(NotificationType.TRANSCRIPTION_FAILED);
         LocalDateTime readAt = LocalDateTime.of(2026, 1, 3, 9, 0);
         entity.setReadAt(readAt);
 
@@ -108,7 +108,7 @@ class NotificationMapperTest {
     @Test
     void toResponse_unreadNotificationHasNullReadAt() {
         Notification entity = new Notification();
-        entity.setType(NotificationType.COLLABORATION_INVITED);
+        entity.setType(NotificationType.TRANSCRIPTION_FAILED);
         // readAt never set - the "unread" state.
 
         NotificationResponse response = mapper.toResponse(entity);

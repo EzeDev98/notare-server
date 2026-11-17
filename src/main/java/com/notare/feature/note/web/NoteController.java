@@ -6,7 +6,6 @@ import com.notare.feature.note.dto.request.CreateNoteRequest;
 import com.notare.feature.note.dto.request.UpdateNoteRequest;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
-import com.notare.feature.note.dto.response.TrashedNoteResponse;
 import com.notare.feature.note.service.NoteCreation;
 import com.notare.feature.note.service.NoteService;
 import com.notare.feature.user.model.UserDetail;
@@ -81,24 +80,16 @@ public class NoteController {
      * change it ordered every row by a column permanently false. Pinned notes
      * now rise to the top, which is the entire user-visible point of the
      * feature.
-     *
-     * <p><b>Contract change:</b> {@code archived=false} is the default and
-     * archived notes are now EXCLUDED. Previously every non-deleted note came
-     * back regardless. Nothing could set the flag before, so no existing row is
-     * affected — but a client written against the old behaviour would silently
-     * start seeing fewer notes, which is worth stating rather than leaving to
-     * be discovered.
      */
     @GetMapping
     public ResponseEntity<PagedResponse<NoteSummaryResponse>> listNotes(
             @AuthenticationPrincipal UserDetail userDetail,
-            @RequestParam(name = "archived", defaultValue = "false") boolean archived,
             @ParameterObject
             @PageableDefault(size = 20, sort = {"pinned", "updatedAt"}, direction = Sort.Direction.DESC)
             Pageable pageable) {
 
         PagedResponse<NoteSummaryResponse> response =
-                noteService.listNotes(userDetail.getUser().getId(), archived, pageable);
+                noteService.listNotes(userDetail.getUser().getId(), pageable);
         return ResponseEntity.ok(response);
     }
 
@@ -107,35 +98,6 @@ public class NoteController {
      * case-insensitive, paginated. The literal path /notes/search takes
      * precedence over /notes/{noteId}, so there's no clash with get-by-id.
      */
-    /**
-     * The trash: notes this owner has soft-deleted.
-     *
-     * <p>Restore and permanent delete have existed since Step 1 and nothing
-     * could list what they act on, so a deleted note was unreachable through
-     * any client — indistinguishable, from the user's side, from a permanent
-     * one.
-     *
-     * <p>A literal sub-path alongside {@code /{noteId}}, like {@code /search}.
-     * Spring matches literal segments ahead of templates, so {@code /trash} is
-     * never mistaken for a note id and the two can be declared in any order.
-     *
-     * <p>Sorted newest-trashed-first by default, which is the order a user
-     * scans a trash in. The service appends id as a tiebreaker — see
-     * withStableOrder there for why a deletedAt sort alone is not safe to
-     * paginate.
-     */
-    @GetMapping("/trash")
-    public ResponseEntity<PagedResponse<TrashedNoteResponse>> listTrashedNotes(
-            @AuthenticationPrincipal UserDetail userDetail,
-            @ParameterObject
-            @PageableDefault(size = 20, sort = "deletedAt", direction = Sort.Direction.DESC)
-            Pageable pageable) {
-
-        PagedResponse<TrashedNoteResponse> response =
-                noteService.listTrashedNotes(userDetail.getUser().getId(), pageable);
-        return ResponseEntity.ok(response);
-    }
-
     @GetMapping("/search")
     public ResponseEntity<PagedResponse<NoteSummaryResponse>> searchNotes(
             @AuthenticationPrincipal UserDetail userDetail,
@@ -174,28 +136,20 @@ public class NoteController {
         return ResponseEntity.ok(response);
     }
 
+    /** Deletes the note for good, with its voice clips. There is no trash and no restore. */
     @DeleteMapping("/{noteId}")
-    public ResponseEntity<Void> softDeleteNote(
+    public ResponseEntity<Void> deleteNote(
             @AuthenticationPrincipal UserDetail userDetail,
             @PathVariable Long noteId) {
 
-        noteService.softDeleteNote(userDetail.getUser().getId(), noteId);
+        noteService.permanentlyDeleteNote(userDetail.getUser().getId(), noteId);
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/{noteId}/restore")
-    public ResponseEntity<NoteResponse> restoreNote(
-            @AuthenticationPrincipal UserDetail userDetail,
-            @PathVariable Long noteId) {
-
-        NoteResponse response = noteService.restoreNote(userDetail.getUser().getId(), noteId);
-        return ResponseEntity.ok(response);
-    }
-
     /**
-     * Pin and archive: POST to set, DELETE to clear.
+     * Pin: POST to set, DELETE to clear.
      *
-     * <h2>Why four action endpoints and not a field on PATCH</h2>
+     * <h2>Why action endpoints and not a field on PATCH</h2>
      *
      * <p>PATCH /notes/{id} is auto-save. It carries content, requires
      * a version, and fires on a debounce while someone is typing. Putting
@@ -211,13 +165,13 @@ public class NoteController {
      * than a general-purpose write to a status field, because the general write
      * hands clients the ability to set anything.
      *
-     * <p>All four return the full note, including its new version, so a client
+     * <p>Both return the full note, including its new version, so a client
      * can adopt it without a refetch. See saveOrganisationChange in the service
      * for why these bump the version at all.
      *
      * <p><b>Owner only, and there is deliberately no /shared-notes
-     * counterpart.</b> Step 7 scoped WRITE to content: pin and
-     * archive are the owner's private view of their own note, and a
+     * counterpart.</b> Step 7 scoped WRITE to content: pin is
+     * the owner's private view of their own note, and a
      * collaborator reorganising someone else's sidebar is not a feature. No
      * check is needed to enforce that — these paths live under the
      * owner-scoped /notes collection and the service looks the note up by
@@ -237,30 +191,5 @@ public class NoteController {
             @PathVariable Long noteId) {
 
         return ResponseEntity.ok(noteService.setPinned(userDetail.getUser().getId(), noteId, false));
-    }
-
-    @PostMapping("/{noteId}/archive")
-    public ResponseEntity<NoteResponse> archiveNote(
-            @AuthenticationPrincipal UserDetail userDetail,
-            @PathVariable Long noteId) {
-
-        return ResponseEntity.ok(noteService.setArchived(userDetail.getUser().getId(), noteId, true));
-    }
-
-    @DeleteMapping("/{noteId}/archive")
-    public ResponseEntity<NoteResponse> unarchiveNote(
-            @AuthenticationPrincipal UserDetail userDetail,
-            @PathVariable Long noteId) {
-
-        return ResponseEntity.ok(noteService.setArchived(userDetail.getUser().getId(), noteId, false));
-    }
-
-    @DeleteMapping("/{noteId}/permanent")
-    public ResponseEntity<Void> permanentlyDeleteNote(
-            @AuthenticationPrincipal UserDetail userDetail,
-            @PathVariable Long noteId) {
-
-        noteService.permanentlyDeleteNote(userDetail.getUser().getId(), noteId);
-        return ResponseEntity.noContent().build();
     }
 }

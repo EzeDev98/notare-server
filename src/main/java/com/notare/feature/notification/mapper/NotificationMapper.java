@@ -24,8 +24,6 @@ public class NotificationMapper {
         notification.setTargetType(command.targetType());
         notification.setTargetId(command.targetId());
         notification.setTargetLabel(command.targetLabel());
-        notification.setPreviousPermission(command.previousPermission());
-        notification.setNewPermission(command.newPermission());
         return notification;
     }
 
@@ -37,8 +35,6 @@ public class NotificationMapper {
                 notification.getTargetType(),
                 notification.getTargetId(),
                 notification.getTargetLabel(),
-                notification.getPreviousPermission(),
-                notification.getNewPermission(),
                 notification.getReadAt(),
                 notification.getCreatedAt()
         );

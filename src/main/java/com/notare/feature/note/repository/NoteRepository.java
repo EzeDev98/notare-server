@@ -40,43 +40,6 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
     Page<Note> findByOwnerIdAndDeletedFalse(Long ownerId, Pageable pageable);
 
     /**
-     * The trash: this owner's soft-deleted notes.
-     *
-     * <p>The mirror of the finder above, and the reason soft delete was built
-     * as a plain boolean rather than Hibernate's @SoftDelete — that annotation
-     * hides deleted rows globally, which makes restore and permanent delete
-     * work by special case and makes a trash LISTING impossible without
-     * escaping the abstraction entirely.
-     */
-    Page<Note> findByOwnerIdAndDeletedTrue(Long ownerId, Pageable pageable);
-
-    /**
-     * The main list: active notes the owner has not archived.
-     *
-     * <p>Archiving is "keep it, stop showing it to me", so the default list has
-     * to exclude archived notes or the feature does nothing. Note that this
-     * makes GET /notes narrower than it was — see the contract note on
-     * NoteService.listNotes.
-     */
-    Page<Note> findByOwnerIdAndDeletedFalseAndArchivedFalse(Long ownerId, Pageable pageable);
-
-    /**
-     * The archive: active notes the owner has archived.
-     *
-     * <p>Deleted is still excluded. Archived and deleted are orthogonal
-     * booleans, so a note can be both — trashing an archived note must remove
-     * it from the archive view, not leave it in two places at once.
-     */
-    Page<Note> findByOwnerIdAndDeletedFalseAndArchivedTrue(Long ownerId, Pageable pageable);
-
-    /**
-     * A soft-deleted note that belongs to the given owner.
-     * Used by: restore deleted note (we must be able to find rows that the
-     * "active" finders above deliberately hide).
-     */
-    Optional<Note> findByIdAndOwnerIdAndDeletedTrue(Long id, Long ownerId);
-
-    /**
      * Any note that belongs to the given owner, whether active or soft-deleted.
      * Used by: permanent delete (works regardless of current deleted state).
      */

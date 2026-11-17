@@ -6,7 +6,6 @@ import com.notare.feature.sync.config.SyncProperties;
 import com.notare.feature.sync.dto.response.SyncClipResponse;
 import com.notare.feature.sync.dto.response.SyncNoteResponse;
 import com.notare.feature.sync.dto.response.SyncPullResponse;
-import com.notare.feature.sync.dto.response.SyncTrashedResponse;
 import com.notare.feature.sync.model.NoteTombstone;
 import com.notare.feature.sync.repository.NoteTombstoneRepository;
 import com.notare.feature.sync.service.SyncPullService;
@@ -72,12 +71,10 @@ public class SyncPullServiceImpl implements SyncPullService {
         // evict those.
         List<SyncNoteResponse> changed = new ArrayList<>();
         List<Long> deletedIds = new ArrayList<>();
-        List<SyncTrashedResponse> trashed = new ArrayList<>();
 
         for (NoteChange change : page.getContent()) {
             if (change.deleted()) {
                 deletedIds.add(change.noteId());
-                trashed.add(new SyncTrashedResponse(change.noteId(), change.purgeAt()));
             } else {
                 changed.add(new SyncNoteResponse(change.note(), change.clientId()));
             }
@@ -122,7 +119,7 @@ public class SyncPullServiceImpl implements SyncPullService {
         // taken above then covers anything written during the walk.
         LocalDateTime nextCursor = hasMore ? since : snapshot;
 
-        return new SyncPullResponse(changed, deletedIds, nextCursor, hasMore, clips, trashed);
+        return new SyncPullResponse(changed, deletedIds, nextCursor, hasMore, clips);
     }
 
     /** Attaches each visible clip's transcript state, with one query for the whole page (no N+1). */

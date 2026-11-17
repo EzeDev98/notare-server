@@ -11,7 +11,6 @@ public record NoteSummaryResponse(
         Long id,
         String contentPreview,
         boolean pinned,
-        boolean archived,
         Long version,
         LocalDateTime updatedAt
 ) {

@@ -1,33 +1,24 @@
 package com.notare.feature.user.web;
 
-import com.notare.feature.user.dto.request.ChangePasswordRequest;
 import com.notare.feature.user.dto.request.DeleteAccountRequest;
-import com.notare.feature.user.service.AccountService;
 import com.notare.feature.user.service.AccountDeletionService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 
-import com.notare.common.dto.PagedResponse;
 import com.notare.feature.user.dto.request.RegistrationRequest;
 import com.notare.feature.user.dto.response.CurrentUserResponse;
 import com.notare.feature.user.dto.response.RegistrationResponse;
-import com.notare.feature.user.dto.response.UserSummaryResponse;
 import com.notare.feature.user.model.UserDetail;
 import com.notare.feature.user.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springdoc.core.annotations.ParameterObject;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 
 @RequiredArgsConstructor
 @RestController
@@ -35,7 +26,6 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
-    private final AccountService accountService;
     private final AccountDeletionService accountDeletionService;
 
     @PostMapping("/register")
@@ -61,19 +51,6 @@ public class UserController {
      * safely alongside {@code /notes/{noteId}}.
      */
     /**
-     * Step 17g (B-02). The auth service checks the current password: wrong is 400 "Incorrect password.".
-     * The caller stays signed in; the auth service holds no other session to end.
-     */
-    @PostMapping("/password/change")
-    public ResponseEntity<Void> changePassword(
-            @AuthenticationPrincipal UserDetail userDetail,
-            @Valid @RequestBody ChangePasswordRequest request) {
-        accountService.changePassword(
-                userDetail.getUser().getUsername(), request.getCurrentPassword(), request.getNewPassword());
-        return ResponseEntity.noContent().build();
-    }
-
-    /**
      * Step 17g (B-03). Deletes the account and everything it owns. The body carries the username as
      * confirmation. If it fails halfway, calling again continues; a scheduled job also continues it.
      */
@@ -90,59 +67,5 @@ public class UserController {
             @AuthenticationPrincipal UserDetail userDetail) {
 
         return ResponseEntity.ok(userService.getCurrentUser(userDetail.getUser().getId()));
-    }
-
-    /**
-     * Resolve a batch of user ids to public profiles.
-     *
-     * <p>The API returns bare ids everywhere — {@code ownerId},
-     * {@code actorId}, {@code lastModifiedBy}, {@code sharedWithUserId},
-     * {@code collaboratorId} — because embedding a profile in every row would
-     * mean a user lookup per row. That decision only works if the client has a
-     * way to resolve a page's worth of ids in one request. This is it.
-     *
-     * <p>Spring binds {@code List<Long>} from either form, so
-     * {@code ?ids=1,2,3} and {@code ?ids=1&ids=2&ids=3} both work and no
-     * parsing code is needed for either.
-     *
-     * <p>Returns a bare list rather than a paged envelope. The caller already
-     * knows how many results it can possibly get — it supplied the ids — so
-     * pagination would add an envelope around a set the client defined itself.
-     * The per-request cap does the job pagination would otherwise be doing.
-     *
-     * <p><b>Known trade-off.</b> Ids are sequential, so an authenticated caller
-     * can walk this endpoint from 1 upward and enumerate the directory's
-     * usernames and display names. That is a real disclosure that
-     * {@code /user/search} does not have, since search requires knowing a term
-     * to match. It is accepted for the same reason partial email matching was
-     * accepted on search: the fields exposed are the ones this application
-     * treats as a public profile, and every alternative — restricting lookup to
-     * ids the caller already has a relationship with — needs the user module to
-     * query collaborations and shares, inverting the dependency direction those
-     * modules are built on. The per-request cap bounds the rate; the rate
-     * limiter already on the backlog for {@code /sync} should cover this path
-     * too, and that is the proper fix.
-     */
-    @GetMapping("/lookup")
-    public ResponseEntity<List<UserSummaryResponse>> lookupUsers(
-            @RequestParam("ids") List<Long> ids) {
-
-        return ResponseEntity.ok(userService.lookupUsers(ids));
-    }
-
-    /**
-     * Search for other users to invite as collaborators. Authenticated (only the
-     * POST /user/** paths are public), and the current user is excluded from
-     * results in the query.
-     */
-    @GetMapping("/search")
-    public ResponseEntity<PagedResponse<UserSummaryResponse>> searchUsers(
-            @AuthenticationPrincipal UserDetail userDetail,
-            @RequestParam("q") String query,
-            @ParameterObject
-            @PageableDefault(size = 20, sort = "username") Pageable pageable) {
-
-        return ResponseEntity.ok(
-                userService.searchUsers(userDetail.getUser().getId(), query, pageable));
     }
 }

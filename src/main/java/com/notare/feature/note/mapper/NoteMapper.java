@@ -19,7 +19,7 @@ public class NoteMapper {
     /**
      * Builds a brand-new Note from a create request. We only set the fields the
      * caller controls: ownerId, content. Everything else is left to defaults
-     * or the framework — pinned/archived/deleted default to false, and id,
+     * or the framework — pinned/deleted default to false, and id,
      * version, createdAt, updatedAt are populated by JPA on save.
      */
     public Note toEntity(Long ownerId, CreateNoteRequest request) {
@@ -35,7 +35,6 @@ public class NoteMapper {
                 note.getOwnerId(),
                 note.getContent(),
                 note.isPinned(),
-                note.isArchived(),
                 note.getVersion(),
                 note.getLastModifiedBy(),
                 note.getCreatedAt(),
@@ -48,7 +47,6 @@ public class NoteMapper {
                 note.getId(),
                 buildPreview(note.getContent()),
                 note.isPinned(),
-                note.isArchived(),
                 note.getVersion(),
                 note.getUpdatedAt()
         );

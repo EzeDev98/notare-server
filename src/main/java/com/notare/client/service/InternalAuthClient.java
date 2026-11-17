@@ -233,34 +233,6 @@ public class InternalAuthClient {
      * signing the user out in internal-auth deletes those tokens, which is how SyncPoint
      * finds out that its own "signed in elsewhere" record is stale.
      */
-    public InternalAuthApiResponse<LogoutResponse> logoutAll(String accessToken) {
-        return restClient.delete()
-                .uri("/session/all")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-                .retrieve()
-                .onStatus(HttpStatusCode::isError, this::handleDownstreamError)
-                .body(new ParameterizedTypeReference<InternalAuthApiResponse<LogoutResponse>>() {});
-    }
-
-    public InternalAuthApiResponse<java.util.List<SessionResponse>> listSessions(String accessToken) {
-        return restClient.get()
-                .uri("/session")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-                .retrieve()
-                .onStatus(HttpStatusCode::isError, this::handleDownstreamError)
-                .body(new ParameterizedTypeReference<InternalAuthApiResponse<java.util.List<SessionResponse>>>() {});
-    }
-
-    /** Signs out one of the caller's own devices (step 17h). internal-auth answers 404 when it is not theirs. */
-    public InternalAuthApiResponse<Void> revokeSession(String accessToken, String sessionId) {
-        return restClient.delete()
-                .uri("/session/{sessionId}", sessionId)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-                .retrieve()
-                .onStatus(HttpStatusCode::isError, this::handleDownstreamError)
-                .body(new ParameterizedTypeReference<InternalAuthApiResponse<Void>>() {});
-    }
-
     public boolean isSessionLive(String username) {
         InternalAuthApiResponse<SessionStatusResponse> response = restClient.post()
                 .uri("/auth/session-status")
@@ -270,21 +242,6 @@ public class InternalAuthClient {
                 .onStatus(HttpStatusCode::isError, this::handleDownstreamError)
                 .body(new ParameterizedTypeReference<InternalAuthApiResponse<SessionStatusResponse>>() {});
         return response != null && response.getData() != null && response.getData().isActive();
-    }
-
-    /**
-     * A signed-in user changes their own password (step 17g, B-02). A wrong current password comes
-     * back as a 400 "Incorrect password." and is passed through as it is, by the same 4xx rule as
-     * every other call here.
-     */
-    public void changePassword(com.notare.client.dto.request.InternalChangePasswordRequest request) {
-        restClient.post()
-                .uri("/auth/change-password")
-                .header(HttpHeaders.AUTHORIZATION, basicAuthHeader)
-                .body(request)
-                .retrieve()
-                .onStatus(HttpStatusCode::isError, this::handleDownstreamError)
-                .body(new ParameterizedTypeReference<InternalAuthApiResponse<Void>>() {});
     }
 
     public void deleteUser(String internalAuthUserId) {

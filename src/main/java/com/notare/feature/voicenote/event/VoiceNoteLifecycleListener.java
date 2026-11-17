@@ -5,8 +5,6 @@ import org.springframework.context.event.EventListener;
 
 import com.notare.common.storage.FileStorageService;
 import com.notare.feature.note.event.NotePermanentlyDeletedEvent;
-import com.notare.feature.note.event.NoteRestoredEvent;
-import com.notare.feature.note.event.NoteSoftDeletedEvent;
 import com.notare.feature.voicenote.model.VoiceNote;
 import com.notare.feature.voicenote.repository.VoiceNoteRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +16,6 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -38,18 +35,6 @@ public class VoiceNoteLifecycleListener {
     private final VoiceNoteRepository voiceNotes;
     private final FileStorageService fileStorage;
     private final ApplicationEventPublisher eventPublisher;
-
-    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
-    public void onNoteSoftDeleted(NoteSoftDeletedEvent event) {
-        int hidden = voiceNotes.softDeleteByNoteId(event.noteId(), LocalDateTime.now());
-        log.debug("Hid {} voice clip(s) of trashed note {}", hidden, event.noteId());
-    }
-
-    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
-    public void onNoteRestored(NoteRestoredEvent event) {
-        int shown = voiceNotes.restoreByNoteId(event.noteId(), LocalDateTime.now());
-        log.debug("Restored {} voice clip(s) of note {}", shown, event.noteId());
-    }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onNotePermanentlyDeleted(NotePermanentlyDeletedEvent event) {

@@ -34,7 +34,7 @@ class NotificationRepositoryTest {
                 notification(
                         1L,
                         2L,
-                        NotificationType.NOTE_SHARED,
+                        NotificationType.TRANSCRIPTION_COMPLETED,
                         NotificationTargetType.NOTE,
                         10L,
                         "First note",
@@ -44,7 +44,7 @@ class NotificationRepositoryTest {
                 notification(
                         1L,
                         2L,
-                        NotificationType.NOTE_SHARE_REVOKED,
+                        NotificationType.TRANSCRIPTION_FAILED,
                         NotificationTargetType.NOTE,
                         11L,
                         "Second note",
@@ -64,7 +64,7 @@ class NotificationRepositoryTest {
                 notification(
                         2L,
                         1L,
-                        NotificationType.NOTE_SHARED,
+                        NotificationType.TRANSCRIPTION_COMPLETED,
                         NotificationTargetType.NOTE,
                         30L,
                         "Other user's note",
@@ -202,8 +202,6 @@ class NotificationRepositoryTest {
                 targetType,
                 targetId,
                 targetLabel,
-                null,
-                null,
                 readAt,
                 createdAt
         );

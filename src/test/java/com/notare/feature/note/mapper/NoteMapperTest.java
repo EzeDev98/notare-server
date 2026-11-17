@@ -29,7 +29,6 @@ class NoteMapperTest {
         note.setOwnerId(3L);
         note.setContent("hi");
         note.setPinned(true);
-        note.setArchived(false);
         note.setVersion(2L);
         note.setLastModifiedBy(9L);
 
@@ -39,7 +38,6 @@ class NoteMapperTest {
         assertThat(response.ownerId()).isEqualTo(3L);
         assertThat(response.content()).isEqualTo("hi");
         assertThat(response.pinned()).isTrue();
-        assertThat(response.archived()).isFalse();
         assertThat(response.version()).isEqualTo(2L);
         assertThat(response.lastModifiedBy()).isEqualTo(9L);
     }
@@ -122,14 +120,12 @@ class NoteMapperTest {
         note.setId(8L);
         note.setContent("summary test");
         note.setPinned(false);
-        note.setArchived(true);
         note.setVersion(5L);
 
         NoteSummaryResponse summary = mapper.toSummary(note);
 
         assertThat(summary.id()).isEqualTo(8L);
         assertThat(summary.pinned()).isFalse();
-        assertThat(summary.archived()).isTrue();
         assertThat(summary.version()).isEqualTo(5L);
     }
 }

@@ -54,10 +54,6 @@ public class WebSecurityConfig {
                         // its whole point is stopping Render from spinning the
                         // instance down while nobody happens to be logged in.
                         .requestMatchers(HttpMethod.GET, "/api/v1/keep-alive").permitAll()
-                        // The collaboration socket handshake only. A browser cannot send an
-                        // Authorization header on a WebSocket, so the one-time ticket in the query
-                        // string is checked by CollabHandshakeInterceptor instead (step 15c).
-                        .requestMatchers(HttpMethod.GET, "/api/v1/ws/collab").permitAll()
                         // Spring Boot forwards any unhandled 404/500 to /error, and that
                         // forward goes through this filter chain as an ERROR dispatch. If
                         // /error isn't permitted it falls to anyRequest().authenticated(),
@@ -109,7 +105,7 @@ public class WebSecurityConfig {
         };
     }
 
-    /** Step 19c: one list for REST (CORS) and the WebSocket handshake (WebSocketConfig reads the same setting). */
+    /** Step 19c: the allowed origins for REST (CORS). */
     @org.springframework.beans.factory.annotation.Value(
             "${app.cors.allowed-origin-patterns:https://*.onrender.com,http://localhost:*}")
     private String[] allowedOriginPatterns;

@@ -138,7 +138,7 @@ class SyncControllerTest {
 
     private NoteResponse sampleNote(Long id, Long ownerId, Long version) {
         LocalDateTime now = LocalDateTime.now();
-        return new NoteResponse(id, ownerId, "content", false, false, version, ownerId, now, now);
+        return new NoteResponse(id, ownerId, "content", false, version, ownerId, now, now);
     }
 
     private SyncPullResponse emptyPullResponse(LocalDateTime cursor) {

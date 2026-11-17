@@ -3,7 +3,7 @@ package com.notare.feature.notification.event;
 import com.notare.feature.notification.dto.command.CreateNotificationCommand;
 import com.notare.feature.notification.enums.NotificationTargetType;
 import com.notare.feature.notification.enums.NotificationType;
-import com.notare.feature.notification.service.impl.NotificationDispatcher;
+import com.notare.feature.notification.service.NotificationService;
 import com.notare.feature.transcription.event.TranscriptionCompletedEvent;
 import com.notare.feature.transcription.event.TranscriptionFailedEvent;
 import org.junit.jupiter.api.Test;
@@ -56,26 +56,26 @@ class TranscriptionNotificationListenerTest {
     private static final Long TRANSCRIPTION_ID = 500L;
 
     @Mock
-    private NotificationDispatcher dispatcher;
+    private NotificationService notificationService;
     private TranscriptionNotificationListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new TranscriptionNotificationListener(dispatcher);
+        listener = new TranscriptionNotificationListener(notificationService);
     }
     @Test
     void onTranscriptionCompleted_notifiesTheOwnerWithNoActorAndPointsAtTheVoiceNote() {
         listener.onTranscriptionCompleted(
                 new TranscriptionCompletedEvent(TRANSCRIPTION_ID, VOICE_NOTE_ID, OWNER_ID));
 
-        verify(dispatcher).dispatch(new CreateNotificationCommand(
+        verify(notificationService).create(new CreateNotificationCommand(
                 OWNER_ID,
                 NotificationType.TRANSCRIPTION_COMPLETED,
                 null,                              // no actor — the system did this, not a person
                 NotificationTargetType.VOICE_NOTE,
                 VOICE_NOTE_ID,
                 null));
-        verifyNoMoreInteractions(dispatcher);
+        verifyNoMoreInteractions(notificationService);
     }
 
     @Test
@@ -83,14 +83,14 @@ class TranscriptionNotificationListenerTest {
         listener.onTranscriptionFailed(
                 new TranscriptionFailedEvent(TRANSCRIPTION_ID, VOICE_NOTE_ID, OWNER_ID, "engine timed out"));
 
-        verify(dispatcher).dispatch(new CreateNotificationCommand(
+        verify(notificationService).create(new CreateNotificationCommand(
                 OWNER_ID,
                 NotificationType.TRANSCRIPTION_FAILED,
                 null,
                 NotificationTargetType.VOICE_NOTE,
                 VOICE_NOTE_ID,
                 null));
-        verifyNoMoreInteractions(dispatcher);
+        verifyNoMoreInteractions(notificationService);
     }
 
     @Test
@@ -102,7 +102,7 @@ class TranscriptionNotificationListenerTest {
         listener.onTranscriptionFailed(
                 new TranscriptionFailedEvent(TRANSCRIPTION_ID, VOICE_NOTE_ID, OWNER_ID, sensitiveMessage));
 
-        verify(dispatcher).dispatch(new CreateNotificationCommand(
+        verify(notificationService).create(new CreateNotificationCommand(
                 OWNER_ID,
                 NotificationType.TRANSCRIPTION_FAILED,
                 null,
@@ -116,7 +116,7 @@ class TranscriptionNotificationListenerTest {
         listener.onTranscriptionFailed(
                 new TranscriptionFailedEvent(TRANSCRIPTION_ID, VOICE_NOTE_ID, OWNER_ID, null));
 
-        verify(dispatcher).dispatch(new CreateNotificationCommand(
+        verify(notificationService).create(new CreateNotificationCommand(
                 OWNER_ID,
                 NotificationType.TRANSCRIPTION_FAILED,
                 null,

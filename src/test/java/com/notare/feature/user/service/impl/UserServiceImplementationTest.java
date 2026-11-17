@@ -1,18 +1,14 @@
 package com.notare.feature.user.service.impl;
 
-import com.notare.common.dto.PagedResponse;
-import com.notare.common.exception.InvalidUserLookupException;
 import com.notare.common.exception.NotarianIdGenerationException;
 import com.notare.common.exception.RegistrationException;
 import com.notare.client.dto.response.InternalAuthApiResponse;
 import com.notare.client.dto.response.RegisterResponse;
 import com.notare.common.exception.UserAlreadyExistException;
 import com.notare.common.exception.UserNotFoundException;
-import com.notare.common.util.LikeEscaper;
 import com.notare.feature.user.dto.request.RegistrationRequest;
 import com.notare.feature.user.dto.response.CurrentUserResponse;
 import com.notare.feature.user.dto.response.RegistrationResponse;
-import com.notare.feature.user.dto.response.UserSummaryResponse;
 import com.notare.feature.user.enums.UserStatus;
 import com.notare.feature.user.event.UserRegisteredEvent;
 import com.notare.feature.user.model.User;
@@ -27,22 +23,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -64,18 +51,14 @@ import static org.mockito.Mockito.when;
  * not actually been compiled or run. Please run it via {@code mvn test}
  * before trusting it.
  *
- * <p>Covers {@link UserServiceImplementation#registerUser}, {@code
- * getCurrentUser}, {@code lookupUsers}, {@code searchUsers}, and {@code
- * existsById} - every branch of every method on the class, including the
- * notarianId-generation retry loop and the deliberately-asymmetric privacy
- * behavior of {@code searchUsers} (blank term -> nothing, vs. note/transcript
- * search where blank means "list all").
+ * <p>Covers {@link UserServiceImplementation#registerUser} and {@code
+ * getCurrentUser} - every branch of every method on the class, including the
+ * notarianId-generation retry loop.
  */
 @ExtendWith(MockitoExtension.class)
 public class UserServiceImplementationTest {
 
     private static final int MAX_ID_GENERATION_ATTEMPTS = 10;
-    private static final int MAX_USER_LOOKUP_IDS = 100;
 
     @Mock private NotarianIdGenerator notarianIdGenerator;
     @Mock private UserRepository userRepository;
@@ -290,143 +273,4 @@ public class UserServiceImplementationTest {
                 .hasMessage("User not found.");
     }
 
-    // ---- lookupUsers -------------------------------------------------
-
-    @Test
-    void lookupUsers_throwsInvalidUserLookupException_whenCollectionIsNull() {
-        assertThatThrownBy(() -> service.lookupUsers(null))
-                .isInstanceOf(InvalidUserLookupException.class)
-                .hasMessage("At least one id is required.");
-        verifyNoInteractions(userRepository);
-    }
-
-    @Test
-    void lookupUsers_throwsInvalidUserLookupException_whenCollectionIsEmpty() {
-        assertThatThrownBy(() -> service.lookupUsers(List.of()))
-                .isInstanceOf(InvalidUserLookupException.class)
-                .hasMessage("At least one id is required.");
-    }
-
-    @Test
-    void lookupUsers_throwsInvalidUserLookupException_whenOnlyElementIsNull() {
-        List<Long> ids = new ArrayList<>();
-        ids.add(null);
-
-        assertThatThrownBy(() -> service.lookupUsers(ids))
-                .isInstanceOf(InvalidUserLookupException.class)
-                .hasMessage("At least one id is required.");
-        verifyNoInteractions(userRepository);
-    }
-
-    @Test
-    void lookupUsers_dedupesAndDropsNulls_beforeQuerying_preservingInsertionOrder() {
-        List<Long> ids = Arrays.asList(3L, 1L, null, 3L, 2L, 1L);
-        when(userRepository.findByIdIn(any())).thenReturn(List.of());
-
-        service.lookupUsers(ids);
-
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Collection<Long>> captor = ArgumentCaptor.forClass(Collection.class);
-        verify(userRepository).findByIdIn(captor.capture());
-        assertThat(captor.getValue()).containsExactly(3L, 1L, 2L);
-    }
-
-    @Test
-    void lookupUsers_throwsInvalidUserLookupException_whenDistinctCountExceedsTheCeiling() {
-        List<Long> ids = new ArrayList<>();
-        for (long i = 0; i < MAX_USER_LOOKUP_IDS + 1; i++) {
-            ids.add(i);
-        }
-
-        assertThatThrownBy(() -> service.lookupUsers(ids))
-                .isInstanceOf(InvalidUserLookupException.class)
-                .hasMessageContaining("At most " + MAX_USER_LOOKUP_IDS);
-        verifyNoInteractions(userRepository);
-    }
-
-    @Test
-    void lookupUsers_allowsExactlyTheCeilingCount() {
-        List<Long> ids = new ArrayList<>();
-        for (long i = 0; i < MAX_USER_LOOKUP_IDS; i++) {
-            ids.add(i);
-        }
-        when(userRepository.findByIdIn(any())).thenReturn(List.of());
-
-        assertThatCode(() -> service.lookupUsers(ids)).doesNotThrowAnyException();
-    }
-
-    @Test
-    void lookupUsers_mapsEachRepositoryRowToASummary() {
-        User a = new User();
-        a.setId(1L); a.setUsername("alice"); a.setFirstName("Alice"); a.setLastName("A");
-        User b = new User();
-        b.setId(2L); b.setUsername("bob"); b.setFirstName("Bob"); b.setLastName("B");
-        when(userRepository.findByIdIn(any())).thenReturn(List.of(a, b));
-
-        List<UserSummaryResponse> result = service.lookupUsers(List.of(1L, 2L));
-
-        assertThat(result).containsExactly(
-                new UserSummaryResponse(1L, "alice", "Alice", "A"),
-                new UserSummaryResponse(2L, "bob", "Bob", "B"));
-    }
-
-    // ---- searchUsers -------------------------------------------------
-
-    @Test
-    void searchUsers_returnsAnEmptyPage_whenQueryIsNull_withoutTouchingTheRepository() {
-        Pageable pageable = Pageable.unpaged();
-
-        PagedResponse<UserSummaryResponse> result = service.searchUsers(10L, null, pageable);
-
-        assertThat(result.content()).isEmpty();
-        verifyNoInteractions(userRepository);
-    }
-
-    @Test
-    void searchUsers_returnsAnEmptyPage_whenQueryIsBlank_withoutTouchingTheRepository() {
-        // Privacy: an empty term must not fall through to listing every user,
-        // unlike note/transcript search where blank means "list mine".
-        Pageable pageable = Pageable.unpaged();
-
-        PagedResponse<UserSummaryResponse> result = service.searchUsers(10L, "   ", pageable);
-
-        assertThat(result.content()).isEmpty();
-        verifyNoInteractions(userRepository);
-    }
-
-    @Test
-    void searchUsers_stripsAndEscapesTheTerm_beforeDelegatingToTheRepository() {
-        Pageable pageable = Pageable.unpaged();
-        String rawTerm = " Jo%hn_ ";
-        String expectedEscaped = LikeEscaper.escape(rawTerm.strip());
-        Page<User> emptyPage = Page.empty(pageable);
-        when(userRepository.searchUsers(eq(10L), eq(expectedEscaped), eq(pageable))).thenReturn(emptyPage);
-
-        service.searchUsers(10L, rawTerm, pageable);
-
-        verify(userRepository).searchUsers(10L, expectedEscaped, pageable);
-    }
-
-    @Test
-    void searchUsers_mapsRepositoryContentToSummaries() {
-        Pageable pageable = Pageable.unpaged();
-        User user = new User();
-        user.setId(3L); user.setUsername("carol"); user.setFirstName("Carol"); user.setLastName("C");
-        Page<User> page = new org.springframework.data.domain.PageImpl<>(List.of(user));
-        when(userRepository.searchUsers(any(), anyString(), any())).thenReturn(page);
-
-        PagedResponse<UserSummaryResponse> result = service.searchUsers(10L, "carol", pageable);
-
-        assertThat(result.content()).containsExactly(new UserSummaryResponse(3L, "carol", "Carol", "C"));
-    }
-
-    // ---- existsById -------------------------------------------------
-
-    @Test
-    void existsById_delegatesDirectlyToTheRepository() {
-        when(userRepository.existsById(42L)).thenReturn(true);
-
-        assertThat(service.existsById(42L)).isTrue();
-        verify(userRepository).existsById(42L);
-    }
 }

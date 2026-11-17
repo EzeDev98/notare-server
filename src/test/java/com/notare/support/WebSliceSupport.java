@@ -39,7 +39,6 @@ public @interface WebSliceSupport {
         RateLimitProperties rateLimitProperties() {
             RateLimitProperties properties = new RateLimitProperties();
             properties.setSyncPerMinute(1000);
-            properties.setLookupPerMinute(1000);
             return properties;
         }
 

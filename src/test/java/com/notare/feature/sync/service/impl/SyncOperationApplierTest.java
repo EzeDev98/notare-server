@@ -98,7 +98,7 @@ class SyncOperationApplierTest {
     }
 
     private NoteResponse note(Long id, Long version) {
-        return new NoteResponse(id, OWNER_ID, "hello", false, false, version, OWNER_ID, null, null);
+        return new NoteResponse(id, OWNER_ID, "hello", false, version, OWNER_ID, null, null);
     }
 
     private SyncOperationRequest request(SyncOperationType type) {
@@ -136,7 +136,7 @@ class SyncOperationApplierTest {
         assertThat(result.note().version()).isEqualTo(3L);
         verify(noteService, never()).updateNote(any(), any(), any());
         verify(noteService, never()).createWithClientId(any(), any(), any());
-        verify(noteService, never()).softDeleteNote(any(), any());
+        verify(noteService, never()).permanentlyDeleteNote(any(), any());
         verify(syncOperationRepository, never()).save(any());
     }
 
@@ -234,26 +234,6 @@ class SyncOperationApplierTest {
     // -------------------------------------------------------------------
 
     @Test
-    void apply_newDeleteOperation_softDeletesThenReReadsToRecordThePostDeleteVersion() {
-        when(syncOperationRepository.findByOwnerIdAndOperationId(OWNER_ID, OPERATION_ID))
-                .thenReturn(Optional.empty());
-        SyncOperationRequest req = request(SyncOperationType.DELETE);
-        req.setNoteId(NOTE_ID);
-        NoteResponse afterDelete = note(NOTE_ID, 4L);
-        when(noteService.findAnyNote(OWNER_ID, NOTE_ID)).thenReturn(Optional.of(afterDelete));
-
-        SyncOperationResult result = applier.apply(OWNER_ID, req);
-
-        verify(noteService).softDeleteNote(OWNER_ID, NOTE_ID);
-        verify(noteService).findAnyNote(OWNER_ID, NOTE_ID);
-        assertThat(result.status()).isEqualTo(SyncResultStatus.APPLIED);
-        assertThat(result.note()).isEqualTo(afterDelete);
-
-        verify(syncOperationRepository).save(ledgerCaptor.capture());
-        assertThat(ledgerCaptor.getValue().getResultVersion()).isEqualTo(4L);
-    }
-
-    @Test
     void apply_deleteOperation_whoseReReadComesBackEmpty_skipsTheLedgerWrite() {
         when(syncOperationRepository.findByOwnerIdAndOperationId(OWNER_ID, OPERATION_ID))
                 .thenReturn(Optional.empty());
@@ -277,7 +257,7 @@ class SyncOperationApplierTest {
         SyncOperationRequest req = request(SyncOperationType.DELETE);
         req.setNoteId(NOTE_ID);
         org.mockito.Mockito.doThrow(new NoteNotFoundException("already gone"))
-                .when(noteService).softDeleteNote(OWNER_ID, NOTE_ID);
+                .when(noteService).permanentlyDeleteNote(OWNER_ID, NOTE_ID);
 
         assertThatThrownBy(() -> applier.apply(OWNER_ID, req))
                 .isInstanceOf(NoteNotFoundException.class);

@@ -15,7 +15,6 @@ import com.notare.feature.voicenote.dto.response.VoiceUpload;
 import com.notare.feature.voicenote.service.VoiceNoteService;
 import com.notare.feature.voicenote.validation.VoiceUploadValidator;
 import lombok.RequiredArgsConstructor;
-import com.notare.feature.voicenote.event.VoiceNoteCreatedEvent;
 import com.notare.feature.voicenote.event.VoiceNoteDeletedEvent;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.io.Resource;
@@ -30,11 +29,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.LocalDateTime;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -58,12 +54,6 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
     @Override
     public VoiceNoteResponse upload(Long ownerId, MultipartFile file, Long noteId, Integer durationSeconds) {
         return store(ownerId, noteId, null, file, durationSeconds).clip();
-    }
-
-    @Override
-    public VoiceUpload uploadForNote(Long uploaderId, Long noteId, MultipartFile file, String clientId,
-                                     Integer durationSeconds) {
-        return store(uploaderId, noteId, clientId, file, durationSeconds);
     }
 
     /** The one upload path. A client id makes it idempotent; without one it always stores. */
@@ -97,15 +87,6 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
                     storageKey, file.getSize(), durationSeconds);
             entity.setClientId(clientId);
             VoiceNote saved = voiceNoteRepository.save(entity);
-
-            // Announce the creation only after the metadata row exists.
-            // Consumers such as the sharing module can now grant access to
-            // this recording when its parent note is already shared.
-            eventPublisher.publishEvent(new VoiceNoteCreatedEvent(
-                    saved.getId(),
-                    saved.getOwnerId(),
-                    saved.getNoteId()));
-
             return new VoiceUpload(voiceNoteMapper.toResponse(saved), true);
         } catch (DataIntegrityViolationException e) {
             // Lost a race with a replay of the same upload: uq_voice_notes_owner_client_id fired. The
@@ -115,41 +96,6 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
                 throw e;
             }
             return voiceNoteRepository.findByOwnerIdAndClientId(ownerId, clientId)
-                    .map(clip -> new VoiceUpload(voiceNoteMapper.toResponse(clip), false))
-                    .orElseThrow(() -> e);
-        } catch (RuntimeException e) {
-            fileStorageService.delete(storageKey);
-            throw e;
-        }
-    }
-
-    @Override
-    public VoiceUpload copyClip(Long userId, Long sourceVoiceNoteId, Long targetNoteId, String clientId) {
-        Optional<VoiceNote> existing = voiceNoteRepository.findByOwnerIdAndClientId(userId, clientId);
-        if (existing.isPresent()) {
-            return new VoiceUpload(voiceNoteMapper.toResponse(existing.get()), false);
-        }
-
-        // A clip its owner removed on its own is gone for everyone, same as a deleted one.
-        VoiceNote source = voiceNoteRepository.findById(sourceVoiceNoteId)
-                .filter(clip -> !clip.isRemoved())
-                .orElseThrow(() -> new VoiceNoteNotFoundException("Voice note not found."));
-
-        String storageKey = fileStorageService.copy(source.getStorageKey(), source.getOriginalFilename());
-        try {
-            VoiceNote entity = voiceNoteMapper.toEntity(
-                    userId, targetNoteId,
-                    source.getOriginalFilename(), source.getContentType(),
-                    storageKey, source.getSizeBytes(), source.getDurationSeconds());
-            entity.setClientId(clientId);
-            VoiceNote saved = voiceNoteRepository.save(entity);
-
-            eventPublisher.publishEvent(new VoiceNoteCreatedEvent(saved.getId(), saved.getOwnerId(), saved.getNoteId()));
-            return new VoiceUpload(voiceNoteMapper.toResponse(saved), true);
-        } catch (DataIntegrityViolationException e) {
-            // Lost a race with a retry of the same copy: its clip is the answer, this object is surplus.
-            fileStorageService.delete(storageKey);
-            return voiceNoteRepository.findByOwnerIdAndClientId(userId, clientId)
                     .map(clip -> new VoiceUpload(voiceNoteMapper.toResponse(clip), false))
                     .orElseThrow(() -> e);
         } catch (RuntimeException e) {
@@ -346,44 +292,8 @@ public class VoiceNoteServiceImpl implements VoiceNoteService {
         }
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public VoiceNoteResponse getAuthorizedVoiceNote(Long voiceNoteId) {
-        VoiceNote voiceNote = voiceNoteRepository.findById(voiceNoteId)
-                .orElseThrow(() -> new VoiceNoteNotFoundException("Voice note not found."));
-        return voiceNoteMapper.toResponse(voiceNote);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public VoiceNoteContent getAuthorizedAudio(Long voiceNoteId) {
-        VoiceNote voiceNote = voiceNoteRepository.findById(voiceNoteId)
-                .orElseThrow(() -> new VoiceNoteNotFoundException("Voice note not found."));
-        Resource resource = fileStorageService.load(voiceNote.getStorageKey());
-        return new VoiceNoteContent(resource, voiceNote.getContentType(), voiceNote.getOriginalFilename(), voiceNote.getSizeBytes());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Map<Long, VoiceNoteResponse> getAuthorizedVoiceNoteSummaries(Collection<Long> voiceNoteIds) {
-        if (voiceNoteIds == null || voiceNoteIds.isEmpty()) {
-            // Guard the empty case explicitly: an IN () clause is invalid SQL on
-            // some databases, and there's nothing to ask for anyway.
-            return Map.of();
-        }
-        return voiceNoteRepository.findByIdIn(voiceNoteIds).stream()
-                .collect(Collectors.toMap(VoiceNote::getId, voiceNoteMapper::toResponse));
-    }
-
     private VoiceNote requireOwned(Long ownerId, Long voiceNoteId) {
         return voiceNoteRepository.findByIdAndOwnerId(voiceNoteId, ownerId)
                 .orElseThrow(() -> new VoiceNoteNotFoundException("Voice note not found."));
-    }
-    @Override
-    @Transactional(readOnly = true)
-    public List<VoiceNoteResponse> getAuthorizedVoiceNotesByNote(Long noteId) {
-        return voiceNoteRepository.findByNoteId(noteId).stream()
-                .map(voiceNoteMapper::toResponse)
-                .toList();
     }
 }

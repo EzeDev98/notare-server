@@ -88,7 +88,7 @@ class NotificationServiceImplTest {
         Notification n = new Notification();
         n.setId(NOTIFICATION_ID);
         n.setRecipientId(recipientId);
-        n.setType(NotificationType.NOTE_SHARED);
+        n.setType(NotificationType.TRANSCRIPTION_COMPLETED);
         n.setTargetType(NotificationTargetType.NOTE);
         n.setTargetId(42L);
         n.setTargetLabel("Q3 Plan");
@@ -103,7 +103,7 @@ class NotificationServiceImplTest {
     @Test
     void create_mapsTheCommandThroughTheMapperAndSavesTheResultingEntity() {
         CreateNotificationCommand command = new CreateNotificationCommand(
-                RECIPIENT_ID, NotificationType.NOTE_SHARED, OTHER_USER_ID,
+                RECIPIENT_ID, NotificationType.TRANSCRIPTION_COMPLETED, OTHER_USER_ID,
                 NotificationTargetType.NOTE, 42L, "Q3 Plan");
         Notification entity = new Notification();
         when(notificationMapper.toEntity(command)).thenReturn(entity);

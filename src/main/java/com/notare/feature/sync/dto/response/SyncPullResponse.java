@@ -50,21 +50,12 @@ public record SyncPullResponse(
          * (step 17c). Paged in step with {@code changed}: the same page number and size, and hasMore is
          * true while either list has more.
          */
-        List<SyncClipResponse> clips,
-
-        /** Notes in Recently deleted with their purge date (step 17e). A subset of deletedIds. */
-        List<SyncTrashedResponse> trashed
+        List<SyncClipResponse> clips
 ) {
-
-    /** The shape before the purge dates were added. */
-    public SyncPullResponse(List<SyncNoteResponse> changed, List<Long> deletedIds,
-                            LocalDateTime nextCursor, boolean hasMore, List<SyncClipResponse> clips) {
-        this(changed, deletedIds, nextCursor, hasMore, clips, List.of());
-    }
 
     /** The shape before clips were added. */
     public SyncPullResponse(List<SyncNoteResponse> changed, List<Long> deletedIds,
                             LocalDateTime nextCursor, boolean hasMore) {
-        this(changed, deletedIds, nextCursor, hasMore, List.of(), List.of());
+        this(changed, deletedIds, nextCursor, hasMore, List.of());
     }
 }

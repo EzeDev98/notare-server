@@ -3,7 +3,7 @@ package com.notare.feature.notification.event;
 import com.notare.feature.notification.dto.command.CreateNotificationCommand;
 import com.notare.feature.notification.enums.NotificationTargetType;
 import com.notare.feature.notification.enums.NotificationType;
-import com.notare.feature.notification.service.impl.NotificationDispatcher;
+import com.notare.feature.notification.service.NotificationService;
 import com.notare.feature.transcription.event.TranscriptionCompletedEvent;
 import com.notare.feature.transcription.event.TranscriptionFailedEvent;
 import lombok.RequiredArgsConstructor;
@@ -41,7 +41,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 public class TranscriptionNotificationListener {
 
-    private final NotificationDispatcher dispatcher;
+    private final NotificationService notificationService;
 
     /**
      * Transcript is ready. Actor is NULL — nobody did this to you, the system
@@ -52,7 +52,7 @@ public class TranscriptionNotificationListener {
             phase = TransactionPhase.AFTER_COMMIT,
             fallbackExecution = true)
     public void onTranscriptionCompleted(TranscriptionCompletedEvent event) {
-        dispatcher.dispatch(new CreateNotificationCommand(
+        notificationService.create(new CreateNotificationCommand(
                 event.ownerId(),
                 NotificationType.TRANSCRIPTION_COMPLETED,
                 null,
@@ -77,7 +77,7 @@ public class TranscriptionNotificationListener {
             phase = TransactionPhase.AFTER_COMMIT,
             fallbackExecution = true)
     public void onTranscriptionFailed(TranscriptionFailedEvent event) {
-        dispatcher.dispatch(new CreateNotificationCommand(
+        notificationService.create(new CreateNotificationCommand(
                 event.ownerId(),
                 NotificationType.TRANSCRIPTION_FAILED,
                 null,

@@ -25,7 +25,6 @@ public record NoteResponse(
         Long ownerId,
         String content,
         boolean pinned,
-        boolean archived,
         Long version,
 
         /**

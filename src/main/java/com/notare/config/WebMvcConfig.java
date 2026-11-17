@@ -35,18 +35,16 @@ public class WebMvcConfig implements WebMvcConfigurer {
         resolvers.add(userAgentArgumentResolver);
     }
 
-    /** Step 17j (B-15): per-user limits on the three endpoints that can be used to scrape or enumerate. */
+    /** Step 17j (B-15): per-user limit on the sync endpoint. */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         // Step 17k: first, so an outdated client is turned away before it uses up any rate limit.
         registry.addInterceptor(clientVersionInterceptor)
                 .addPathPatterns("/" + appTitle + "/**")
                 .excludePathPatterns("/" + appTitle + "/internal/**", "/" + appTitle + "/admin/**",
-                        "/" + appTitle + "/keep-alive", "/" + appTitle + "/ws/**");
+                        "/" + appTitle + "/keep-alive");
         registry.addInterceptor(new RateLimitInterceptor(rateLimiter, "sync", rateLimitProperties::getSyncPerMinute))
                 .addPathPatterns("/" + appTitle + "/sync");
-        registry.addInterceptor(new RateLimitInterceptor(rateLimiter, "lookup", rateLimitProperties::getLookupPerMinute))
-                .addPathPatterns("/" + appTitle + "/user/lookup", "/" + appTitle + "/user/search");
     }
 
 }

@@ -10,7 +10,6 @@ import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.service.NoteService;
 import com.notare.feature.voicenote.dto.request.VoiceNoteContent;
 import com.notare.feature.voicenote.dto.response.VoiceNoteResponse;
-import com.notare.feature.voicenote.event.VoiceNoteCreatedEvent;
 import com.notare.feature.voicenote.event.VoiceNoteDeletedEvent;
 import com.notare.feature.voicenote.mapper.VoiceNoteMapper;
 import com.notare.feature.voicenote.model.VoiceNote;
@@ -235,8 +234,6 @@ class VoiceNoteServiceImplTest {
 
         assertThat(result).isEqualTo(response);
         verify(voiceUploadValidator).validate(file, 10);
-        verify(eventPublisher).publishEvent(new VoiceNoteCreatedEvent(
-                saved.getId(), saved.getOwnerId(), saved.getNoteId()));
         // Bytes must be stored before the row exists — an interrupted upload
         // must never leave a metadata row pointing at nothing.
         InOrder order = inOrder(fileStorageService, voiceNoteRepository);

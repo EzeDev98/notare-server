@@ -31,23 +31,6 @@ public interface VoiceNoteRepository extends JpaRepository<VoiceNote, Long> {
     @Query(value = "select * from voice_notes where note_id = :noteId", nativeQuery = true)
     List<VoiceNote> findAllByNoteIdIncludingDeleted(@Param("noteId") Long noteId);
 
-    /** The note went to the trash: hide its clips. updated_at moves, so the next pull reports them. */
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query(value = "update voice_notes set deleted = true, deleted_at = :at, updated_at = :at "
-            + "where note_id = :noteId and deleted = false",
-            nativeQuery = true)
-    int softDeleteByNoteId(@Param("noteId") Long noteId, @Param("at") LocalDateTime at);
-
-    /**
-     * The note came back from the trash: its clips come back too, except the ones the person
-     * deleted on their own (removed).
-     */
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query(value = "update voice_notes set deleted = false, deleted_at = null, updated_at = :at "
-            + "where note_id = :noteId and deleted = true and removed = false",
-            nativeQuery = true)
-    int restoreByNoteId(@Param("noteId") Long noteId, @Param("at") LocalDateTime at);
-
     /**
      * Step 18e: gives a clip that belongs to no note a note to live in. Only touches an owner's own
      * standalone clip, so a repeat or a wrong id changes nothing. updated_at moves for the next pull.

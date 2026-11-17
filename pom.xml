@@ -98,11 +98,6 @@
 			<artifactId>shedlock-provider-jdbc-template</artifactId>
 			<version>5.13.0</version>
 		</dependency>
-		<!-- Live collaboration relay (step 15c, D-032): the /api/v1/ws/collab socket. -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-websocket</artifactId>
-		</dependency>
 		<!--
 			Render's health check needs a path that returns 200 without
 			authentication. Everything else in this API requires a JWT

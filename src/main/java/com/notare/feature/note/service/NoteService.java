@@ -7,14 +7,11 @@ import com.notare.feature.note.dto.request.UpdateNoteRequest;
 import com.notare.feature.note.dto.response.NoteChange;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
-import com.notare.feature.note.dto.response.TrashedNoteResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
-import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -22,10 +19,6 @@ import java.util.Optional;
  * UserDetail. That keeps this service decoupled from Spring Security types,
  * and — more importantly — the ownerId is threaded into every repository call,
  * so ownership is enforced on every single operation, not just reads.
- *
- * <p>The three methods at the bottom are the exception, and they're labelled as
- * such. They exist for the share module (Step 7), which authorizes a caller via
- * a grant row and then needs to actually touch the note.
  */
 public interface NoteService {
 
@@ -33,22 +26,8 @@ public interface NoteService {
 
     NoteResponse getNote(Long ownerId, Long noteId);
 
-    /**
-     * The owner's notes, filtered by archive state.
-     *
-     * <p><b>Contract change.</b> This used to return every non-deleted note,
-     * archived ones included, because nothing could set archived and the flag
-     * was therefore always false. Now that it can be set, the default list
-     * excludes archived notes — otherwise archiving would be a flag with no
-     * observable effect.
-     *
-     * <p>There is deliberately no "both" option. A client that wants everything
-     * makes two calls, and in practice does not want to: the point of two lists
-     * is that they are two screens.
-     *
-     * @param archived false for the main list, true for the archive
-     */
-    PagedResponse<NoteSummaryResponse> listNotes(Long ownerId, boolean archived, Pageable pageable);
+    /** The owner's active notes. */
+    PagedResponse<NoteSummaryResponse> listNotes(Long ownerId, Pageable pageable);
 
     /**
      * Pin or unpin a note. Idempotent: setting the state it already has is a
@@ -62,32 +41,13 @@ public interface NoteService {
      */
     NoteResponse setPinned(Long ownerId, Long noteId, boolean pinned);
 
-    /**
-     * Archive or unarchive a note. Same idempotency and same absence of a
-     * version gate as {@link #setPinned}.
-     */
-    NoteResponse setArchived(Long ownerId, Long noteId, boolean archived);
-
     PagedResponse<NoteSummaryResponse> searchNotes(Long ownerId, String query, Pageable pageable);
-
-    /**
-     * This owner's trashed notes, so a client can offer restore and permanent
-     * delete on something the user can actually see.
-     *
-     * <p>Both of those operations existed from Step 1; nothing could list what
-     * they operate on, which made a soft delete indistinguishable from a
-     * permanent one from the user's side.
-     */
-    PagedResponse<TrashedNoteResponse> listTrashedNotes(Long ownerId, Pageable pageable);
 
     NoteResponse updateNote(Long ownerId, Long noteId, UpdateNoteRequest request);
 
     NoteResponse autoSave(Long ownerId, Long noteId, AutoSaveNoteRequest request);
 
-    void softDeleteNote(Long ownerId, Long noteId);
-
-    NoteResponse restoreNote(Long ownerId, Long noteId);
-
+    /** Deletes the note for good and publishes NotePermanentlyDeletedEvent so its clips and files go too. */
     void permanentlyDeleteNote(Long ownerId, Long noteId);
 
     /**
@@ -154,57 +114,8 @@ public interface NoteService {
 
     /**
      * Deletes one expired trashed note for good and publishes NotePermanentlyDeletedEvent, so
-     * shares, clips, transcripts, stored files and the sync tombstone are cleaned up (step 17e).
+     * clips, transcripts, stored files and the sync tombstone are cleaned up (step 17e).
      * Each call is its own transaction. Returns false when the note is gone, restored, or not due.
      */
     boolean purgeExpiredNote(Long noteId, LocalDateTime now);
-
-    // ---------------------------------------------------------------------
-    // Pre-authorized access (share module only).
-    //
-    // These take NO userId and perform NO permission check. The caller must
-    // have already established that the requester may read (or write) the note
-    // — in practice, by finding a NoteShare grant. Calling one of these from a
-    // controller, or from anywhere that hasn't checked a grant, is a privilege
-    // escalation: any authenticated user could read any note by guessing an id.
-    //
-    // The "authorized" in each name is a claim the CALLER makes, not something
-    // these methods verify.
-    // ---------------------------------------------------------------------
-
-    /** Reads an active note by id, ownership unchecked. Throws 404 if it doesn't exist or is trashed. */
-    NoteResponse getAuthorizedNote(Long noteId);
-
-    /**
-     * Updates title and content of an active note by id, ownership unchecked.
-     *
-     * <p>Runs the same version guard as {@link #updateNote} — a stale version
-     * still yields a 409 carrying the current one. That's the point of routing
-     * collaborator writes through here rather than reimplementing them: the
-     * owner and a collaborator editing at once is precisely the race Step 2's
-     * optimistic locking was built for, and both writers must go through the
-     * same gate for it to work.
-     */
-    NoteResponse updateAuthorizedNote(Long noteId, UpdateNoteRequest request);
-
-    /**
-     * Pre-authorized partial update — the auto-save counterpart to
-     * {@link #updateAuthorizedNote}.
-     *
-     * <p>Same contract and same warning as the other two accessors: this takes
-     * no user id and checks nothing. "Authorized" is a claim the CALLER makes.
-     * SharedNoteServiceImpl remains the only class permitted to call it, having
-     * already resolved a WRITE grant.
-     */
-    NoteResponse autoSaveAuthorizedNote(Long noteId, AutoSaveNoteRequest request);
-
-    /**
-     * Resolves a batch of note ids to summaries in one query, ownership
-     * unchecked. Keyed by note id, so callers can look up each row's note
-     * without depending on result order.
-     *
-     * <p>Ids that are unknown or soft-deleted are simply absent from the map —
-     * the caller decides whether that's a skipped row or an error.
-     */
-    Map<Long, NoteSummaryResponse> getAuthorizedNoteSummaries(Collection<Long> noteIds);
 }

@@ -9,7 +9,6 @@ import com.notare.feature.note.dto.request.UpdateNoteRequest;
 import com.notare.feature.note.dto.response.NoteChange;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
-import com.notare.feature.note.dto.response.TrashedNoteResponse;
 import com.notare.feature.note.event.NotePermanentlyDeletedEvent;
 import com.notare.feature.note.mapper.NoteMapper;
 import com.notare.feature.note.model.Note;
@@ -30,7 +29,6 @@ import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -80,7 +78,7 @@ import static org.mockito.Mockito.when;
  *       this backwards silently wipes a note, so both directions are tested
  *       explicitly.</li>
  *   <li><b>{@code withStableOrder} is applied inconsistently on purpose.</b>
- *       {@code listNotes} and {@code listTrashedNotes} append an {@code id}
+ *       {@code listNotes} appends an {@code id}
  *       tiebreaker so paging is well-defined when timestamps tie;
  *       {@code searchNotes} does NOT - it passes the caller's {@code
  *       Pageable} straight through to {@code searchByOwner} untouched. That
@@ -191,37 +189,25 @@ class NoteServiceImplTest {
     // ---- listNotes -------------------------------------------------
 
     @Test
-    void listNotes_active_queriesFindByOwnerIdAndDeletedFalseAndArchivedFalse() {
-        when(noteRepository.findByOwnerIdAndDeletedFalseAndArchivedFalse(eq(9L), any()))
+    void listNotes_queriesFindByOwnerIdAndDeletedFalse() {
+        when(noteRepository.findByOwnerIdAndDeletedFalse(eq(9L), any()))
                 .thenReturn(new PageImpl<>(List.of()));
 
-        service.listNotes(9L, false, Pageable.unpaged());
+        service.listNotes(9L, Pageable.unpaged());
 
-        verify(noteRepository).findByOwnerIdAndDeletedFalseAndArchivedFalse(eq(9L), any());
-        verify(noteRepository, never()).findByOwnerIdAndDeletedFalseAndArchivedTrue(any(), any());
-    }
-
-    @Test
-    void listNotes_archived_queriesFindByOwnerIdAndDeletedFalseAndArchivedTrue() {
-        when(noteRepository.findByOwnerIdAndDeletedFalseAndArchivedTrue(eq(9L), any()))
-                .thenReturn(new PageImpl<>(List.of()));
-
-        service.listNotes(9L, true, Pageable.unpaged());
-
-        verify(noteRepository).findByOwnerIdAndDeletedFalseAndArchivedTrue(eq(9L), any());
-        verify(noteRepository, never()).findByOwnerIdAndDeletedFalseAndArchivedFalse(any(), any());
+        verify(noteRepository).findByOwnerIdAndDeletedFalse(eq(9L), any());
     }
 
     @Test
     void listNotes_appendsAnIdDescTiebreaker_whenTheCallersSortHasNoIdOrder() {
         Pageable requested = PageRequest.of(0, 20, Sort.by(Sort.Order.desc("updatedAt")));
-        when(noteRepository.findByOwnerIdAndDeletedFalseAndArchivedFalse(eq(9L), any()))
+        when(noteRepository.findByOwnerIdAndDeletedFalse(eq(9L), any()))
                 .thenReturn(new PageImpl<>(List.of()));
 
-        service.listNotes(9L, false, requested);
+        service.listNotes(9L, requested);
 
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(noteRepository).findByOwnerIdAndDeletedFalseAndArchivedFalse(eq(9L), captor.capture());
+        verify(noteRepository).findByOwnerIdAndDeletedFalse(eq(9L), captor.capture());
         Sort appliedSort = captor.getValue().getSort();
         assertThat(appliedSort.getOrderFor("updatedAt")).isNotNull();
         assertThat(appliedSort.getOrderFor("id")).isNotNull();
@@ -231,39 +217,39 @@ class NoteServiceImplTest {
     @Test
     void listNotes_leavesTheSortAlone_whenTheCallerAlreadyOrdersById() {
         Pageable requested = PageRequest.of(0, 20, Sort.by(Sort.Order.asc("id")));
-        when(noteRepository.findByOwnerIdAndDeletedFalseAndArchivedFalse(eq(9L), any()))
+        when(noteRepository.findByOwnerIdAndDeletedFalse(eq(9L), any()))
                 .thenReturn(new PageImpl<>(List.of()));
 
-        service.listNotes(9L, false, requested);
+        service.listNotes(9L, requested);
 
-        verify(noteRepository).findByOwnerIdAndDeletedFalseAndArchivedFalse(9L, requested);
+        verify(noteRepository).findByOwnerIdAndDeletedFalse(9L, requested);
     }
 
     @Test
     void listNotes_leavesAnUnsortedPageableAlone_addingNoOrderByAtAll() {
         Pageable requested = PageRequest.of(0, 20);
-        when(noteRepository.findByOwnerIdAndDeletedFalseAndArchivedFalse(eq(9L), any()))
+        when(noteRepository.findByOwnerIdAndDeletedFalse(eq(9L), any()))
                 .thenReturn(new PageImpl<>(List.of()));
 
-        service.listNotes(9L, false, requested);
+        service.listNotes(9L, requested);
 
-        verify(noteRepository).findByOwnerIdAndDeletedFalseAndArchivedFalse(9L, requested);
+        verify(noteRepository).findByOwnerIdAndDeletedFalse(9L, requested);
     }
 
     @Test
     void listNotes_mapsPageContentToSummaries_andBuildsThePagedEnvelope() {
         Note note = note(1L, 9L, "some content", 3L);
-        when(noteRepository.findByOwnerIdAndDeletedFalseAndArchivedFalse(eq(9L), any()))
+        when(noteRepository.findByOwnerIdAndDeletedFalse(eq(9L), any()))
                 .thenReturn(new PageImpl<>(List.of(note)));
 
-        PagedResponse<NoteSummaryResponse> result = service.listNotes(9L, false, Pageable.unpaged());
+        PagedResponse<NoteSummaryResponse> result = service.listNotes(9L, Pageable.unpaged());
 
         assertThat(result.content()).hasSize(1);
         assertThat(result.content().get(0).id()).isEqualTo(1L);
         assertThat(result.content().get(0).contentPreview()).isEqualTo("some content");
     }
 
-    // ---- setPinned / setArchived -------------------------------------------------
+    // ---- setPinned -------------------------------------------------
 
     @Test
     void setPinned_throwsNoteNotFoundException_whenNoActiveOwnedNoteMatches() {
@@ -287,49 +273,6 @@ class NoteServiceImplTest {
         assertThat(note.isPinned()).isTrue();
         verify(noteRepository).saveAndFlush(note);
         assertThat(response.pinned()).isTrue();
-    }
-
-    @Test
-    void setArchived_flipsTheFlagAndSavesAndFlushesImmediately() {
-        Note note = note(5L, 9L, "x", 1L);
-        note.setArchived(false);
-        when(noteRepository.findByIdAndOwnerIdAndDeletedFalse(5L, 9L)).thenReturn(Optional.of(note));
-        when(noteRepository.saveAndFlush(note)).thenReturn(note);
-
-        NoteResponse response = service.setArchived(9L, 5L, true);
-
-        assertThat(note.isArchived()).isTrue();
-        verify(noteRepository).saveAndFlush(note);
-        assertThat(response.archived()).isTrue();
-    }
-
-    // ---- listTrashedNotes -------------------------------------------------
-
-    @Test
-    void listTrashedNotes_queriesDeletedTrue_andPairsEachSummaryWithItsDeletedAtTimestamp() {
-        Note note = note(1L, 9L, "trashed content", 1L);
-        LocalDateTime deletedAt = LocalDateTime.of(2026, 3, 1, 0, 0);
-        note.setDeleted(true);
-        note.setDeletedAt(deletedAt);
-        when(noteRepository.findByOwnerIdAndDeletedTrue(eq(9L), any())).thenReturn(new PageImpl<>(List.of(note)));
-
-        PagedResponse<TrashedNoteResponse> result = service.listTrashedNotes(9L, Pageable.unpaged());
-
-        assertThat(result.content()).hasSize(1);
-        assertThat(result.content().get(0).note().id()).isEqualTo(1L);
-        assertThat(result.content().get(0).deletedAt()).isEqualTo(deletedAt);
-    }
-
-    @Test
-    void listTrashedNotes_alsoAppendsTheIdTiebreaker_likeListNotesDoes() {
-        Pageable requested = PageRequest.of(0, 20, Sort.by(Sort.Order.desc("deletedAt")));
-        when(noteRepository.findByOwnerIdAndDeletedTrue(eq(9L), any())).thenReturn(new PageImpl<>(List.of()));
-
-        service.listTrashedNotes(9L, requested);
-
-        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(noteRepository).findByOwnerIdAndDeletedTrue(eq(9L), captor.capture());
-        assertThat(captor.getValue().getSort().getOrderFor("id")).isNotNull();
     }
 
     // ---- searchNotes -------------------------------------------------
@@ -437,55 +380,6 @@ class NoteServiceImplTest {
         service.autoSave(9L, 5L, autoSaveNoteRequest("patched", 3L));
 
         assertThat(note.getContent()).isEqualTo("patched");
-    }
-
-    // ---- softDeleteNote -------------------------------------------------
-
-    @Test
-    void softDeleteNote_throwsNoteNotFoundException_whenNoActiveOwnedNoteMatches() {
-        when(noteRepository.findByIdAndOwnerIdAndDeletedFalse(5L, 9L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.softDeleteNote(9L, 5L)).isInstanceOf(NoteNotFoundException.class);
-    }
-
-    @Test
-    void softDeleteNote_marksDeletedAndStampsDeletedAt_thenSaves() {
-        Note note = note(5L, 9L, "x", 1L);
-        when(noteRepository.findByIdAndOwnerIdAndDeletedFalse(5L, 9L)).thenReturn(Optional.of(note));
-
-        LocalDateTime before = LocalDateTime.now();
-        service.softDeleteNote(9L, 5L);
-        LocalDateTime after = LocalDateTime.now();
-
-        assertThat(note.isDeleted()).isTrue();
-        assertThat(note.getDeletedAt()).isBetween(before.minusSeconds(2), after.plusSeconds(2));
-        verify(noteRepository).save(note);
-    }
-
-    // ---- restoreNote -------------------------------------------------
-
-    @Test
-    void restoreNote_throwsNoteNotFoundException_withADeletedSpecificMessage_whenNoTrashedOwnedNoteMatches() {
-        when(noteRepository.findByIdAndOwnerIdAndDeletedTrue(5L, 9L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.restoreNote(9L, 5L))
-                .isInstanceOf(NoteNotFoundException.class)
-                .hasMessage("Deleted note not found.");
-    }
-
-    @Test
-    void restoreNote_clearsDeletedAndDeletedAt_savesAndFlushesImmediately() {
-        Note note = note(5L, 9L, "x", 1L);
-        note.setDeleted(true);
-        note.setDeletedAt(LocalDateTime.now());
-        when(noteRepository.findByIdAndOwnerIdAndDeletedTrue(5L, 9L)).thenReturn(Optional.of(note));
-        when(noteRepository.saveAndFlush(note)).thenReturn(note);
-
-        service.restoreNote(9L, 5L);
-
-        assertThat(note.isDeleted()).isFalse();
-        assertThat(note.getDeletedAt()).isNull();
-        verify(noteRepository).saveAndFlush(note);
     }
 
     // ---- permanentlyDeleteNote -------------------------------------------------
@@ -675,71 +569,4 @@ class NoteServiceImplTest {
         assertThat(change.clientId()).isNull();
     }
 
-    // ---- getAuthorizedNote / updateAuthorizedNote / autoSaveAuthorizedNote -----
-
-    @Test
-    void getAuthorizedNote_returnsTheMappedNote_usingNoOwnerFilterAtAll() {
-        when(noteRepository.findByIdAndDeletedFalse(5L)).thenReturn(Optional.of(note(5L, 999L, "shared", 1L)));
-
-        NoteResponse response = service.getAuthorizedNote(5L);
-
-        assertThat(response.id()).isEqualTo(5L);
-        assertThat(response.ownerId()).isEqualTo(999L);
-    }
-
-    @Test
-    void getAuthorizedNote_throwsNoteNotFoundException_whenAbsentOrTrashed() {
-        when(noteRepository.findByIdAndDeletedFalse(5L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.getAuthorizedNote(5L)).isInstanceOf(NoteNotFoundException.class);
-    }
-
-    @Test
-    void updateAuthorizedNote_onAMatchingVersion_clearsNullContentJustLikeUpdateNote() {
-        Note note = note(5L, 999L, "old", 3L);
-        when(noteRepository.findByIdAndDeletedFalse(5L)).thenReturn(Optional.of(note));
-        when(noteRepository.saveAndFlush(note)).thenReturn(note);
-
-        service.updateAuthorizedNote(5L, updateNoteRequest(null, 3L));
-
-        assertThat(note.getContent()).isNull();
-    }
-
-    @Test
-    void autoSaveAuthorizedNote_leavesNullContentUntouched_justLikeAutoSave() {
-        Note note = note(5L, 999L, "untouched", 3L);
-        when(noteRepository.findByIdAndDeletedFalse(5L)).thenReturn(Optional.of(note));
-        when(noteRepository.saveAndFlush(note)).thenReturn(note);
-
-        service.autoSaveAuthorizedNote(5L, autoSaveNoteRequest(null, 3L));
-
-        assertThat(note.getContent()).isEqualTo("untouched");
-    }
-
-    // ---- getAuthorizedNoteSummaries -------------------------------------------------
-
-    @Test
-    void getAuthorizedNoteSummaries_returnsAnEmptyMap_forANullIdCollection_withoutQueryingTheRepository() {
-        assertThat(service.getAuthorizedNoteSummaries(null)).isEmpty();
-        verifyNoInteractions(noteRepository);
-    }
-
-    @Test
-    void getAuthorizedNoteSummaries_returnsAnEmptyMap_forAnEmptyIdCollection_withoutQueryingTheRepository() {
-        assertThat(service.getAuthorizedNoteSummaries(List.of())).isEmpty();
-        verifyNoInteractions(noteRepository);
-    }
-
-    @Test
-    void getAuthorizedNoteSummaries_returnsASummaryMapKeyedByNoteId() {
-        Note a = note(1L, 9L, "first", 0L);
-        Note b = note(2L, 9L, "second", 0L);
-        when(noteRepository.findByIdInAndDeletedFalse(List.of(1L, 2L))).thenReturn(List.of(a, b));
-
-        Map<Long, NoteSummaryResponse> result = service.getAuthorizedNoteSummaries(List.of(1L, 2L));
-
-        assertThat(result).hasSize(2);
-        assertThat(result.get(1L).contentPreview()).isEqualTo("first");
-        assertThat(result.get(2L).contentPreview()).isEqualTo("second");
-    }
 }

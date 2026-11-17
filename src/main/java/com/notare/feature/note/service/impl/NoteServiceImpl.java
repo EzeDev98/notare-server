@@ -1,7 +1,6 @@
 package com.notare.feature.note.service.impl;
 
 import com.notare.common.dto.PagedResponse;
-import com.notare.common.exception.BodyIsCollaborativeException;
 import com.notare.common.exception.NoteConflictException;
 import com.notare.common.exception.NoteNotFoundException;
 import com.notare.common.util.LikeEscaper;
@@ -11,18 +10,13 @@ import com.notare.feature.note.dto.request.UpdateNoteRequest;
 import com.notare.feature.note.dto.response.NoteChange;
 import com.notare.feature.note.dto.response.NoteResponse;
 import com.notare.feature.note.dto.response.NoteSummaryResponse;
-import com.notare.feature.note.dto.response.TrashedNoteResponse;
-import com.notare.feature.note.enums.BodyMode;
 import com.notare.feature.note.service.NoteCreation;
 import com.notare.feature.note.event.NotePermanentlyDeletedEvent;
-import com.notare.feature.note.event.NoteRestoredEvent;
-import com.notare.feature.note.event.NoteSoftDeletedEvent;
 import com.notare.feature.note.mapper.NoteMapper;
 import com.notare.feature.note.model.Note;
 import com.notare.feature.note.repository.NoteRepository;
 import com.notare.feature.note.service.NoteService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -33,11 +27,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -47,9 +38,6 @@ public class NoteServiceImpl implements NoteService {
     private final NoteMapper noteMapper;
     private final ApplicationEventPublisher eventPublisher;
 
-    /** How long a note stays in Recently deleted (notare.trash.retention-days). Not a constructor argument on purpose. */
-    @Value("${notare.trash.retention-days:30}")
-    private int trashRetentionDays = 30;
 
     @Override
     @Transactional
@@ -72,11 +60,8 @@ public class NoteServiceImpl implements NoteService {
 
     @Override
     @Transactional(readOnly = true)
-    public PagedResponse<NoteSummaryResponse> listNotes(Long ownerId, boolean archived, Pageable pageable) {
-        Page<Note> page = archived
-                ? noteRepository.findByOwnerIdAndDeletedFalseAndArchivedTrue(ownerId, withStableOrder(pageable))
-                : noteRepository.findByOwnerIdAndDeletedFalseAndArchivedFalse(ownerId, withStableOrder(pageable));
-        return toSummaryPage(page);
+    public PagedResponse<NoteSummaryResponse> listNotes(Long ownerId, Pageable pageable) {
+        return toSummaryPage(noteRepository.findByOwnerIdAndDeletedFalse(ownerId, withStableOrder(pageable)));
     }
 
     @Override
@@ -87,16 +72,8 @@ public class NoteServiceImpl implements NoteService {
         return saveOrganisationChange(note);
     }
 
-    @Override
-    @Transactional
-    public NoteResponse setArchived(Long ownerId, Long noteId, boolean archived) {
-        Note note = requireOwnActiveNote(ownerId, noteId);
-        note.setArchived(archived);
-        return saveOrganisationChange(note);
-    }
-
     /**
-     * Shared tail of the two toggles above.
+     * Shared tail of the pin toggle above.
      *
      * <p><b>These writes DO bump the version, and that is deliberate.</b> The
      * tempting alternative is a @Modifying UPDATE that sets the column without
@@ -145,18 +122,6 @@ public class NoteServiceImpl implements NoteService {
 
     @Override
     @Transactional(readOnly = true)
-    public PagedResponse<TrashedNoteResponse> listTrashedNotes(Long ownerId, Pageable pageable) {
-        Page<Note> page = noteRepository.findByOwnerIdAndDeletedTrue(ownerId, withStableOrder(pageable));
-
-        List<TrashedNoteResponse> content = page.getContent().stream()
-                .map(note -> new TrashedNoteResponse(noteMapper.toSummary(note), note.getDeletedAt(), note.getPurgeAt()))
-                .toList();
-
-        return PagedResponse.of(content, page);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
     public PagedResponse<NoteSummaryResponse> searchNotes(Long ownerId, String query, Pageable pageable) {
         // Normalize the term: null-safe and trimmed. An empty term makes the
         // LIKE '%%' match everything, so a blank search behaves like "list all".
@@ -191,32 +156,6 @@ public class NoteServiceImpl implements NoteService {
 
     @Override
     @Transactional
-    public void softDeleteNote(Long ownerId, Long noteId) {
-        Note note = noteRepository.findByIdAndOwnerIdAndDeletedFalse(noteId, ownerId)
-                .orElseThrow(() -> new NoteNotFoundException("Note not found."));
-        LocalDateTime now = LocalDateTime.now();
-        note.setDeleted(true);
-        note.setDeletedAt(now);
-        note.setPurgeAt(now.plusDays(trashRetentionDays));
-        noteRepository.save(note);
-        eventPublisher.publishEvent(new NoteSoftDeletedEvent(noteId, ownerId));
-    }
-
-    @Override
-    @Transactional
-    public NoteResponse restoreNote(Long ownerId, Long noteId) {
-        Note note = noteRepository.findByIdAndOwnerIdAndDeletedTrue(noteId, ownerId)
-                .orElseThrow(() -> new NoteNotFoundException("Deleted note not found."));
-        note.setDeleted(false);
-        note.setDeletedAt(null);
-        note.setPurgeAt(null);
-        Note saved = noteRepository.saveAndFlush(note);
-        eventPublisher.publishEvent(new NoteRestoredEvent(noteId, ownerId));
-        return noteMapper.toResponse(saved);
-    }
-
-    @Override
-    @Transactional
     public void permanentlyDeleteNote(Long ownerId, Long noteId) {
         // Fetch ownership-scoped FIRST, then delete the managed entity.
         // We never call deleteById(noteId): that would delete by primary key
@@ -226,14 +165,7 @@ public class NoteServiceImpl implements NoteService {
                 .orElseThrow(() -> new NoteNotFoundException("Note not found."));
         noteRepository.delete(note);
 
-        // Announce the deletion so anything referencing this note can clean up.
-        // The share module listens; this module doesn't know that, and the
-        // dependency keeps pointing share -> note with no cycle.
-        //
-        // Only on PERMANENT delete. Soft delete leaves grants intact, because a
-        // trashed note can be restored and its collaborators should still be
-        // there when it comes back — they simply can't see it meanwhile, since
-        // every shared-note query already filters on deleted = false.
+        // Announce the deletion so its clips, transcripts, stored files and the sync tombstone are cleaned up.
         eventPublisher.publishEvent(new NotePermanentlyDeletedEvent(noteId, ownerId));
     }
 
@@ -352,8 +284,7 @@ public class NoteServiceImpl implements NoteService {
     /**
      * Full replacement of a note's editable fields (PUT semantics).
      *
-     * <p>Shared by the owner's updateNote and the collaborator's
-     * updateAuthorizedNote. The request's version must be the note's current one
+     * <p>The request's version must be the note's current one
      * (requireMatchingVersion); a stale one is refused with 409.
      *
      * <p>saveAndFlush forces the UPDATE now so @Version increments and
@@ -363,12 +294,9 @@ public class NoteServiceImpl implements NoteService {
      * auto-save, and the reason the two request DTOs stay separate types
      * despite currently having identical fields.
      *
-     * <p>Note what is never touched here: pinned, archived, deleted. WRITE
-     * covers the note's shared substance, not the owner's private organisation
-     * of it.
+     * <p>Note what is never touched here: pinned, deleted.
      */
     private NoteResponse applyFullUpdate(Note note, UpdateNoteRequest request) {
-        rejectIfCollaborative(note);
         requireMatchingVersion(note, request.getVersion());
         note.setContent(request.getContent());
 
@@ -378,9 +306,6 @@ public class NoteServiceImpl implements NoteService {
 
     /**
      * Partial update (PATCH semantics). A stale version is refused with 409 (requireMatchingVersion).
-     *
-     * <p>Shared by the owner's autoSave and the collaborator's
-     * autoSaveAuthorizedNote, for the same reason as applyFullUpdate above.
      *
      * <p>A null field means "the client didn't touch this, leave it as-is" —
      * only non-null fields are applied. To CLEAR a field the client sends an
@@ -396,9 +321,6 @@ public class NoteServiceImpl implements NoteService {
      * client can never catch up with.
      */
     private NoteResponse applyAutoSave(Note note, AutoSaveNoteRequest request) {
-        if (request.getContent() != null) {
-            rejectIfCollaborative(note);
-        }
         requireMatchingVersion(note, request.getVersion());
         if (request.getContent() != null) {
             note.setContent(request.getContent());
@@ -409,27 +331,14 @@ public class NoteServiceImpl implements NoteService {
     }
 
     /**
-     * A COLLAB note's text is the merged document, so a plain "content = ..." write
-     * (PUT, or PATCH that sends content) is refused with 409 BODY_IS_COLLABORATIVE
-     * (step 15f). PATCH that leaves content out is unaffected, so the owner can still
-     * pin or archive. This also stops the legacy sync queue overwriting a merged body.
-     */
-    private static void rejectIfCollaborative(Note note) {
-        if (note.getBodyMode() == BodyMode.COLLAB) {
-            throw new BodyIsCollaborativeException(note.getId());
-        }
-    }
-
-    /**
      * Layer 1 of the optimistic locking (step 17a, D-17): the version the client edited from must be
      * the note's current one, compared with equals. A stale one is a 409 carrying the current version.
      *
-     * <p>Legacy-mode notes only: a COLLAB note's text is refused earlier (BODY_IS_COLLABORATIVE) and
-     * the rest of its edits have no body to conflict over. A null version is the sync path, which
-     * has its own operation ledger; the REST endpoints refuse a missing one before they get here.
+     * <p>A null version is the sync path, which has its own operation ledger; the REST endpoints
+     * refuse a missing one before they get here.
      */
     private static void requireMatchingVersion(Note note, Long version) {
-        if (note.getBodyMode() == BodyMode.COLLAB || version == null) {
+        if (version == null) {
             return;
         }
         if (!version.equals(note.getVersion())) {
@@ -466,61 +375,6 @@ public class NoteServiceImpl implements NoteService {
                 pageable.getPageNumber(),
                 pageable.getPageSize(),
                 sort.and(Sort.by(Sort.Order.desc("id"))));
-    }
-
-    // ---------------------------------------------------------------------
-    // Pre-authorized access — see the contract on NoteService. No ownerId, no
-    // permission check: the share module has already found a grant before
-    // calling any of these.
-    // ---------------------------------------------------------------------
-
-    @Override
-    @Transactional(readOnly = true)
-    public NoteResponse getAuthorizedNote(Long noteId) {
-        Note note = noteRepository.findByIdAndDeletedFalse(noteId)
-                .orElseThrow(() -> new NoteNotFoundException("Note not found."));
-        return noteMapper.toResponse(note);
-    }
-
-    @Override
-    @Transactional
-    public NoteResponse updateAuthorizedNote(Long noteId, UpdateNoteRequest request) {
-        Note note = noteRepository.findByIdAndDeletedFalse(noteId)
-                .orElseThrow(() -> new NoteNotFoundException("Note not found."));
-
-        // Identical to updateNote from here down — now structurally rather than
-        // by discipline. This body used to be a character-for-character copy,
-        // kept in step by a comment asking future editors to change both. That
-        // was fine while there was one pair; adding auto-save would have made it
-        // two pairs, and a rule enforced by a comment fails quietly the first
-        // time someone reads only one of the four methods.
-        //
-        // A collaborator's write IS an ordinary note write once authorization
-        // has happened. The only difference between the two paths is how the
-        // caller earned the right to be here, and that difference is entirely
-        // above this line.
-        return applyFullUpdate(note, request);
-    }
-
-    @Override
-    @Transactional
-    public NoteResponse autoSaveAuthorizedNote(Long noteId, AutoSaveNoteRequest request) {
-        Note note = noteRepository.findByIdAndDeletedFalse(noteId)
-                .orElseThrow(() -> new NoteNotFoundException("Note not found."));
-
-        return applyAutoSave(note, request);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Map<Long, NoteSummaryResponse> getAuthorizedNoteSummaries(Collection<Long> noteIds) {
-        if (noteIds == null || noteIds.isEmpty()) {
-            // Guard the empty case explicitly: an IN () clause is invalid SQL on
-            // some databases, and there's nothing to ask for anyway.
-            return Map.of();
-        }
-        return noteRepository.findByIdInAndDeletedFalse(noteIds).stream()
-                .collect(Collectors.toMap(Note::getId, noteMapper::toSummary));
     }
 
     /**

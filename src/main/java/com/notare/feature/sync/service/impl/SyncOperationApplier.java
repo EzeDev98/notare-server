@@ -118,9 +118,9 @@ public class SyncOperationApplier {
     }
 
     private NoteResponse delete(Long ownerId, SyncOperationRequest request) {
-        noteService.softDeleteNote(ownerId, request.getNoteId());
-        // Re-read so the ledger and the response carry the post-delete version.
-        return noteService.findAnyNote(ownerId, request.getNoteId()).orElse(null);
+        noteService.permanentlyDeleteNote(ownerId, request.getNoteId());
+        // The note is gone, so there is no version to record; a replay answers NOT_FOUND, which is harmless.
+        return null;
     }
 
     private void record(Long ownerId, SyncOperationRequest request, NoteResponse note) {
