@@ -11,7 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-
+/** Endpoint for refreshing a session. */
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("${app.title}/auth")

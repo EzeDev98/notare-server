@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-
+/** Endpoints for registering, the caller's profile, account deletion and the AI tidy setting. */
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("${app.title}/user")
@@ -37,26 +37,6 @@ public class UserController {
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
-    /**
-     * The caller's own profile.
-     *
-     * <p>{@code /me} rather than {@code /{userId}} on purpose. A path variable
-     * would invite the question "may I read another id?", and every answer to
-     * that question is a decision the endpoint should not be making. There is
-     * no id in the URL, so the subject is the token holder and cannot be
-     * anything else — authorization is expressed by the route's shape rather
-     * than enforced by a check inside it, which is the same instinct behind
-     * scoping every repository finder by owner.
-     *
-     * <p>This must be routed BEFORE any future {@code /user/{something}}
-     * mapping, though nothing here needs it today: Spring matches literal
-     * segments ahead of templates, the same reason {@code /notes/search} sits
-     * safely alongside {@code /notes/{noteId}}.
-     */
-    /**
-     * Step 17g (B-03). Deletes the account and everything it owns. The body carries the username as
-     * confirmation. If it fails halfway, calling again continues; a scheduled job also continues it.
-     */
     @DeleteMapping("/me")
     public ResponseEntity<Void> deleteAccount(
             @AuthenticationPrincipal UserDetail userDetail,
@@ -72,7 +52,6 @@ public class UserController {
         return ResponseEntity.ok(userService.getCurrentUser(userDetail.getUser().getId()));
     }
 
-    /** AI tidy opt-in for the caller. */
     @GetMapping("/me/ai-tidy")
     public ResponseEntity<AiTidySettingResponse> getAiTidy(@AuthenticationPrincipal UserDetail userDetail) {
         return ResponseEntity.ok(userService.getAiTidy(userDetail.getUser().getId()));

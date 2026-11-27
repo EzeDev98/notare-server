@@ -53,53 +53,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 15p of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox</b> - see {@link
- * AuthControllerTest}'s disclaimer (Step 15a);
- * same reasoning. Run via {@code mvn test} before trusting it.
- *
- * <p>Authenticated principal is supplied the same way as
- * {@link CollaborationControllerTest}
- * (Step 15d) - directly on {@code SecurityContextHolder} in the test thread,
- * with {@code addFilters = false} keeping the real
- * {@code JwtAuthenticationFilter} chain out of this slice.
- *
- * <p>Upload validation ({@code VoiceUploadValidator}) runs INSIDE the
- * service, not the controller, so this controller has no bean-validated
- * request DTO the way {@code NoteController}'s create/update do - every
- * upload-rejection test below is a thrown-exception test
- * ({@link InvalidVoiceUploadException} -&gt; 400,
- * {@link UnsupportedAudioFormatException} -&gt; 400,
- * {@link VoiceFileTooLargeException} -&gt; 413), not a validation-annotation
- * test.
- *
- * <p>Download/stream tests here mirror
- * {@link SharedNoteControllerTest}'s attached-
- * voice-note tests (Step 15k) almost line for line - same headers, same
- * Range handling, same {@code originalFilename}-null fallback - since both
- * controllers serve the identical {@link VoiceNoteContent} shape through the
- * identical Range logic, differing only in which service/authorization path
- * produces it (direct ownership here vs. a grant on the parent note there).
- *
- * <p>Covers: {@code POST /voice-notes} - 201 with a Location built from
- * {@code fromCurrentRequest().path("/{id}")} (distinct from
- * {@code SharedNoteController}'s hand-built {@code @Value}-based Location,
- * Step 15k - this one is a relative append, since the upload path itself
- * already sits at the right base); {@code noteId}/{@code durationSeconds}
- * both optional and both forwarded when present; the three upload-rejection
- * exceptions. {@code GET /voice-notes/{id}} - 200, and
- * {@link VoiceNoteNotFoundException} -&gt; 404. {@code GET /voice-notes} -
- * the {@code @PageableDefault} (size 20, sort {@code createdAt} DESC) and
- * the {@link PagedResponse} envelope. {@code GET /voice-notes/by-note/{id}}
- * - the plain (unpaged) list, and that the literal {@code /by-note/...}
- * segment never gets swallowed by the {@code /{voiceNoteId}} template.
- * {@code GET .../download} - headers, and the {@code originalFilename}-null
- * fallback name. {@code GET .../stream} - no {@code Range} header -&gt; 200 whole
- * resource; a {@code Range} header -&gt; 206 slice. {@code DELETE
- * /voice-notes/{id}} - 204, and the same 404.
- */
+/** Tests for VoiceNoteController. */
 @WebSliceSupport
 @WebMvcTest(
         controllers = VoiceNoteController.class,
@@ -152,10 +106,6 @@ class VoiceNoteControllerTest {
         return new MockMultipartFile(
                 "file", "memo.m4a", "audio/mp4", "fake-audio-bytes".getBytes(StandardCharsets.UTF_8));
     }
-
-    // ----------------------------------------------------------------
-    // POST /voice-notes
-    // ----------------------------------------------------------------
 
     @Test
     void upload_validRequest_returns201WithLocationAndBody() throws Exception {
@@ -231,10 +181,6 @@ class VoiceNoteControllerTest {
                 .andExpect(jsonPath("$.detail").value("Audio file exceeds the maximum size of 25 MB."));
     }
 
-    // ----------------------------------------------------------------
-    // GET /voice-notes/{voiceNoteId}
-    // ----------------------------------------------------------------
-
     @Test
     void getVoiceNote_validRequest_returns200() throws Exception {
         authenticateAs(1L);
@@ -255,10 +201,6 @@ class VoiceNoteControllerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value("Voice note not found."));
     }
-
-    // ----------------------------------------------------------------
-    // GET /voice-notes
-    // ----------------------------------------------------------------
 
     @Test
     void listVoiceNotes_noParams_usesThePageableDefaultOfSize20SortedByCreatedAtDesc() throws Exception {
@@ -291,10 +233,6 @@ class VoiceNoteControllerTest {
                 .andExpect(jsonPath("$.totalElements").value(1));
     }
 
-    // ----------------------------------------------------------------
-    // GET /voice-notes/by-note/{noteId}
-    // ----------------------------------------------------------------
-
     @Test
     void listForNote_validRequest_returns200WithThePlainList() throws Exception {
         authenticateAs(1L);
@@ -318,10 +256,6 @@ class VoiceNoteControllerTest {
         org.mockito.Mockito.verify(voiceNoteService, org.mockito.Mockito.never())
                 .getVoiceNote(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
     }
-
-    // ----------------------------------------------------------------
-    // GET /voice-notes/{voiceNoteId}/download
-    // ----------------------------------------------------------------
 
     @Test
     void download_validRequest_returns200WithHeadersAndBody() throws Exception {
@@ -361,10 +295,6 @@ class VoiceNoteControllerTest {
                 .andExpect(status().isNotFound());
     }
 
-    // ----------------------------------------------------------------
-    // GET /voice-notes/{voiceNoteId}/stream
-    // ----------------------------------------------------------------
-
     @Test
     void stream_noRangeHeader_returns200WithTheWholeResourceAndAcceptRanges() throws Exception {
         authenticateAs(1L);
@@ -401,10 +331,6 @@ class VoiceNoteControllerTest {
         mockMvc.perform(get(BASE_URL + "/999/stream"))
                 .andExpect(status().isNotFound());
     }
-
-    // ----------------------------------------------------------------
-    // DELETE /voice-notes/{voiceNoteId}
-    // ----------------------------------------------------------------
 
     @Test
     void deleteVoiceNote_validRequest_returns204() throws Exception {

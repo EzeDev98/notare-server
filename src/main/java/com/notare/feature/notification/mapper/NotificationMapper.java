@@ -5,17 +5,10 @@ import com.notare.feature.notification.dto.response.NotificationResponse;
 import com.notare.feature.notification.model.Notification;
 import org.springframework.stereotype.Component;
 
-/**
- * Hand-written mapper, @Component, same as every other module here.
- */
+/** Maps notifications to their response. */
 @Component
 public class NotificationMapper {
 
-    /**
-     * Command -> new entity. readAt is deliberately left null: a notification
-     * is born unread, and that's expressed by absence rather than by setting a
-     * flag. createdAt is filled by auditing on persist.
-     */
     public Notification toEntity(CreateNotificationCommand command) {
         Notification notification = new Notification();
         notification.setRecipientId(command.recipientId());

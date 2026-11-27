@@ -22,13 +22,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Test-only stand-in for internal-auth-server so @SpringBootTest integration
- * tests need no live IAM. Plays the IAM's session-authority role: it mints
- * tokens on login/refresh and revokes them on logout. StubJwtDecoder consults
- * usernameForActiveToken(), so a logged-out token is rejected like the real
- * JWKS-verified flow would once it expires.
- */
+/** Test stand-in used by the integration tests. */
 @Component
 @Primary
 @Profile("test")
@@ -83,10 +77,8 @@ public class StubInternalAuthClient extends InternalAuthClient {
 
     @Override
     public void deleteUser(String internalAuthUserId) {
-        // no-op in tests
     }
 
-    /** Username behind a live (not logged-out) access token, or null. */
     public String usernameForActiveToken(String accessToken) {
         return accessToken == null ? null : accessTokens.get(accessToken);
     }

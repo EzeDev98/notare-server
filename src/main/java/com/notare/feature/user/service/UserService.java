@@ -5,18 +5,13 @@ import com.notare.feature.user.dto.response.AiTidySettingResponse;
 import com.notare.feature.user.dto.response.CurrentUserResponse;
 import com.notare.feature.user.dto.response.RegistrationResponse;
 
-
+/** Registration, the current user's profile and the AI tidy setting. */
 public interface UserService {
 
     RegistrationResponse registerUser(RegistrationRequest request);
 
-    /**
-     * The caller's own profile, including the numeric id that every other
-     * payload in the API uses to identify people.
-     */
     CurrentUserResponse getCurrentUser(Long userId);
 
-    /** Whether AI tidy is on for this user. Off until they turn it on. */
     AiTidySettingResponse getAiTidy(Long userId);
 
     AiTidySettingResponse setAiTidy(Long userId, boolean enabled);

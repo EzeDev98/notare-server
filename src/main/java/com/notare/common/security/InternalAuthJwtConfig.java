@@ -8,12 +8,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
-/**
- * Verifies access tokens minted by internal-auth-server. Notare never issues
- * or stores login sessions itself: IAM is the only session authority.
- * The JWKS is fetched lazily, so notare still boots when IAM is down.
- * Tests supply their own JwtDecoder (profile "test").
- */
+/** Verifies access tokens issued by internal-auth-server. */
 @Configuration
 @Profile("!test")
 public class InternalAuthJwtConfig {

@@ -12,6 +12,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** Tests for NoteTombstoneRepository. */
 @DataJpaTest
 @ActiveProfiles("test")
 class NoteTombstoneRepositoryTest {

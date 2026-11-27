@@ -35,35 +35,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 12a of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox.</b> This environment has no route to a
- * Maven mirror, so Mockito and Spring Data ({@code Page}/{@code Pageable})
- * are unavailable as compile-time dependencies here, and {@code
- * target/classes} only holds this project's own already-compiled classes,
- * not third-party jars. Every test below is reasoned carefully from {@link
- * NotificationServiceImpl}'s source and follows this codebase's existing
- * Mockito conventions exactly, but it has not actually been compiled or run.
- * Please run it via {@code mvn test} before trusting it.
- *
- * <p>Covers every method on {@link NotificationServiceImpl}, with particular
- * attention to the two behaviors its own doc comments call out as
- * deliberate and easy to get backwards:
- * <ul>
- *   <li>{@code markAsRead} is idempotent by DOING NOTHING on a second call —
- *       an already-read notification is returned as-is, with no repository
- *       write, because overwriting {@code readAt} on every glance would
- *       destroy its "first read" meaning;</li>
- *   <li>{@code delete} and {@code markAsRead} both resolve through the
- *       recipient-scoped {@code findByIdAndRecipientId} rather than a bare
- *       id lookup, so a non-owner gets {@link NotificationNotFoundException}
- *       (404) rather than any hint the row exists at all;</li>
- *   <li>{@code create} maps the command through {@link NotificationMapper}
- *       and saves it — it has no recipient check by design, since the only
- *       callers are trusted internal listeners.</li>
- * </ul>
- */
+/** Tests for NotificationServiceImpl. */
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceImplTest {
 
@@ -96,10 +68,6 @@ class NotificationServiceImplTest {
         return n;
     }
 
-    // -------------------------------------------------------------------
-    // create
-    // -------------------------------------------------------------------
-
     @Test
     void create_mapsTheCommandThroughTheMapperAndSavesTheResultingEntity() {
         CreateNotificationCommand command = new CreateNotificationCommand(
@@ -112,10 +80,6 @@ class NotificationServiceImplTest {
 
         verify(notificationRepository).save(entity);
     }
-
-    // -------------------------------------------------------------------
-    // list
-    // -------------------------------------------------------------------
 
     @Test
     void list_unreadOnlyFalse_usesTheFullListQuery() {
@@ -153,11 +117,6 @@ class NotificationServiceImplTest {
         Notification first = notification(RECIPIENT_ID, null);
         Notification second = notification(RECIPIENT_ID, null);
         second.setId(11L);
-        // totalElements must exceed 20 (not just 10) so that page 1 is a
-        // genuine middle page: with size 10, page 0 covers items 0-9 and
-        // page 1 covers items 10-19. If total were only 12, page 1 would be
-        // the LAST page and hasNext() would correctly be false. 22 puts a
-        // page 2 after this one, so both hasNext() and hasPrevious() are true.
         Page<Notification> page = new PageImpl<>(List.of(first, second), pageable, 22);
         when(notificationRepository.findByRecipientId(RECIPIENT_ID, pageable)).thenReturn(page);
         NotificationResponse firstResponse = mock(NotificationResponse.class);
@@ -173,10 +132,6 @@ class NotificationServiceImplTest {
         assertThat(result.hasPrevious()).isTrue();
     }
 
-    // -------------------------------------------------------------------
-    // unreadCount
-    // -------------------------------------------------------------------
-
     @Test
     void unreadCount_wrapsTheRepositoryCountInTheResponseEnvelope() {
         when(notificationRepository.countByRecipientIdAndReadAtIsNull(RECIPIENT_ID)).thenReturn(7L);
@@ -185,10 +140,6 @@ class NotificationServiceImplTest {
 
         assertThat(result).isEqualTo(new UnreadCountResponse(7L));
     }
-
-    // -------------------------------------------------------------------
-    // markAsRead
-    // -------------------------------------------------------------------
 
     @Test
     void markAsRead_unreadNotification_stampsReadAtAndFlushesImmediately() {
@@ -218,8 +169,6 @@ class NotificationServiceImplTest {
         NotificationResponse result = service.markAsRead(RECIPIENT_ID, NOTIFICATION_ID);
 
         assertThat(result).isEqualTo(response);
-        // The original timestamp must survive untouched — a second "read" must
-        // never move it forward.
         assertThat(n.getReadAt()).isEqualTo(firstReadAt);
         verify(notificationRepository, never()).saveAndFlush(any());
         verify(notificationRepository, never()).save(any());
@@ -236,10 +185,6 @@ class NotificationServiceImplTest {
         verify(notificationRepository, never()).saveAndFlush(any());
     }
 
-    // -------------------------------------------------------------------
-    // markAllAsRead
-    // -------------------------------------------------------------------
-
     @Test
     void markAllAsRead_delegatesToTheBulkUpdateAndReturnsTheAffectedRowCount() {
         when(notificationRepository.markAllAsRead(eq(RECIPIENT_ID), any(LocalDateTime.class)))
@@ -253,10 +198,6 @@ class NotificationServiceImplTest {
         assertThat(timestampCaptor.getValue()).isNotNull();
     }
 
-    // -------------------------------------------------------------------
-    // delete
-    // -------------------------------------------------------------------
-
     @Test
     void delete_ownedNotification_deletesTheManagedEntityRatherThanByBareId() {
         Notification n = notification(RECIPIENT_ID, null);
@@ -265,8 +206,6 @@ class NotificationServiceImplTest {
 
         service.delete(RECIPIENT_ID, NOTIFICATION_ID);
 
-        // Must delete the fetched, ownership-verified entity — never deleteById,
-        // which would drop the ownership predicate entirely.
         verify(notificationRepository).delete(n);
         verify(notificationRepository, never()).deleteById(any());
     }

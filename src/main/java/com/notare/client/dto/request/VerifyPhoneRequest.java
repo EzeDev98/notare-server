@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Request body sent to internal-auth-server to verify a phone number. */
 @Getter
 @Setter
 @NoArgsConstructor

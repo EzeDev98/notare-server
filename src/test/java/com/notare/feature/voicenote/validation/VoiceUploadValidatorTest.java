@@ -20,21 +20,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 2b of the coverage roadmap.
- *
- * <p>Covers {@link VoiceUploadValidator#validate}: the fail-fast order
- * (missing/empty file, then size, then duration, then format), the
- * magic-byte format check (the declared content type is ignored), and both edges of the size and
- * duration ceilings - "at exactly the limit" is documented by the code as
- * allowed ({@code >}, not {@code >=}), which is exactly the kind of
- * off-by-one a test needs to pin down rather than assume.
- *
- * <p>Expected byte thresholds are derived from the same {@link DataSize}
- * object the validator itself reads ({@code properties.getMaxSize()}),
- * never hand-computed, so these tests can't drift from whatever Spring's
- * {@code DataSize} actually does internally.
- */
+/** Tests for VoiceUploadValidator. */
 class VoiceUploadValidatorTest {
 
     private VoiceNoteProperties properties;

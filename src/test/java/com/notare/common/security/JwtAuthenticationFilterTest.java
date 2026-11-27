@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/** Tests for JwtAuthenticationFilter. */
 @ExtendWith(MockitoExtension.class)
 class JwtAuthenticationFilterTest {
 
@@ -56,7 +57,6 @@ class JwtAuthenticationFilterTest {
         return new UserDetail(user);
     }
 
-    /** Runs the filter and returns true when it let the request continue down the chain. */
     private boolean run(JwtAuthenticationFilter filter, String authHeader) throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest();
         if (authHeader != null) request.addHeader("Authorization", authHeader);

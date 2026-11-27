@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/** Ends a session through internal-auth-server. */
 @Service
 @RequiredArgsConstructor
 public class LogoutServiceImpl implements LogoutService {

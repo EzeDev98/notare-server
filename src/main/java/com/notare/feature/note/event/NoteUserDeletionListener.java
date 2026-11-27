@@ -11,14 +11,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
-/**
- * The note module's part of an account deletion (step 17g, B-03).
- *
- * <p>Notes go through the normal permanent delete, one by one, so NotePermanentlyDeletedEvent runs
- * every cascade exactly as for a manual delete: shares, collaboration data, clips and their stored
- * files, and the sync tombstone. Plain {@code @EventListener}, so those cascades register properly
- * inside the deletion's transaction.
- */
+/** Deletes a user's notes when their account is deleted. */
 @Slf4j
 @Component
 @RequiredArgsConstructor

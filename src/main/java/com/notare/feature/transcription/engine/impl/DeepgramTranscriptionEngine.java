@@ -20,13 +20,7 @@ import java.io.InputStream;
 import java.net.http.HttpClient;
 import java.time.Duration;
 
-/**
- * Speech-to-text through Deepgram's pre-recorded endpoint. Active only when
- * notare.transcription.engine=deepgram.
- *
- * Error messages thrown from here are stored on the transcription row and can reach users,
- * so they never contain the API key or Deepgram's response body.
- */
+/** Speech-to-text through Deepgram. */
 @Slf4j
 @Component
 @ConditionalOnProperty(prefix = "notare.transcription", name = "engine", havingValue = "deepgram")

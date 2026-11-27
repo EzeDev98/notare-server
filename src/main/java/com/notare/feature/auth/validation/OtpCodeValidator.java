@@ -3,11 +3,7 @@ package com.notare.feature.auth.validation;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 
-/**
- * Validates the 6-digit code internal-auth emails for a password reset.
- * The length used to come from notare's own OTP config; that config is gone
- * along with notare-issued OTPs, so the length is fixed here.
- */
+/** Validates a 6-digit one-time code. */
 public class OtpCodeValidator implements ConstraintValidator<ValidOtpCode, String> {
 
     private static final int CODE_LENGTH = 6;

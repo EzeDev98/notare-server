@@ -15,6 +15,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** Tests for TranscriptionRepository. */
 @DataJpaTest
 @ActiveProfiles("test")
 class TranscriptionRepositoryTest {
@@ -118,15 +119,6 @@ class TranscriptionRepositoryTest {
 
     @Test
     void searchByOwnerAndStatus_is_case_insensitive_and_partial() {
-        // searchByOwnerAndStatus does a single literal-phrase LIKE match, not a
-        // tokenized/AND search - "PROJECT PLAN" only matches a transcript that
-        // contains that exact two-word phrase contiguously. Transcript 102
-        // ("...delivery plan.") has "project" and "plan" nowhere near each
-        // other, so it was never a match under that semantic; asserting it was
-        // is what made this test flaky against the real query. "ROJEC" (mixed
-        // case, and not a whole word) still exercises both properties this
-        // test is named for - case-insensitivity and partial/substring
-        // matching - against the "project" substring both transcripts share.
         assertThat(
                 repository.searchByOwnerAndStatus(
                         1L,

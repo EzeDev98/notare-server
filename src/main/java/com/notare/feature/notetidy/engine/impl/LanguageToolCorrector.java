@@ -21,15 +21,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Corrections from a self-hosted LanguageTool (POST /v2/check), so note text
- * never leaves the server's own network.
- *
- * <p>Only spelling, casing, punctuation and typography are applied, and only
- * when the rule offers exactly one replacement. Grammar and style suggestions
- * reword text, so they are never applied. Code spans, URLs and email addresses
- * are left as written.
- */
+/** Corrects note text through a self-hosted LanguageTool. */
 @Component
 @ConditionalOnProperty(prefix = "notare.tidy", name = "corrector", havingValue = "languagetool")
 public class LanguageToolCorrector implements TextCorrector {
@@ -94,13 +86,12 @@ public class LanguageToolCorrector implements TextCorrector {
             fixes.add(new Fix(offset, length, replacements.get(0).path("value").asText()));
         }
 
-        // End to start, so each offset is still valid when it is applied.
         fixes.sort(Comparator.comparingInt(Fix::offset).reversed());
         StringBuilder corrected = new StringBuilder(text);
         int appliedFrom = Integer.MAX_VALUE;
         for (Fix fix : fixes) {
             if (fix.offset() + fix.length() > appliedFrom) {
-                continue; // overlaps a fix already applied
+                continue;
             }
             corrected.replace(fix.offset(), fix.offset() + fix.length(), fix.value());
             appliedFrom = fix.offset();

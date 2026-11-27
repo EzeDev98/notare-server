@@ -29,6 +29,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/** Tests for LoginServiceImpl. */
 @ExtendWith(MockitoExtension.class)
 class LoginServiceImplTest {
 

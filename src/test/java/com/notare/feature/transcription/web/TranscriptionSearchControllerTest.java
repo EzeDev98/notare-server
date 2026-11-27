@@ -40,37 +40,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 15n of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox</b> - see {@link
- * AuthControllerTest}'s disclaimer (Step 15a);
- * same reasoning. Run via {@code mvn test} before trusting it.
- *
- * <p>Authenticated principal is supplied the same way as
- * {@link CollaborationControllerTest}
- * (Step 15d) - directly on {@code SecurityContextHolder} in the test thread,
- * with {@code addFilters = false} keeping the real
- * {@code JwtAuthenticationFilter} chain out of this slice.
- *
- * <p>This is the smallest controller in the roadmap - one endpoint, no path
- * variables, no request body - so the tests are correspondingly narrow: the
- * required {@code q} parameter, the {@code @PageableDefault} (size 20, sort
- * {@code updatedAt} DESC), an explicit override, the caller's id reaching
- * the service, and the {@link PagedResponse} envelope round-tripping.
- * {@link TranscriptionService#searchTranscripts} takes no query string that
- * can fail validation and throws nothing of its own (per its own javadoc -
- * a blank query matches everything rather than erroring), so there is no
- * exception-mapping test here the way there is for most other controllers.
- *
- * <p>Covers: {@code GET /transcriptions/search} - a missing {@code q}
- * returns 400 before the service runs (Spring's own required-parameter
- * binding, not bean validation - the same mechanism {@code NoteController}'s
- * {@code /notes/search} relies on, Step 15f); the query string is forwarded
- * verbatim, including a blank string; the {@code @PageableDefault}
- * default paging/sort and an explicit override; the
- * response is the service's {@link PagedResponse} unchanged.
- */
+/** Tests for TranscriptionSearchController. */
 @WebSliceSupport
 @WebMvcTest(
         controllers = TranscriptionSearchController.class,
@@ -120,10 +90,6 @@ class TranscriptionSearchControllerTest {
         return PagedResponse.of(List.of(), page);
     }
 
-    // ----------------------------------------------------------------
-    // GET /transcriptions/search
-    // ----------------------------------------------------------------
-
     @Test
     void search_missingQueryParam_returns400BeforeReachingTheService() throws Exception {
         authenticateAs(1L);
@@ -148,9 +114,6 @@ class TranscriptionSearchControllerTest {
 
     @Test
     void search_blankQuery_isForwardedAsIs_notRejected() throws Exception {
-        // A blank q is a legitimate "match everything" query per the service's
-        // own javadoc, not a validation failure - the controller has no
-        // @NotBlank on it, so this must reach the service rather than 400.
         authenticateAs(1L);
         when(transcriptionService.searchTranscripts(eq(1L), eq(""), any()))
                 .thenReturn(emptyPage());

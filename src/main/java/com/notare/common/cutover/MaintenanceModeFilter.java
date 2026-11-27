@@ -11,11 +11,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-/**
- * Step 18g: maintenance mode for the data migration. While MAINTENANCE_MODE=true every request gets
- * 503 with Retry-After, except the admin endpoints (the migration runs through them) and health checks.
- * Off by default. Runs after the security chain (order -100), so the CORS headers are already on the answer.
- */
+/** Rejects requests while maintenance mode is on. */
 @Component
 @Order(-50)
 public class MaintenanceModeFilter extends OncePerRequestFilter {

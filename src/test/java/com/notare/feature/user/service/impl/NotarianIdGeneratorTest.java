@@ -10,33 +10,7 @@ import static com.notare.common.constant.GeneralConstant.LENGTH;
 import static com.notare.common.constant.GeneralConstant.VOWELS;
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Step 1e of the coverage roadmap.
- *
- * <p>Covers {@link NotarianIdGenerator#generateId()}: the fixed length, the
- * consonant/vowel/consonant/... alternating pattern, and that every
- * character drawn actually comes from {@link
- * com.notare.common.constant.GeneralConstant}'s pools rather than some
- * off-by-one slipping past {@code random.nextInt(pool.length)}.
- *
- * <p>The retry-on-collision loop (bounded by {@code
- * MAX_ID_GENERATION_ATTEMPTS}) lives in {@code UserServiceImplementation},
- * not here - this class only generates one candidate per call, so that
- * belongs to Step 5a's tests, not this one.
- *
- * <p>A note on the two sample sizes below: this class uses an internal,
- * unmockable {@code SecureRandom}, so there's no way to force a specific
- * output - the only honest way to test it is statistically. The
- * pattern/pool-membership check runs a large sample (2,000) because that
- * assertion can never fail on a correct implementation, however many draws
- * it makes. The distinctness check deliberately uses a much smaller sample
- * (100) because IT CAN legitimately fail even when the generator is
- * correct - the id space is only 16^4 * 5^3 = 8,192,000 combinations, and
- * the birthday paradox means a big enough sample will eventually collide by
- * chance. 100 draws keeps that false-failure probability under 0.1%
- * (empirically confirmed against this exact class: 0 collisions across 20
- * independent trials of 100 draws each before this test was written).
- */
+/** Tests for NotarianIdGenerator. */
 class NotarianIdGeneratorTest {
 
     private static final int LARGE_SAMPLE = 2000;

@@ -8,22 +8,12 @@ import org.springframework.stereotype.Component;
 
 import java.util.Objects;
 
-/**
- * Hand-written mapper (the codebase doesn't use MapStruct). It's a @Component
- * so the service can inject it. Keeping mapping here means the service focuses
- * on business logic and the DTO<->entity translation lives in one place.
- */
+/** Maps notes to their responses. */
 @Component
 public class NoteMapper {
 
     private static final int PREVIEW_MAX_LENGTH = 200;
 
-    /**
-     * Builds a brand-new Note from a create request. We only set the fields the
-     * caller controls: ownerId, content. Everything else is left to defaults
-     * or the framework — pinned/deleted default to false, and id,
-     * version, createdAt, updatedAt are populated by JPA on save.
-     */
     public Note toEntity(Long ownerId, CreateNoteRequest request) {
         Note note = new Note();
         note.setOwnerId(ownerId);
@@ -46,7 +36,6 @@ public class NoteMapper {
         );
     }
 
-    /** The note is still exactly as AI tidy left it, and the text from before is kept. */
     public boolean isRestorable(Note note) {
         return note.getPreTidyContent() != null && Objects.equals(note.getVersion(), note.getTidiedVersion());
     }
@@ -61,11 +50,6 @@ public class NoteMapper {
         );
     }
 
-    /**
-     * Produces the short preview shown in list views. Null/blank content yields
-     * null (nothing to preview); long content is cut to PREVIEW_MAX_LENGTH with
-     * an ellipsis so the client can show "…" without guessing.
-     */
     private String buildPreview(String content) {
         if (content == null || content.isBlank()) {
             return null;

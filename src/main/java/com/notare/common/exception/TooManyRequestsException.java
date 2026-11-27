@@ -2,7 +2,7 @@ package com.notare.common.exception;
 
 import lombok.Getter;
 
-/** A per-user request limit was exceeded (step 17j, B-15). Answered as 429 with Retry-After. */
+/** Thrown when a per-user request limit is exceeded. */
 @Getter
 public class TooManyRequestsException extends RuntimeException {
 

@@ -16,11 +16,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Picks notes for AI tidy once a minute and hands each one to the tidy pool.
- * A note still being worked on is never handed over twice. Only exists when
- * notare.tidy.enabled=true.
- */
+/** Picks idle notes for AI tidy once a minute. */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -51,7 +47,7 @@ public class NoteTidyJob {
                 handedOver++;
             } catch (TaskRejectedException busy) {
                 inFlight.remove(noteId);
-                break; // pool is full; the rest are picked on a later run
+                break;
             }
         }
         if (handedOver > 0) {

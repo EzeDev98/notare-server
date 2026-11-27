@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Body for PUT /user/me/ai-tidy. */
+/** Request body for turning AI tidy on or off. */
 @Getter
 @Setter
 @NoArgsConstructor

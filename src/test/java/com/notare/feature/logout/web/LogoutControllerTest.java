@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** Plain unit test: the controller's path uses a ${app.title} placeholder, so it is called directly. */
+/** Tests for LogoutController. */
 @ExtendWith(MockitoExtension.class)
 class LogoutControllerTest {
 

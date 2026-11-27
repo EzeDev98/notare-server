@@ -2,7 +2,7 @@ package com.notare.common.exception;
 
 import lombok.Getter;
 
-/** The client's version is below the configured minimum (step 17k). Answered as 426 CLIENT_TOO_OLD. */
+/** Thrown when a client is older than the minimum supported version. */
 @Getter
 public class ClientTooOldException extends RuntimeException {
 

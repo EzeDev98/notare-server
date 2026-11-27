@@ -6,7 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Ask for a fresh account-activation email. Accepts the account's notarianId or its email address. */
+/** Request body for sending a fresh account-activation email. */
 @Getter
 @Setter
 @NoArgsConstructor

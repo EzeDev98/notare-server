@@ -37,24 +37,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 5a of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox.</b> This environment has no route to a
- * Maven mirror, so Mockito, Spring Security ({@code PasswordEncoder}), Spring
- * context ({@code ApplicationEventPublisher}), and Spring Data
- * ({@code Page}/{@code Pageable}) are unavailable as compile-time
- * dependencies here, and {@code target/classes} only holds this project's own
- * already-compiled classes, not third-party jars. Every test below is
- * reasoned carefully from {@link UserServiceImplementation}'s source and
- * follows this codebase's existing Mockito conventions exactly, but it has
- * not actually been compiled or run. Please run it via {@code mvn test}
- * before trusting it.
- *
- * <p>Covers {@link UserServiceImplementation#registerUser} and {@code
- * getCurrentUser} - every branch of every method on the class, including the
- * notarianId-generation retry loop.
- */
+/** Tests for UserServiceImplementation. */
 @ExtendWith(MockitoExtension.class)
 public class UserServiceImplementationTest {
 
@@ -97,8 +80,6 @@ public class UserServiceImplementationTest {
         return user;
     }
 
-    // ---- registerUser -------------------------------------------------
-
     @Test
     void registerUser_propagatesValidatorFailure_beforeAnyRepositoryOrIamInteraction() {
         RegistrationRequest request = registrationRequest();
@@ -129,8 +110,6 @@ public class UserServiceImplementationTest {
     @Test
     void registerUser_throwsUserAlreadyExistException_whenOnlyEmailIsTaken() {
         RegistrationRequest request = registrationRequest();
-        // Username differs from the request's, so the branch falls through to
-        // the email-specific message.
         when(userRepository.findByUsernameOrEmail("johndoe", "john@example.com"))
                 .thenReturn(Optional.of(existingUser("someoneelse", "john@example.com")));
 
@@ -232,18 +211,12 @@ public class UserServiceImplementationTest {
         when(userRepository.existsByNotarianId("BADAZOP")).thenReturn(false);
         when(userRepository.save(any(User.class))).thenThrow(new DataIntegrityViolationException("duplicate key"));
 
-        // The pre-check with findByUsernameOrEmail is best-effort, not a
-        // guarantee - a concurrent registration can still slip a duplicate
-        // past it and fail at the unique-constraint level instead. This is
-        // the safety net for that race.
         assertThatThrownBy(() -> service.registerUser(request))
                 .isInstanceOf(UserAlreadyExistException.class)
                 .hasMessage("A user with this username or email is already registered");
 
         verify(eventPublisher, never()).publishEvent(any());
     }
-
-    // ---- getCurrentUser -------------------------------------------------
 
     @Test
     void getCurrentUser_returnsTheMappedProfile_whenTheUserExists() {

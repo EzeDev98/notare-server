@@ -31,40 +31,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 15h of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox</b> - see {@link
- * AuthControllerTest}'s disclaimer (Step 15a);
- * same reasoning. Run via {@code mvn test} before trusting it.
- *
- * <p>All three endpoints are on {@code WebSecurityConfig}'s permit-all list
- * ({@code POST /api/v1/password/**}), so {@code addFilters = false} matches
- * how they're actually reached - unauthenticated, exactly like
- * {@link OtpControllerTest} (Step 15c).
- *
- * <p>{@code VerifyResetOtpRequest.code} carries the same {@code @ValidOtpCode}
- * constraint as {@code VerifyOtpRequest} in Step 15c, for the identical
- * reason: {@code @WebMvcTest} does not component-scan a plain
- * {@code @Component} outside the controller-shaped set, so
- * {@link OtpCodeValidator} (which validates the 6-digit code; it used to depend on OtpProperties for
- * {@code app.otp.length=6}) must be imported explicitly, or the constraint
- * would be silently absent and the malformed-code test below would pass for
- * the wrong reason.
- *
- * <p>Covers: {@code forgot-password} - happy path forwards the request and
- * always returns the same fixed {@link com.notare.common.dto.MessageResponse}
- * regardless of whether the service does anything internally (per the
- * controller's own javadoc on why the wording must never reveal whether an
- * account exists), plus a blank/malformed email rejected by validation before
- * the service runs. {@code verify-reset-otp} - happy path returns the
- * service's reset token; a malformed (wrong-length) code is rejected by
- * validation; {@link InvalidOtpException} from the service surfaces as 400.
- * {@code reset-password} - happy path returns the fixed success message;
- * blank fields rejected by validation -&gt; 400, {@link PasswordMisMatchException}
- * -&gt; 400 and {@link InvalidResetTokenException} -&gt; 401, both via
- * {@code GlobalExceptionHandler} (Step 14a).
- */
+/** Tests for PasswordResetController. */
 @WebSliceSupport
 @WebMvcTest(
         controllers = PasswordResetController.class,
@@ -89,10 +56,6 @@ class PasswordResetControllerTest {
 
     @MockBean
     private PasswordResetService passwordResetService;
-
-    // ----------------------------------------------------------------
-    // POST /password/forgot-password
-    // ----------------------------------------------------------------
 
     @Test
     void forgotPassword_validEmail_returns200WithTheFixedMessageAndForwardsToTheService() throws Exception {
@@ -131,9 +94,6 @@ class PasswordResetControllerTest {
 
     @Test
     void forgotPassword_returnsTheSameFixedMessage_regardlessOfWhetherTheAccountExists() throws Exception {
-        // The controller's own javadoc: the answer must be identical whether
-        // or not the email is registered, so the service's internal outcome
-        // is never allowed to change the response body.
         doNothing().when(passwordResetService).forgotPassword(any());
 
         mockMvc.perform(post(FORGOT_PASSWORD_URL)
@@ -142,10 +102,6 @@ class PasswordResetControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("A reset code has been sent you."));
     }
-
-    // ----------------------------------------------------------------
-    // POST /password/verify-reset-otp
-    // ----------------------------------------------------------------
 
     @Test
     void verifyResetOtp_validRequest_returns200WithTheResetToken() throws Exception {
@@ -204,10 +160,6 @@ class PasswordResetControllerTest {
                 .andExpect(jsonPath("$.detail").value("Invalid or expired code."));
     }
 
-    // ----------------------------------------------------------------
-    // POST /password/reset-password
-    // ----------------------------------------------------------------
-
     @Test
     void resetPassword_validRequest_returns200WithTheFixedMessage() throws Exception {
         doNothing().when(passwordResetService).resetPassword(any());
@@ -248,9 +200,6 @@ class PasswordResetControllerTest {
 
     @Test
     void resetPassword_passwordsDoNotMatch_returns400ViaGlobalExceptionHandler() throws Exception {
-        // The two-field mismatch is a SERVICE-level check (PasswordMisMatchException),
-        // not bean validation - both fields individually satisfy @NotBlank/@Pattern,
-        // so this reaches PasswordResetServiceImpl before failing.
         org.mockito.Mockito.doThrow(new PasswordMisMatchException("Passwords do not match"))
                 .when(passwordResetService).resetPassword(any());
 

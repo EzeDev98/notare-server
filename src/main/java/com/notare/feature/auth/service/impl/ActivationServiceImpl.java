@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.Locale;
 
+/** Resends account-activation emails through internal-auth-server. */
 @Service
 @RequiredArgsConstructor
 public class ActivationServiceImpl implements ActivationService {
@@ -27,7 +28,6 @@ public class ActivationServiceImpl implements ActivationService {
                 ? value.toLowerCase(Locale.ROOT)
                 : userRepository.findByNotarianId(value.toUpperCase(Locale.ROOT)).map(User::getEmail).orElse(null);
 
-        // Unknown account: do nothing and answer the same, so this endpoint is not an account oracle.
         if (email != null) {
             authClient.resendActivation(email);
         }

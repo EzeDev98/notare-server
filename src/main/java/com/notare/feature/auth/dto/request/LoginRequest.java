@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Request body for signing in. */
 @Getter
 @Setter
 @NoArgsConstructor

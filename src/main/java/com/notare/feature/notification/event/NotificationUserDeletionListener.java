@@ -7,11 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-/**
- * The notification module's part of an account deletion (step 17g). A sweep rather than a first-step
- * delete: the cascades of the deletion itself (shares ending) create notices naming this user, and
- * those exist only once the first step has been committed.
- */
+/** Deletes a user's notifications when their account is deleted. */
 @Slf4j
 @Component
 @RequiredArgsConstructor

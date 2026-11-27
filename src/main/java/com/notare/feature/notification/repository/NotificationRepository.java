@@ -11,57 +11,25 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
-/**
- * Recipient-scoped throughout, same rule as every other repository here: the
- * scoping lives in the query, so someone else's notification comes back empty
- * and surfaces as 404 rather than being filtered out by a forgettable if-check.
- */
+/** Data access for notifications, always scoped to the recipient. */
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
-    /** Everything this user was notified about (step 17g). */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = "delete from notifications where recipient_id = :userId", nativeQuery = true)
     int deleteAllForRecipient(@Param("userId") Long userId);
 
-    /** Notices other people received about this user's actions: they stay, the name goes (step 17g). */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = "update notifications set actor_id = null where actor_id = :userId", nativeQuery = true)
     int clearActor(@Param("userId") Long userId);
 
-
-    /** The full list for one user. */
     Page<Notification> findByRecipientId(Long recipientId, Pageable pageable);
 
-    /** The unread-only view. IsNull reads as "read_at IS NULL" — no boolean column needed. */
     Page<Notification> findByRecipientIdAndReadAtIsNull(Long recipientId, Pageable pageable);
 
-    /**
-     * The badge count. A dedicated count query rather than fetching a page and
-     * reading totalElements: this runs on nearly every client poll, and it can
-     * be answered straight from the (recipient_id, read_at) index without
-     * materialising a single row.
-     */
     long countByRecipientIdAndReadAtIsNull(Long recipientId);
 
-    /** One notification, scoped to its owner. Used for mark-as-read and delete. */
     Optional<Notification> findByIdAndRecipientId(Long id, Long recipientId);
 
-    /**
-     * Mark everything unread as read, in one statement.
-     *
-     * <p>The only bulk UPDATE in the project, and it earns the exception: a user
-     * clearing a backlog could touch hundreds of rows, and load-then-save-each
-     * would be hundreds of SELECTs and UPDATEs to set one column to one value.
-     *
-     * <p>Two things a bulk update costs, and both are acceptable here:
-     * it bypasses the persistence context (any Notification already loaded in
-     * this transaction keeps its stale readAt — nothing in the mark-all flow
-     * reads one), and it skips entity callbacks, which is why the timestamp is
-     * passed in as a parameter rather than left to auditing.
-     *
-     * <p>The readAt IS NULL predicate makes it idempotent: calling it twice
-     * doesn't rewrite the timestamps of things already read.
-     */
     @Modifying
     @Query("""
             UPDATE Notification n

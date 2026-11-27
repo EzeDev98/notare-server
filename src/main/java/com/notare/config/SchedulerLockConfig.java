@@ -9,14 +9,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
 
-/**
- * Makes sure only one instance runs each scheduled job (step 17e, B-21).
- *
- * <p>A job takes a row in the {@code shedlock} table before it runs. An instance that finds the
- * row already held skips the run. The database clock decides expiry, so instances with drifting
- * clocks cannot both think the lock is free. {@code defaultLockAtMostFor} frees the lock if the
- * instance holding it dies mid-run.
- */
+/** Makes sure only one server instance runs each scheduled job at a time. */
 @Configuration
 @EnableSchedulerLock(defaultLockAtMostFor = "PT30M")
 public class SchedulerLockConfig {

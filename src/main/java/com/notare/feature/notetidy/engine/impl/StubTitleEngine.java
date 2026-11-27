@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Optional;
 
-/** Dev and tests: never infers a title, so no note gets a first line it did not have. */
+/** Placeholder title engine for dev and tests that never returns a title. */
 @Component
 @ConditionalOnProperty(prefix = "notare.tidy", name = "engine", havingValue = "stub", matchIfMissing = true)
 public class StubTitleEngine implements TitleEngine {

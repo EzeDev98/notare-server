@@ -11,11 +11,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.util.function.IntSupplier;
 
-/**
- * Applies one per-user limit to the GET requests of the paths it is registered for (WebMvcConfig).
- * It runs after the security filters, so the caller is already known; anyone not signed in is
- * left to the 401 and never counted. Each bucket is a separate counter per user.
- */
+/** Applies the per-user request limit to the paths it is registered for. */
 @RequiredArgsConstructor
 public class RateLimitInterceptor implements HandlerInterceptor {
 

@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/** Requests, reads and searches transcriptions. */
 @Service
 @RequiredArgsConstructor
 public class TranscriptionServiceImpl implements TranscriptionService {
@@ -35,9 +36,6 @@ public class TranscriptionServiceImpl implements TranscriptionService {
     @Override
     @Transactional
     public TranscriptionResponse submit(Long userId, Long voiceNoteId) {
-        // The note's owner and anyone with WRITE on it may ask (step 17d, B-11). The job belongs to the
-        // clip's owner, so the audio can be found; the asker is remembered for the notice that tells
-        // them the transcript is ready. Both checks go through other modules' PUBLIC services.
         Long ownerId = authorise(userId, voiceNoteId);
 
         Transcription transcription = transcriptionRepository
@@ -47,8 +45,6 @@ public class TranscriptionServiceImpl implements TranscriptionService {
         if (transcription != null) {
             switch (transcription.getStatus()) {
                 case PENDING, PROCESSING, COMPLETED -> {
-                    // Already queued, running, or done — idempotent: return the
-                    // current state and start nothing new.
                     return transcriptionMapper.toResponse(transcription);
                 }
                 case FAILED -> resetToPending(transcription, userId);
@@ -58,11 +54,8 @@ public class TranscriptionServiceImpl implements TranscriptionService {
         }
 
         Transcription saved = transcriptionRepository.save(transcription);
-        // The clip's next sync carries the new status (step 17c). Same transaction as the save.
         voiceNoteService.touchClip(voiceNoteId);
 
-        // Publish INSIDE this transaction. The listener consumes it AFTER_COMMIT,
-        // so the async worker never queries for this row before it's committed.
         eventPublisher.publishEvent(new TranscriptionRequestedEvent(saved.getId()));
 
         return transcriptionMapper.toResponse(saved);
@@ -71,7 +64,6 @@ public class TranscriptionServiceImpl implements TranscriptionService {
     @Override
     @Transactional(readOnly = true)
     public TranscriptionResponse getByVoiceNote(Long userId, Long voiceNoteId) {
-        // Anyone who can see the note may read the transcript, Viewers included.
         Long ownerId = authorise(userId, voiceNoteId);
         Transcription transcription = transcriptionRepository
                 .findByVoiceNoteIdAndOwnerId(voiceNoteId, ownerId)
@@ -93,8 +85,6 @@ public class TranscriptionServiceImpl implements TranscriptionService {
     @Override
     @Transactional(readOnly = true)
     public PagedResponse<TranscriptionResponse> searchTranscripts(Long ownerId, String query, Pageable pageable) {
-        // Same normalization as note search: null-safe, trimmed; blank term
-        // matches all completed transcripts.
         String term = query == null ? "" : query.strip();
         Page<Transcription> page = transcriptionRepository.searchByOwnerAndStatus(
                 ownerId, TranscriptionStatus.COMPLETED, LikeEscaper.escape(term), pageable);
@@ -104,10 +94,6 @@ public class TranscriptionServiceImpl implements TranscriptionService {
         return PagedResponse.of(content, page);
     }
 
-    /**
-     * Checks that the clip is this user's and returns its owner. Anyone else gets the same 404 as a
-     * clip that does not exist.
-     */
     private Long authorise(Long userId, Long voiceNoteId) {
         return voiceNoteService.getVoiceNote(userId, voiceNoteId).ownerId();
     }

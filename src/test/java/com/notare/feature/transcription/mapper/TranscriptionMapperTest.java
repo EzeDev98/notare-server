@@ -7,18 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Step 3e of the coverage roadmap.
- *
- * <p>Covers {@link TranscriptionMapper#toResponse} across each lifecycle
- * stage {@link TranscriptionStatus} describes: PENDING/PROCESSING (transcript
- * and friends still null), COMPLETED (transcript, confidence, and language
- * populated), and FAILED (errorMessage populated instead). The mapper itself
- * has no branching on status - it's a straight field copy - but the response
- * DTO's own doc comment says the client's contract depends on which fields
- * are populated for which status, so that contract is what's worth testing,
- * not just "does the copy work."
- */
+/** Tests for TranscriptionMapper. */
 class TranscriptionMapperTest {
 
     private final TranscriptionMapper mapper = new TranscriptionMapper();

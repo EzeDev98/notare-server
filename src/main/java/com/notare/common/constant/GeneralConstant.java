@@ -1,5 +1,6 @@
 package com.notare.common.constant;
 
+/** Constants shared across the application. */
 public class GeneralConstant {
 
     public static final char[] CONSONANTS = {'B','D','F','G','H','J','K','L','M','N','P','R','S','T','V','Z'};

@@ -13,10 +13,7 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
-/**
- * Progress of one account deletion (step 17g, B-03). The auth id is kept here because the auth user
- * is deleted last, possibly by a later attempt. The row is deleted together with the user.
- */
+/** Progress of one account deletion, so a deletion that stops halfway can be finished. */
 @Getter
 @Setter
 @NoArgsConstructor

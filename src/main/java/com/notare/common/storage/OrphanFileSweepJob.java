@@ -15,13 +15,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Step 19b: finds stored files that no voice clip row points at, so abandoned objects do not pile up.
- * A file is an orphan when no voice_notes row (hidden or not) has its key AND it is older than the grace
- * period (an upload writes the file just before its row). By default it only LOGS orphans; set
- * notare.storage.orphan-sweep.delete=true to remove them, at most max-delete per run.
- * Only backends that can list their files take part (R2); others are skipped.
- */
+/** Deletes stored files that no voice clip points at. */
 @Slf4j
 @Component
 @RequiredArgsConstructor

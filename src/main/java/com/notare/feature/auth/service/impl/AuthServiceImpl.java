@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 
 import static com.notare.common.constant.GeneralConstant.TOKEN_TYPE;
 
-/** Token refresh is redeemed at internal-auth-server, the sole session authority. */
+/** Refreshes sessions through internal-auth-server. */
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {

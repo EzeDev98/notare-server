@@ -7,22 +7,12 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Conservative layout clean-up for note content. Pure: no I/O, and running it
- * twice gives the same result as running it once.
- *
- * <p>Content is plain text, one line per editor block, with "- text" for a
- * bullet and "1. text" for a numbered item (the editor's own two list forms).
- * Nothing here adds blank lines between paragraphs: every line is already its
- * own block, so that would change the layout of every note.
- */
+/** Cleans up a note's layout without changing its words. */
 @Component
 public class NoteFormatter {
 
-    /** "* text" is the same bullet as "- text" in the editor. */
     private static final Pattern STAR_BULLET = Pattern.compile("^\\* (.*)$");
 
-    /** A numbered item, exactly as the editor reads one. */
     private static final Pattern ORDERED_ITEM = Pattern.compile("^(\\d{1,9})\\. (.*)$");
 
     public String format(String text) {

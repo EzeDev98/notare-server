@@ -29,44 +29,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 13b of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox.</b> This environment has no route to a
- * Maven mirror, so Mockito is unavailable as a compile-time dependency here,
- * and {@code target/classes} only holds this project's own already-compiled
- * classes, not third-party jars. Every test below is reasoned carefully from
- * {@link SyncPullServiceImpl}'s source and follows this codebase's existing
- * Mockito conventions exactly (see {@code VoiceUploadValidatorTest} for the
- * pattern of instantiating a real {@code @ConfigurationProperties} bean
- * directly rather than mocking it), but it has not actually been compiled or
- * run. Please run it via {@code mvn test} before trusting it.
- *
- * <p>{@code SyncProperties} is a plain settable bean, so these tests
- * construct a real instance with fixed values rather than mocking getters —
- * consistent with how this codebase treats every other properties class.
- *
- * <p>Covers, per the class's own extensive inline reasoning:
- * <ul>
- *   <li>the overlap window: an incremental pull queries
- *       {@code since.minusSeconds(overlapSeconds)}, never the raw cursor;</li>
- *   <li>a first sync ({@code since == null}) skips the overlap rewind AND
- *       skips the tombstone query entirely — a client with nothing cached
- *       has nothing to evict;</li>
- *   <li>{@link NoteChange} rows split correctly into the changed list and
- *       the deleted-ids list based on {@code deleted()};</li>
- *   <li>tombstones are appended to {@code deletedIds} only on an incremental
- *       sync, using the SAME rewound window as the note query;</li>
- *   <li>the cursor-holding rule: while {@code hasMore} is true the response
- *       echoes back the client's OWN {@code since} unchanged (not the
- *       snapshot, not the last row's timestamp) so paging within one window
- *       doesn't skip or duplicate rows; once the window is drained the
- *       response advances to the snapshot taken before the query ran;</li>
- *   <li>page-size clamping: an oversized request is capped at
- *       {@code maxPageSize}, and an unpaged request falls back to
- *       {@code defaultPageSize} at page zero.</li>
- * </ul>
- */
+/** Tests for SyncPullServiceImpl. */
 @ExtendWith(MockitoExtension.class)
 class SyncPullServiceImplTest {
 
@@ -121,10 +84,6 @@ class SyncPullServiceImplTest {
         return new NoteChange(noteId, true, null, null);
     }
 
-    // -------------------------------------------------------------------
-    // First sync (no cursor)
-    // -------------------------------------------------------------------
-
     @Test
     void pull_firstSync_queriesWithANullSinceAndSkipsTheOverlapRewind() {
         when(noteService.findChangesSince(eq(OWNER_ID), sinceCaptor.capture(), any()))
@@ -144,10 +103,6 @@ class SyncPullServiceImplTest {
 
         verifyNoInteractions(noteTombstoneRepository);
     }
-
-    // -------------------------------------------------------------------
-    // Incremental sync — overlap window
-    // -------------------------------------------------------------------
 
     @Test
     void pull_incrementalSync_rewindsTheCursorByTheConfiguredOverlap() {
@@ -175,10 +130,6 @@ class SyncPullServiceImplTest {
         verify(noteTombstoneRepository)
                 .findByOwnerIdAndDeletedAtGreaterThanEqual(OWNER_ID, cursor.minusSeconds(5));
     }
-
-    // -------------------------------------------------------------------
-    // Splitting changed vs. deleted
-    // -------------------------------------------------------------------
 
     @Test
     void pull_splitsActiveChangesAndTombstonedRowsFromTheNoteModuleCorrectly() {
@@ -214,10 +165,6 @@ class SyncPullServiceImplTest {
         assertThat(response.deletedIds()).containsExactlyInAnyOrder(2L, 3L);
     }
 
-    // -------------------------------------------------------------------
-    // Cursor-holding rule
-    // -------------------------------------------------------------------
-
     @Test
     void pull_hasMoreTrue_echoesBackTheClientsOwnCursorUnchanged() {
         LocalDateTime cursor = LocalDateTime.of(2026, 1, 1, 12, 0, 0);
@@ -248,10 +195,6 @@ class SyncPullServiceImplTest {
         assertThat(response.hasMore()).isFalse();
         assertThat(response.nextCursor()).isBetween(before, after);
     }
-
-    // -------------------------------------------------------------------
-    // Page-size clamping
-    // -------------------------------------------------------------------
 
     @Test
     void pull_oversizedPageRequest_isClampedToTheConfiguredMaximum() {

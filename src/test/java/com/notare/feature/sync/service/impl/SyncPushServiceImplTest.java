@@ -31,44 +31,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 13a of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox.</b> This environment has no route to a
- * Maven mirror, so Mockito and Spring's {@code OptimisticLockingFailureException}
- * are unavailable as compile-time dependencies here, and {@code target/classes}
- * only holds this project's own already-compiled classes, not third-party jars.
- * Every test below is reasoned carefully from {@link SyncPushServiceImpl}'s
- * source and follows this codebase's existing Mockito conventions exactly,
- * but it has not actually been compiled or run. Please run it via
- * {@code mvn test} before trusting it.
- *
- * <p>Covers, per the class's own doc comments and inline reasoning:
- * <ul>
- *   <li>the four {@code validate} branches (missing clientId on CREATE,
- *       missing noteId/version on UPDATE, missing noteId on DELETE) each
- *       produce an INVALID result WITHOUT ever calling the applier — one
- *       malformed operation must not touch the database;</li>
- *   <li>a well-formed operation is delegated to the applier and its result
- *       is used as-is, counted into {@code appliedCount};</li>
- *   <li>both {@link NoteConflictException} and
- *       {@link OptimisticLockingFailureException} from the applier are
- *       treated identically: CONFLICT, with a follow-up
- *       {@code noteService.findAnyNote} call to fetch the server's current
- *       state (present or absent), counted into {@code conflictCount};</li>
- *   <li>{@link NoteNotFoundException} produces NOT_FOUND withOUT any
- *       {@code findAnyNote} call — the note is gone, there's nothing to
- *       fetch;</li>
- *   <li>operations are applied strictly in request order (sequential, not
- *       parallel — the class's own doc comment explains why: a CREATE must
- *       land before a later UPDATE on the same note);</li>
- *   <li>one operation's INVALID/CONFLICT/NOT_FOUND outcome does not stop the
- *       batch from processing the rest;</li>
- *   <li>an unexpected {@code RuntimeException} from the applier is NOT
- *       caught — it propagates and fails the whole request, which the class's
- *       doc comment says is deliberate.</li>
- * </ul>
- */
+/** Tests for SyncPushServiceImpl. */
 @ExtendWith(MockitoExtension.class)
 class SyncPushServiceImplTest {
 
@@ -108,10 +71,6 @@ class SyncPushServiceImplTest {
     private SyncOperationResult applied(String operationId) {
         return new SyncOperationResult(operationId, SyncResultStatus.APPLIED, note(NOTE_ID, 2L), null, null);
     }
-
-    // -------------------------------------------------------------------
-    // Validation — each branch must short-circuit before the applier
-    // -------------------------------------------------------------------
 
     @Test
     void push_createMissingClientId_isInvalidWithoutCallingTheApplier() {
@@ -165,10 +124,6 @@ class SyncPushServiceImplTest {
         verifyNoInteractions(applier);
     }
 
-    // -------------------------------------------------------------------
-    // Happy path
-    // -------------------------------------------------------------------
-
     @Test
     void push_wellFormedOperation_delegatesToTheApplierAndCountsItApplied() {
         SyncOperationRequest op = operation("op-1", SyncOperationType.CREATE);
@@ -194,15 +149,6 @@ class SyncPushServiceImplTest {
         assertThat(response.serverTime()).isBetween(before, after);
     }
 
-    // -------------------------------------------------------------------
-    // Conflict handling — NoteConflictException and OptimisticLockingFailureException
-    // treated identically
-    // -------------------------------------------------------------------
-
-    // -------------------------------------------------------------------
-    // Not-found handling
-    // -------------------------------------------------------------------
-
     @Test
     void push_applierThrowsNoteNotFoundException_returnsNotFoundWithoutLookingUpTheNote() {
         SyncOperationRequest op = operation("op-1", SyncOperationType.DELETE);
@@ -214,14 +160,8 @@ class SyncPushServiceImplTest {
         SyncOperationResult result = response.results().get(0);
         assertThat(result.status()).isEqualTo(SyncResultStatus.NOT_FOUND);
         assertThat(response.appliedCount()).isEqualTo(0);
-        // Unlike the conflict path, a not-found note has nothing worth
-        // fetching — the operation is simply moot.
         verify(noteService, never()).findAnyNote(any(), any());
     }
-
-    // -------------------------------------------------------------------
-    // Ordering and batch resilience
-    // -------------------------------------------------------------------
 
     @Test
     void push_multipleOperations_appliesThemInRequestOrder() {
@@ -254,10 +194,6 @@ class SyncPushServiceImplTest {
         assertThat(response.appliedCount()).isEqualTo(1);
         verify(applier, never()).apply(OWNER_ID, invalid);
     }
-
-    // -------------------------------------------------------------------
-    // Unexpected failures are NOT caught
-    // -------------------------------------------------------------------
 
     @Test
     void push_anUnexpectedRuntimeExceptionFromTheApplier_propagatesAndFailsTheWholeBatch() {

@@ -14,25 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 2a of the coverage roadmap.
- *
- * <p>Covers {@link OtpCodeValidator#isValid}: exact-length, all-digits
- * validation against the CONFIGURED length (not a hardcoded 6), and that an
- * invalid value disables the default violation and builds the dynamic
- * "Code must be N digits." message instead.
- *
- * <p>Also documents one thing worth knowing rather than assuming:
- * {@code Character::isDigit} is Unicode-aware, not ASCII-only. A run of
- * Arabic-Indic digits (e.g. "١٢٣٤٥٦") is 6
- * characters and every one of them satisfies {@code Character.isDigit},
- * so this validator currently accepts it as a "valid" 6-digit code. That
- * is very unlikely to be what OTP verification downstream expects when it
- * compares the value or parses it as a plain decimal integer. Not something
- * this test fixes - {@link #isValid_unicodeDecimalDigitsThatAreNotAsciiCurrentlyPass()}
- * pins down the current behavior so it's a deliberate, visible fact rather
- * than a surprise found in production.
- */
+/** Tests for OtpCodeValidator. */
 @ExtendWith(MockitoExtension.class)
 class OtpCodeValidatorTest {
 
@@ -48,12 +30,6 @@ class OtpCodeValidatorTest {
     void setUp() {
         validator = new OtpCodeValidator();
 
-        // Stubbed leniently: only the invalid-value tests below actually reach
-        // this call (production code only touches the context when the value
-        // fails validation), but declaring it once here — rather than
-        // per-test — keeps every "isInvalid" test from repeating the same
-        // three lines. Without lenient(), MockitoExtension's strict stubbing
-        // would fail the valid-value tests that never touch context at all.
         lenient().when(context.buildConstraintViolationWithTemplate(anyString()))
                 .thenReturn(violationBuilder);
     }
@@ -97,7 +73,6 @@ class OtpCodeValidatorTest {
 
     @Test
     void isValid_whitespaceOfTheCorrectLengthIsStillInvalid() {
-        // Same length as a real code, but spaces aren't digits.
         assertThat(validator.isValid("      ", context)).isFalse();
     }
 
@@ -108,9 +83,6 @@ class OtpCodeValidatorTest {
 
     @Test
     void isValid_unicodeDecimalDigitsThatAreNotAsciiCurrentlyPass() {
-        // See the class-level note: Character.isDigit is Unicode-aware.
-        // This is documenting real, current behavior - not asserting it's
-        // desirable.
         String arabicIndicSix = "١٢٣٤٥٦";
         assertThat(arabicIndicSix).hasSize(6);
 
@@ -138,10 +110,6 @@ class OtpCodeValidatorTest {
 
     @Test
     void isValid_nullValueBuildsAViolationTheSameWayAnyOtherInvalidValueDoes() {
-        // Sanity check that the null branch goes through the same
-        // context-population path as every other invalid case, rather than
-        // short-circuiting past it (the "&&" chain means value.length() is
-        // never reached for a null value - only the first condition fails).
         when(context.buildConstraintViolationWithTemplate(anyString())).thenReturn(violationBuilder);
 
         assertThat(validator.isValid(null, context)).isFalse();

@@ -16,22 +16,7 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * Step 10a of the coverage roadmap.
- *
- * <p>Unlike the other two backends, this one talks to a real filesystem, so
- * these tests use a real {@code @TempDir} rather than mocking anything —
- * mocking {@code java.nio.file.Files} would just re-describe the
- * implementation instead of verifying it actually reads and writes bytes.
- *
- * <p>Covers: the constructor's directory-bootstrap (both the happy path and
- * the failure path when the configured location can't be created), the
- * store/load/delete round trip, the UUID-plus-original-extension key scheme
- * (including the no-extension edge case), the "missing key on delete is
- * success" contract shared by every backend, and the path-traversal guard in
- * {@code resolve} — the one piece of defensive logic specific to a
- * filesystem-backed implementation.
- */
+/** Tests for LocalFileStorageService. */
 class LocalFileStorageServiceTest {
 
     @TempDir
@@ -62,9 +47,6 @@ class LocalFileStorageServiceTest {
 
     @Test
     void constructor_throwsStorageException_whenTheLocationCannotBeCreated() throws IOException {
-        // A plain file sitting where a directory SEGMENT needs to go: Files
-        // .createDirectories can't create "blocker/subdir" because "blocker"
-        // already exists and isn't a directory.
         Path blocker = tempDir.resolve("blocker");
         Files.createFile(blocker);
         Path uncreatable = blocker.resolve("subdir");
@@ -90,7 +72,6 @@ class LocalFileStorageServiceTest {
         String key = service.store(new ByteArrayInputStream(new byte[]{1, 2, 3}), "audio/mpeg", "memo.mp3");
 
         assertThat(key).endsWith(".mp3");
-        // The UUID part: 36 chars before the ".mp3" suffix, in UUID's own shape.
         String uuidPart = key.substring(0, key.length() - ".mp3".length());
         assertThat(uuidPart).matches("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
     }
@@ -136,8 +117,6 @@ class LocalFileStorageServiceTest {
 
     @Test
     void load_keyThatEscapesTheStorageRoot_isRejected() {
-        // A key with enough ".." segments to normalize outside tempDir. The
-        // guard must fire before any filesystem read is attempted.
         assertThatThrownBy(() -> service.load("../../../../../../etc/passwd"))
                 .isInstanceOf(StorageException.class)
                 .hasMessageContaining("escapes storage root");
@@ -154,13 +133,9 @@ class LocalFileStorageServiceTest {
 
     @Test
     void delete_missingKey_isTreatedAsSuccess_noExceptionThrown() {
-        // Same "missing key = success" contract every FileStorageService
-        // implementation follows — Files.deleteIfExists already gives us
-        // this for free, but the contract is worth pinning down explicitly.
         assertThat(Files.exists(tempDir.resolve("nonexistent.mp3"))).isFalse();
 
         service.delete("nonexistent.mp3");
-        // No exception: reaching this line is the assertion.
     }
 
     @Test

@@ -23,21 +23,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 4e of the coverage roadmap.
- *
- * <p>Covers {@link ProblemDetailAuthenticationEntryPoint#commence}: the 401
- * status and {@code application/problem+json} content type this class exists
- * specifically to produce instead of Spring's default empty-body 403 (see
- * the class's own extensive doc comment on why that distinction matters for
- * a client's refresh-token loop), the fixed {@code instance} URI, and - the
- * most important behavioral test here - that the response body is
- * IDENTICAL no matter what actually went wrong underneath. The class doc
- * comment is explicit that the vagueness is deliberate ("useful to an
- * attacker probing the auth surface and useless to a legitimate client"), so
- * {@link #commence_producesTheSameBodyRegardlessOfTheUnderlyingAuthenticationExceptionType()}
- * verifies that design goal directly rather than trusting the comment.
- */
+/** Tests for ProblemDetailAuthenticationEntryPoint. */
 @ExtendWith(MockitoExtension.class)
 class ProblemDetailAuthenticationEntryPointTest {
 
@@ -107,10 +93,6 @@ class ProblemDetailAuthenticationEntryPointTest {
         ArgumentCaptor<ProblemDetail> secondCaptor = ArgumentCaptor.forClass(ProblemDetail.class);
         verify(objectMapper).writeValue(eq(outputStream), secondCaptor.capture());
 
-        // Different underlying causes, byte-for-byte identical detail text -
-        // an attacker probing the auth surface (or a legitimate client
-        // trying to distinguish "expired" from "malformed" from "missing")
-        // learns nothing from the message either way.
         assertThat(firstCaptor.getValue().getDetail()).isEqualTo(secondCaptor.getValue().getDetail());
         assertThat(firstCaptor.getValue().getDetail())
                 .doesNotContain("wrong password")

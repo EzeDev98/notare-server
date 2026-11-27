@@ -45,52 +45,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 15l of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox</b> - see {@link
- * AuthControllerTest}'s disclaimer (Step 15a);
- * same reasoning. Run via {@code mvn test} before trusting it.
- *
- * <p>Authenticated principal is supplied the same way as
- * {@link CollaborationControllerTest}
- * (Step 15d) - directly on {@code SecurityContextHolder} in the test thread,
- * with {@code addFilters = false} keeping the real
- * {@code JwtAuthenticationFilter} chain out of this slice.
- *
- * <p>Neither endpoint takes a {@code Pageable} - the controller's own javadoc
- * is explicit that a sort parameter would be silently discarded by delta
- * paging's fixed ordering, so {@code pull} takes plain {@code page}/{@code
- * size} ints instead. The tests below reflect that: they assert the
- * {@code Pageable} captured on the service call rather than reaching for any
- * {@code Sort} assertion, since there is no sort to assert.
- *
- * <p>{@code push}'s own javadoc states the batch's defining behaviour - 200
- * even when every operation conflicted, since the BATCH succeeded and each
- * operation's own fate lives in its {@link SyncOperationResult}. That is
- * asserted directly below (a batch containing one APPLIED and one CONFLICT
- * result still comes back 200), alongside the one thing that IS a structural
- * 400: {@code @NotEmpty}/{@code @Size} on the operations list and {@code
- * @Valid}-cascaded field validation on each element, all handled by bean
- * validation before the service ever runs.
- *
- * <p>Covers: {@code GET /sync} - {@code since} omitted is forwarded as
- * {@code null} (first sync); an explicit ISO-8601 {@code since} is parsed and
- * forwarded; {@code page}/{@code size} default to 0/100 and an explicit
- * override is honoured; a {@code size} of 0 is passed through as
- * {@code Math.max(size, 1)} = 1, per the controller's own clamp (the
- * documented ceiling itself is the service's job, per the javadoc, so it is
- * not re-asserted here); the response's {@code changed}/{@code deletedIds}/
- * {@code nextCursor}/{@code hasMore} all round-trip. {@code POST
- * /sync/batch} - a mixed-outcome batch still returns 200 with each result's
- * own status; an empty {@code operations} list is rejected by validation
- * before the service runs; over-cap (201 operations) is rejected the same
- * way; a missing {@code operationId} or {@code type} on one element is
- * rejected by validation (the cross-field \"UPDATE needs a version\" rule
- * is explicitly the SERVICE's job per its own javadoc, so violating it is
- * NOT asserted as a 400 here - it would come back as an INVALID result inside a
- * 200, which is Step 9c/13's concern, not this controller's).
- */
+/** Tests for SyncController. */
 @WebSliceSupport
 @WebMvcTest(
         controllers = SyncController.class,
@@ -144,10 +99,6 @@ class SyncControllerTest {
     private SyncPullResponse emptyPullResponse(LocalDateTime cursor) {
         return new SyncPullResponse(List.of(), List.of(), cursor, false);
     }
-
-    // ----------------------------------------------------------------
-    // GET /sync
-    // ----------------------------------------------------------------
 
     @Test
     void pull_noSinceParam_forwardsNullForAFirstSync() throws Exception {
@@ -208,8 +159,6 @@ class SyncControllerTest {
 
     @Test
     void pull_sizeOfZero_isClampedUpToOneRatherThanPassedThrough() throws Exception {
-        // The controller's own PageRequest.of(page, Math.max(size, 1)) - a
-        // literal 0 would otherwise throw inside PageRequest itself.
         authenticateAs(1L);
         when(syncPullService.pull(eq(1L), isNull(), any())).thenReturn(emptyPullResponse(LocalDateTime.now()));
 
@@ -249,15 +198,8 @@ class SyncControllerTest {
         verify(syncPullService).pull(eq(77L), isNull(), any());
     }
 
-    // ----------------------------------------------------------------
-    // POST /sync/batch
-    // ----------------------------------------------------------------
-
     @Test
     void push_mixedOutcomeBatch_stillReturns200WithEachOperationsOwnStatus() throws Exception {
-        // The controller's own javadoc: the batch is 200 even when every
-        // operation conflicted - here one applies and one conflicts, and the
-        // HTTP layer must not editorialise either way.
         authenticateAs(1L);
         SyncOperationResult applied = new SyncOperationResult(
                 "op-1", SyncResultStatus.APPLIED, sampleNote(5L, 1L, 1L), "client-note-1", null);

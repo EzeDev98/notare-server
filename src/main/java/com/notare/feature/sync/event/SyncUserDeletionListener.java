@@ -8,11 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-/**
- * The sync module's part of an account deletion (step 17g). A sweep, because deleting each note wrote
- * a tombstone for it (NoteTombstoneListener); those exist only once the first step has been committed.
- * No device of this person will ever pull again, so neither tombstones nor the ledger are needed.
- */
+/** Deletes a user's sync records when their account is deleted. */
 @Slf4j
 @Component
 @RequiredArgsConstructor

@@ -30,47 +30,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 15a of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox</b> - Spring Boot's test slice
- * infrastructure (an embedded servlet container, MockMvc, Mockito) is
- * unavailable as a compile-time/runtime dependency here. Reasoned from
- * source against the app's own {@code spring-boot-starter-parent} version
- * (3.2.5 - see {@code WebSecurityConfig}'s downgrade note), so
- * {@code @MockBean} is used rather than the {@code @MockitoBean} that only
- * exists from Boot 3.4 onward. Run via {@code mvn test} before trusting it.
- *
- * <p>Security is deliberately turned OFF for this slice
- * ({@code addFilters = false}): {@link AuthController} takes no
- * {@code @AuthenticationPrincipal} (refreshing a token is, by design, the one
- * authenticated-feeling endpoint that must work WITHOUT a valid access
- * token - see {@code WebSecurityConfig}'s permit-all list, which includes
- * {@code POST /api/v1/auth/refresh}), so wiring in
- * {@code JwtAuthenticationFilter} and its own three dependencies here would
- * only add noise. Full authenticated-vs-anonymous routing is
- * {@link WebSecurityConfigTest}'s job (Step 4f),
- * already covered.
- *
- * <p>{@link WebMvcConfig} IS imported, deliberately: {@code @WebMvcTest}
- * only auto-detects {@code @Controller}/{@code @ControllerAdvice}/converter/
- * filter-shaped beans, not arbitrary {@code @Configuration} classes, so
- * without this import {@code @ClientIp}/{@code @UserAgent} would silently
- * resolve to {@code null} instead of exercising the real resolvers - which
- * would hide exactly the bug this class exists to catch (are the caller's IP
- * and user agent actually reaching {@link AuthService#refreshToken}?).
- *
- * <p>Covers: a valid request maps to 200 with every {@link TokenResponse}
- * field surfaced in the JSON body, and the resolved client IP / user agent
- * are the exact values passed to the service (both the
- * {@code X-Forwarded-For} path and the direct-connection fallback, per
- * {@link ClientIpArgumentResolver}); a blank refresh token is rejected by
- * bean validation before the service is ever called; and
- * {@link InvalidRefreshTokenException} from the service surfaces as 401 via
- * {@code GlobalExceptionHandler}
- * (Step 14a), which {@code @WebMvcTest} picks up automatically as a
- * {@code @RestControllerAdvice}.
- */
+/** Tests for AuthController. */
 @WebSliceSupport
 @WebMvcTest(
         controllers = AuthController.class,
@@ -127,8 +87,6 @@ public class AuthControllerTest {
 
     @Test
     void refresh_xForwardedForHeaderPresent_thatIpIsPassedToTheService() throws Exception {
-        // ClientIpArgumentResolver takes the first, trimmed entry of a
-        // comma-separated X-Forwarded-For list ahead of the socket address.
         when(authService.refreshToken(any(), anyString(), anyString()))
                 .thenReturn(new TokenResponse("a", "b", "Bearer", 1L));
 
@@ -160,10 +118,6 @@ public class AuthControllerTest {
         ArgumentCaptor<String> ipCaptor = ArgumentCaptor.forClass(String.class);
         verify(authService).refreshToken(any(), anyString(), ipCaptor.capture());
 
-        // MockMvc's default mock request reports 127.0.0.1 as the remote
-        // address when nothing else overrides it - asserting non-blank
-        // rather than pinning the exact loopback string keeps this from
-        // being needlessly brittle to MockMvc internals.
         assertThat(ipCaptor.getValue()).isNotBlank();
     }
 

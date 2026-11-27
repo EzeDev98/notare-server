@@ -7,10 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-/**
- * The transcription module's part of an account deletion (step 17g): the transcripts of this user's
- * own clips go, and the name goes from transcripts they only asked for on someone else's clip.
- */
+/** Deletes or anonymises a user's transcriptions when their account is deleted. */
 @Slf4j
 @Component
 @RequiredArgsConstructor

@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/** Endpoint for resending the account-activation email. */
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("${app.title}/activation")
@@ -18,10 +19,6 @@ public class ActivationController {
 
     private final ActivationService activationService;
 
-    /**
-     * Asks internal-auth-server to email a fresh activation link. The wording never confirms
-     * whether the account exists, so this is not an account oracle.
-     */
     @PostMapping("/resend")
     public ResponseEntity<MessageResponse> resend(@Valid @RequestBody ResendActivationRequest request) {
         activationService.resendActivation(request.getNotarianIdOrEmail());

@@ -19,18 +19,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
-/**
- * A title from Deepgram's text API (POST /v1/read with summarize and topics).
- * Reuses the transcription key, base URL and model-improvement opt-out.
- *
- * <p>A title is never a cut-off sentence. In order:
- * <ol>
- *   <li>the summary's first sentence, filler opener removed, if it fits in 60 characters;</li>
- *   <li>otherwise the strongest topics, joined ("Sub-admin creation, UCC payments and DevOps");</li>
- *   <li>otherwise the summary's first clause, if it is a short phrase on its own.</li>
- * </ol>
- * Empty when none of these is usable: the note keeps the title it had.
- */
+/** Infers a note's title from Deepgram's summary and topics. */
 @Component
 @ConditionalOnProperty(prefix = "notare.tidy", name = "engine", havingValue = "deepgram")
 public class DeepgramTitleEngine implements TitleEngine {
@@ -45,7 +34,6 @@ public class DeepgramTitleEngine implements TitleEngine {
 
     private static final Pattern SENTENCE_END = Pattern.compile("(?<=[.!?])\\s+");
 
-    /** Where a sentence's first clause ends. */
     private static final Pattern CLAUSE_END = Pattern.compile("\\s*(?:[,;:]|\\s[-\u2013\u2014]\\s)");
 
     private static final int MAX_TOPICS = 3;
@@ -110,7 +98,6 @@ public class DeepgramTitleEngine implements TitleEngine {
         return Optional.empty();
     }
 
-    /** The summary's first sentence with its filler opener removed. */
     private static String firstSentence(String summary) {
         String sentence = SENTENCE_END.split(summary.strip(), 2)[0];
         for (Pattern opener : FILLER_OPENERS) {
@@ -119,7 +106,6 @@ public class DeepgramTitleEngine implements TitleEngine {
         return sentence.strip();
     }
 
-    /** Distinct topics, strongest first. */
     private static List<String> topTopics(JsonNode results) {
         List<JsonNode> all = new ArrayList<>();
         for (JsonNode segment : results.path("topics").path("segments")) {
@@ -141,7 +127,6 @@ public class DeepgramTitleEngine implements TitleEngine {
         return topics;
     }
 
-    /** "A", "A and B", or "A, B and C": as many of the strongest topics as fit in 60 characters. */
     private static String joinTopics(List<String> topics) {
         List<String> used = new ArrayList<>();
         for (String topic : topics) {
@@ -169,7 +154,6 @@ public class DeepgramTitleEngine implements TitleEngine {
         return text.isBlank() ? 0 : text.strip().split("\\s+").length;
     }
 
-    /** No closing punctuation, first letter capitalised. */
     private static String tidy(String title) {
         String trimmed = title.strip().replaceAll("[\\s.,;:!?]+$", "");
         return trimmed.isEmpty() ? "" : Character.toUpperCase(trimmed.charAt(0)) + trimmed.substring(1);

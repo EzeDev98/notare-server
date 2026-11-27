@@ -16,13 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Search across the whole transcriptions collection, so it's a top-level
- * resource (/transcriptions) rather than nested under a single voice note. The
- * same entity legitimately appears both as a scoped sub-resource
- * (/voice-notes/{id}/transcription) and as a searchable collection here — a
- * common REST shape.
- */
+/** Endpoint for searching a user's transcriptions. */
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("${app.title}/transcriptions")

@@ -7,10 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-/**
- * Generic API response wrapper
- * Makes all API responses consistent
- */
+/** The wrapper internal-auth-server puts around every response. */
 @Data
 @Builder
 @NoArgsConstructor

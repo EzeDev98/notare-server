@@ -4,17 +4,7 @@ import com.notare.common.exception.RegistrationException;
 import com.notare.feature.user.dto.request.RegistrationRequest;
 import org.springframework.stereotype.Component;
 
-/**
- * Validates new-user registration requests.
- * <p>
- * Extracted from the original {@code ValidateService} grab-bag as part of
- * the SOLID refactor — that class validated six unrelated domains
- * (registration, PIN setting, password reset, OTP format, transactions,
- * and a generic required-fields check) in one place, despite no consumer
- * ever needing more than one of those domains. This class holds exactly
- * the registration rules, used only by {@code UserServiceImpl}. No rule
- * changed during the move.
- */
+/** Validates new-user registration requests. */
 @Component
 public class RegistrationValidator {
 

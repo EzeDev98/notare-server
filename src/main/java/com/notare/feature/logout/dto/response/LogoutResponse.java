@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Response to a logout request. */
 @Getter
 @Setter
 @AllArgsConstructor

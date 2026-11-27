@@ -16,18 +16,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * Re-queues transcriptions that were left PENDING or PROCESSING, for example by a restart.
- *
- * The publish must happen inside a transaction: TranscriptionWorker listens with
- * TransactionPhase.AFTER_COMMIT, and an event published outside a transaction is dropped.
- */
+/** Re-queues transcriptions left unfinished, for example by a restart. */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class StuckTranscriptionRecovery {
 
-    /** Longer than a worst-case job (3 Deepgram attempts with a 120 s read timeout each). */
     private static final long STALE_AFTER_MINUTES = 15;
 
     private final TranscriptionRepository transcriptionRepository;

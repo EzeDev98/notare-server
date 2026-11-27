@@ -27,16 +27,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 10b of the coverage roadmap.
- *
- * <p>Mirrors the other two FileStorageService test classes' scope: the
- * store/load/delete contract, the UUID-plus-extension key scheme, the
- * "missing key on delete is success" contract this class implements
- * explicitly (a check-then-act, unlike Local's deleteIfExists or R2's
- * naturally-idempotent DELETE — worth pinning down for exactly that reason),
- * and each failure path wrapped as StorageException.
- */
+/** Tests for PostgresFileStorageService. */
 @ExtendWith(MockitoExtension.class)
 class PostgresFileStorageServiceTest {
 
@@ -143,11 +134,6 @@ class PostgresFileStorageServiceTest {
 
     @Test
     void delete_missingKey_isTreatedAsSuccess_deleteByIdNeverCalled() {
-        // Explicit check-then-act, unlike Local's deleteIfExists (which is
-        // atomic) or R2's naturally-idempotent DELETE — JpaRepository
-        // .deleteById() throws EmptyResultDataAccessException on a missing
-        // row, so this class guards it itself rather than inheriting the
-        // "missing key = success" contract for free.
         when(repository.existsById(anyString())).thenReturn(false);
 
         service.delete("nonexistent.mp3");

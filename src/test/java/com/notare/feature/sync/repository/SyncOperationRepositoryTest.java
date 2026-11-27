@@ -14,6 +14,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** Tests for SyncOperationRepository. */
 @DataJpaTest
 @ActiveProfiles("test")
 class SyncOperationRepositoryTest {
@@ -31,8 +32,6 @@ class SyncOperationRepositoryTest {
     void setUp() {
         repository.deleteAll();
 
-        // Keyed by "ownerId:operationId" since operationId alone isn't unique
-        // across owners (both owner 1 and owner 2 have an "op-001" here).
         Map<String, LocalDateTime> intendedCreatedAt = Map.of(
                 "1:op-001", base.plusHours(1),
                 "1:op-002", base.plusHours(2),
@@ -65,14 +64,6 @@ class SyncOperationRepositoryTest {
 
         repository.flush();
 
-        // @CreatedDate (via AuditingEntityListener) stamps createdAt with the
-        // real wall-clock time on insert, overwriting the fixed timestamps
-        // seeded above - the same issue as NoteRepositoryTest's updatedAt,
-        // and exactly why deleteOlderThan(cutoff) used to find nothing older
-        // than a January 2026 cutoff. A bulk JPQL update bypasses entity
-        // lifecycle callbacks, so it's the only way to force createdAt back;
-        // clearing the persistence context afterwards ensures the retention
-        // query below sees the corrected rows.
         for (SyncOperation op : saved) {
             testEntityManager.getEntityManager()
                     .createQuery("update SyncOperation s set s.createdAt = :createdAt where s.id = :id")

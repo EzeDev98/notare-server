@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;
 
-/** Step 17k: the oldest client version the server still talks to. Defined only in application.properties. */
+/** The oldest client version the server still accepts. */
 @Getter
 @Setter
 @Validated

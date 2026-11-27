@@ -22,34 +22,14 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * One note, start to finish: correct, format, infer its title, then save only
- * if nobody edited the note in the meantime. Nothing here ever reaches the
- * user except the better note itself.
- *
- * <p>No transaction is held across the LanguageTool or title calls. The note
- * is read, the work is done, and the save is a single conditional update on
- * the version that was read (each repository write runs in its own transaction).
- *
- * <p>The title is the AI's alone: inferred from the whole note, stored in
- * ai_title and never written into the note's text. It is inferred again each
- * time an edited note is tidied, for notes of at least min-words-for-title
- * words. A shorter note keeps the title it had.
- *
- * <p>Failures retry with backoff. After max-attempts the note is left alone at
- * that version, and an edit gives it a fresh set of attempts.
- *
- * <p>Counted in notare.tidy.notes and notare.tidy.titles, by outcome.
- */
+/** Corrects, formats and titles one note, saving only if nobody edited it meanwhile. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class NoteTidyServiceImpl implements NoteTidyService {
 
-    /** The user edited during the job: look again after this long. */
     private static final long EDITED_RETRY_MINUTES = 5;
 
-    /** First failure waits this long, then it doubles each time. */
     private static final long FAILURE_BACKOFF_MINUTES = 5;
 
     private final NoteRepository noteRepository;
@@ -92,7 +72,6 @@ public class NoteTidyServiceImpl implements NoteTidyService {
 
             String body = noteFormatter.format(corrected.text());
 
-            // Never lose words: a fix may change a word, never the number of them.
             if (wordCount(body) != wordCount(original)) {
                 log.warn("AI tidy: note {} result discarded, word count changed", noteId);
                 leave(noteId, version, "word_count_changed");
@@ -107,12 +86,10 @@ public class NoteTidyServiceImpl implements NoteTidyService {
                 return CompletableFuture.completedFuture(null);
             }
 
-            // Only a text change has an original worth restoring; a new title alone does not.
             LocalDateTime now = LocalDateTime.now();
             int saved = noteRepository.applyTidy(
                     noteId, version, body, textChanged ? original : null, title, now);
             if (saved == 0) {
-                // Edited (or deleted) while the job ran: the user's version wins.
                 noteRepository.deferTidy(noteId, now.plusMinutes(EDITED_RETRY_MINUTES));
                 count("edited_during_job");
                 log.debug("AI tidy: note {} changed during the job, result discarded", noteId);
@@ -126,7 +103,6 @@ public class NoteTidyServiceImpl implements NoteTidyService {
         return CompletableFuture.completedFuture(null);
     }
 
-    /** Nothing to save at this version: remember it, so the note waits for its next edit. */
     private void leave(Long noteId, long version, String outcome) {
         noteRepository.markTidied(noteId, version);
         count(outcome);
@@ -135,8 +111,6 @@ public class NoteTidyServiceImpl implements NoteTidyService {
     private void recordFailure(Note note, long version, RuntimeException failure) {
         int attempt = note.getTidyAttempts() + 1;
         if (attempt >= properties.getMaxAttempts()) {
-            // Give up quietly at this version. An edit moves the version on,
-            // and the note is then tried again with a fresh set of attempts.
             noteRepository.markTidied(note.getId(), version);
             count("gave_up");
             log.warn("AI tidy: note {} failed {} times, leaving it until it is edited", note.getId(), attempt, failure);
@@ -149,10 +123,6 @@ public class NoteTidyServiceImpl implements NoteTidyService {
                 note.getId(), attempt, properties.getMaxAttempts(), waitMinutes, failure);
     }
 
-    /**
-     * The note's title, inferred from its whole text. Keeps the title it had when
-     * the note is too short, today's allowance is used up, or nothing usable came back.
-     */
     private String titleFor(Note note, String body) {
         String current = note.getAiTitle();
         if (wordCount(body) < properties.getMinWordsForTitle()) {
@@ -171,7 +141,6 @@ public class NoteTidyServiceImpl implements NoteTidyService {
             countTitle(title.isPresent() ? "inferred" : "none");
             return title.orElse(current);
         } catch (RuntimeException failure) {
-            // A title is optional: the corrections still go ahead without a new one.
             countTitle("engine_failed");
             log.warn("AI tidy: no title for note {}, title engine failed", note.getId(), failure);
             return current;

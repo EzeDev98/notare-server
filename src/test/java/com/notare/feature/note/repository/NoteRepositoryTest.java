@@ -17,6 +17,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** Tests for NoteRepository. */
 @DataJpaTest
 @ActiveProfiles("test")
 class NoteRepositoryTest {
@@ -85,14 +86,6 @@ class NoteRepositoryTest {
                 )
         ));
 
-        // @LastModifiedDate (via AuditingEntityListener, wired up in AppConfig)
-        // stamps updatedAt with the real wall-clock time on insert, silently
-        // overwriting the fixed timestamps seeded above - which is exactly why
-        // the cursor-based delta query below used to see every row as "recent".
-        // A bulk JPQL update bypasses entity lifecycle callbacks entirely, so
-        // it's the only way to force updatedAt back to the intended value;
-        // clearing the persistence context afterwards ensures later reads see
-        // the corrected row rather than the stale (audited) managed instance.
         for (Note n : saved) {
             testEntityManager.getEntityManager()
                     .createQuery("update Note n set n.updatedAt = :updatedAt where n.id = :id")

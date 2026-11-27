@@ -6,10 +6,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
 
-/**
- * The pool AI tidy runs on, kept apart from transcription so a backlog of
- * tidy work never delays a transcript.
- */
+/** The thread pool AI tidy runs on. */
 @Configuration
 public class NoteTidyAsyncConfig {
 
@@ -20,7 +17,6 @@ public class NoteTidyAsyncConfig {
         executor.setMaxPoolSize(2);
         executor.setQueueCapacity(50);
         executor.setThreadNamePrefix("tidy-");
-        // On shutdown, let a note in progress finish its save instead of cutting it off.
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(30);
         return executor;

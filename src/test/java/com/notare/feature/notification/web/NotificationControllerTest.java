@@ -46,38 +46,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 15g of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox</b> - see {@link
- * AuthControllerTest}'s disclaimer (Step 15a);
- * same reasoning. Run via {@code mvn test} before trusting it.
- *
- * <p>Authenticated principal is supplied the same way as
- * {@link CollaborationControllerTest}
- * (Step 15d) - directly on {@code SecurityContextHolder} in the test
- * thread, with {@code addFilters = false} keeping the real
- * {@code JwtAuthenticationFilter} chain out of this slice.
- *
- * <p>Every endpoint here is implicitly scoped to the caller per
- * {@link NotificationController}'s own javadoc - there is no recipient path
- * variable to test for tampering, so each test's emphasis is on (a) the
- * authenticated user's id reaching the service and nobody else's, (b) the
- * {@code unreadOnly} filter and the {@code @PageableDefault} (size 20, sort
- * {@code createdAt} DESC) on the list endpoint, and (c)
- * {@link NotificationNotFoundException} -&gt; 404 on the two id-based
- * mutations.
- *
- * <p>Covers: {@code GET /notifications} - default paging/sort, an explicit
- * override, {@code unreadOnly=true} forwarded, and the
- * {@link PagedResponse} envelope. {@code GET /notifications/unread-count} -
- * 200 with the wrapped count. {@code POST /notifications/{id}/read} - 200
- * with the updated notification, and unknown/not-mine -&gt; 404.
- * {@code POST /notifications/read-all} - 200 wrapping the service's
- * marked-count in {@link MarkAllReadResponse},
- * including the zero case. {@code DELETE /notifications/{id}} - 204, and
- * unknown/not-mine -&gt; 404.
- */
+/** Tests for NotificationController. */
 @WebSliceSupport
 @WebMvcTest(
         controllers = NotificationController.class,
@@ -126,10 +95,6 @@ class NotificationControllerTest {
         Page<NotificationResponse> page = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
         return PagedResponse.of(List.of(), page);
     }
-
-    // ----------------------------------------------------------------
-    // GET /notifications
-    // ----------------------------------------------------------------
 
     @Test
     void list_noParams_defaultsToUnreadOnlyFalseAndPageableDefaultOfSize20SortedByCreatedAtDesc() throws Exception {
@@ -211,10 +176,6 @@ class NotificationControllerTest {
         verify(notificationService).list(eq(77L), eq(false), any());
     }
 
-    // ----------------------------------------------------------------
-    // GET /notifications/unread-count
-    // ----------------------------------------------------------------
-
     @Test
     void unreadCount_validRequest_returns200WithTheWrappedCount() throws Exception {
         authenticateAs(1L);
@@ -227,8 +188,6 @@ class NotificationControllerTest {
 
     @Test
     void unreadCount_neverConflictsWithTheIdRoute() throws Exception {
-        // Literal /unread-count must win over the (nonexistent, but
-        // structurally similar) /{notificationId} pattern used elsewhere.
         authenticateAs(1L);
         when(notificationService.unreadCount(1L)).thenReturn(new UnreadCountResponse(0L));
 
@@ -236,10 +195,6 @@ class NotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.unreadCount").value(0));
     }
-
-    // ----------------------------------------------------------------
-    // POST /notifications/{id}/read
-    // ----------------------------------------------------------------
 
     @Test
     void markAsRead_validRequest_returns200WithTheUpdatedNotification() throws Exception {
@@ -266,10 +221,6 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.detail").value("Notification not found."));
     }
 
-    // ----------------------------------------------------------------
-    // POST /notifications/read-all
-    // ----------------------------------------------------------------
-
     @Test
     void markAllAsRead_someUnread_returns200WithTheMarkedCount() throws Exception {
         authenticateAs(1L);
@@ -291,10 +242,6 @@ class NotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.markedCount").value(0));
     }
-
-    // ----------------------------------------------------------------
-    // DELETE /notifications/{id}
-    // ----------------------------------------------------------------
 
     @Test
     void delete_validRequest_returns204() throws Exception {

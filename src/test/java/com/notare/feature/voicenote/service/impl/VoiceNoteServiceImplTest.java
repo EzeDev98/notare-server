@@ -48,15 +48,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/**
- * Covers {@link VoiceNoteServiceImpl#loadAudio}'s authorization, mirroring
- * the two paths its own doc comment describes: direct ownership (the common
- * case, and the only path for a standalone recording), and — new — falling
- * back to "does the caller own the recording's parent note", so a note
- * owner can finally play back a WRITE collaborator's voice reply the same
- * way {@link VoiceNoteServiceImpl#listVoiceNotesForNote} already lets them
- * see it listed.
- */
+/** Tests for VoiceNoteServiceImpl. */
 @ExtendWith(MockitoExtension.class)
 class VoiceNoteServiceImplTest {
 
@@ -115,15 +107,11 @@ class VoiceNoteServiceImplTest {
         VoiceNoteContent content = service.loadAudio(NOTE_OWNER_ID, VOICE_NOTE_ID);
 
         assertThat(content.resource()).isEqualTo(resource);
-        // The uploader IS the owner — no need to ask NoteService anything.
         verify(noteService, never()).getNote(any(), any());
     }
 
     @Test
     void loadAudio_noteOwnerCanLoadACollaboratorsAttachedReply() {
-        // Uploaded by the collaborator, attached to a note NOTE_OWNER_ID owns —
-        // exactly the scenario from the bug report: playable in the list,
-        // 404 on download, because loadAudio was still uploader-only.
         VoiceNote voiceNote = attachedRecording(COLLABORATOR_ID);
         when(voiceNoteRepository.findById(VOICE_NOTE_ID)).thenReturn(Optional.of(voiceNote));
         when(noteService.getNote(NOTE_OWNER_ID, NOTE_ID)).thenReturn(mock(NoteResponse.class));
@@ -140,7 +128,6 @@ class VoiceNoteServiceImplTest {
     void loadAudio_strangerWhoOwnsNeitherTheNoteNorTheRecordingIsRejected() {
         VoiceNote voiceNote = attachedRecording(COLLABORATOR_ID);
         when(voiceNoteRepository.findById(VOICE_NOTE_ID)).thenReturn(Optional.of(voiceNote));
-        // Not the uploader, and NoteService confirms they don't own the note either.
         when(noteService.getNote(STRANGER_ID, NOTE_ID)).thenThrow(new NoteNotFoundException("Note not found."));
 
         assertThatThrownBy(() -> service.loadAudio(STRANGER_ID, VOICE_NOTE_ID))
@@ -151,8 +138,6 @@ class VoiceNoteServiceImplTest {
 
     @Test
     void loadAudio_standaloneRecordingHasNoNoteFallback() {
-        // noteId == null: nothing to fall back to. Must not ask NoteService
-        // about a note that was never attached, and must reject cleanly.
         VoiceNote voiceNote = new VoiceNote();
         voiceNote.setId(VOICE_NOTE_ID);
         voiceNote.setOwnerId(COLLABORATOR_ID);
@@ -175,23 +160,12 @@ class VoiceNoteServiceImplTest {
                 .isInstanceOf(VoiceNoteNotFoundException.class);
     }
 
-    // -------------------------------------------------------------------
-    // Step 9a — upload / delete / list.
-    //
-    // Fills the gaps left by the loadAudio-only suite above: upload's
-    // validate-before-write ordering and its compensating delete on a
-    // failed save, deleteVoiceNote's event-then-best-effort-storage-cleanup
-    // ordering, and both list paths — including listVoiceNotesForNote's
-    // documented fix (every recording attached to a note the caller owns,
-    // not just the caller's own uploads).
-    // -------------------------------------------------------------------
-
     private MultipartFile multipartFile(String contentType, String filename, byte[] bytes) {
         MultipartFile file = mock(MultipartFile.class);
         try {
             when(file.getInputStream()).thenReturn(new ByteArrayInputStream(bytes));
         } catch (IOException e) {
-            throw new AssertionError(e); // unreachable — stubbing, not real I/O
+            throw new AssertionError(e);
         }
         when(file.getContentType()).thenReturn(contentType);
         when(file.getOriginalFilename()).thenReturn(filename);
@@ -234,8 +208,6 @@ class VoiceNoteServiceImplTest {
 
         assertThat(result).isEqualTo(response);
         verify(voiceUploadValidator).validate(file, 10);
-        // Bytes must be stored before the row exists — an interrupted upload
-        // must never leave a metadata row pointing at nothing.
         InOrder order = inOrder(fileStorageService, voiceNoteRepository);
         order.verify(fileStorageService).store(any(InputStream.class), anyString(), anyString());
         order.verify(voiceNoteRepository).save(entity);
@@ -258,8 +230,6 @@ class VoiceNoteServiceImplTest {
         assertThatThrownBy(() -> service.upload(NOTE_OWNER_ID, file, NOTE_ID, 10))
                 .isSameAs(dbFailure);
 
-        // The file already exists on disk when save() fails, so it must be
-        // cleaned up — otherwise it's an orphan with no metadata row.
         verify(fileStorageService).delete("recordings/orphan.mp3");
         verifyNoInteractions(eventPublisher);
     }
@@ -284,9 +254,6 @@ class VoiceNoteServiceImplTest {
         service.deleteVoiceNote(NOTE_OWNER_ID, VOICE_NOTE_ID);
 
         InOrder order = inOrder(voiceNoteRepository, eventPublisher, fileStorageService);
-        // Metadata row goes first (deleting it is the source of truth for
-        // "this voice note is gone"); the event fires right after, before the
-        // best-effort storage cleanup, so a storage hiccup can never suppress it.
         order.verify(voiceNoteRepository).delete(vn);
         order.verify(eventPublisher).publishEvent(
                 new VoiceNoteDeletedEvent(VOICE_NOTE_ID, "reply.m4a", NOTE_OWNER_ID));
@@ -312,8 +279,6 @@ class VoiceNoteServiceImplTest {
         doThrow(new RuntimeException("bucket unreachable"))
                 .when(fileStorageService).delete("recordings/100.m4a");
 
-        // Must not throw: the logical delete already succeeded, an orphaned
-        // file is tolerable and left for a later cleanup sweep.
         service.deleteVoiceNote(NOTE_OWNER_ID, VOICE_NOTE_ID);
 
         verify(voiceNoteRepository).delete(vn);
@@ -344,9 +309,6 @@ class VoiceNoteServiceImplTest {
 
     @Test
     void listVoiceNotesForNote_ownerSeesEveryAttachedRecording_includingACollaboratorsUpload() {
-        // Regression coverage for the documented fix: findByNoteId (unscoped
-        // by uploader) replaced findByOwnerIdAndNoteId, so the note owner
-        // sees a WRITE collaborator's reply too, not only their own uploads.
         when(noteService.getNote(NOTE_OWNER_ID, NOTE_ID)).thenReturn(mock(NoteResponse.class));
         VoiceNote ownRecording = attachedRecording(NOTE_OWNER_ID);
         VoiceNote collaboratorsRecording = attachedRecording(COLLABORATOR_ID);

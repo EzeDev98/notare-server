@@ -51,50 +51,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 15f of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox</b> - see {@link
- * AuthControllerTest}'s disclaimer (Step 15a);
- * same reasoning. Run via {@code mvn test} before trusting it.
- *
- * <p>Authenticated principal is supplied the same way as
- * {@link CollaborationControllerTest}
- * (Step 15d) - directly on {@code SecurityContextHolder} in the test
- * thread, with {@code addFilters = false} keeping the real
- * {@code JwtAuthenticationFilter} chain out of this slice (Step 4b already
- * covers it). No {@code @ClientIp}/{@code @UserAgent} resolvers are needed -
- * {@link NoteController} takes neither.
- *
- * <p>This is the largest controller in the roadmap, so the intent per
- * endpoint is narrow and specific rather than exhaustive: bean validation is
- * already covered generically by {@code UpdateNoteRequest}/
- * {@code AutoSaveNoteRequest}'s shared {@code @NotNull version}, so it is
- * asserted once per request type rather than on every mutating endpoint; the
- * per-endpoint tests instead focus on (a) the caller's id reaching the
- * service rather than anything from the path/body, (b) the two paging
- * endpoints' distinct {@code @PageableDefault} sort orders, and (c) each
- * endpoint's own documented exception mapping.
- *
- * <p>Covers: {@code POST /notes} - 201 with Location header and body.
- * {@code GET /notes/{id}} - 200, and {@link NoteNotFoundException} -&gt; 404
- * via {@code GlobalExceptionHandler} (Step 14a), asserted once here and
- * assumed for the other id-based endpoints since they all delegate the same
- * lookup to the service. {@code GET /notes} - its {@code @PageableDefault} (size 20, sort
- * {@code pinned,updatedAt} DESC) versus an explicit override, and the
- * {@link PagedResponse} envelope. {@code GET /notes/trash} - its distinct
- * default sort ({@code deletedAt} DESC). {@code GET /notes/search} - the
- * {@code q} parameter is forwarded verbatim. {@code PUT /notes/{id}} - happy
- * path, a missing {@code version} rejected by validation before the service
- * runs, and {@link NoteConflictException} -&gt; 409 with
- * {@code currentVersion} surfaced as an extension member. {@code PATCH
- * /notes/{id}} (auto-save) - happy path with no content (partial update) and
- * the same missing-version 400. {@code DELETE /notes/{id}} - 204.
- * {@code POST /notes/{id}/restore} - 200 with the restored note.
- * {@code POST}/{@code DELETE /notes/{id}/pin} and - each
- * delegates to {@code NoteService#setPinned} with the
- * right boolean. {@code DELETE /notes/{id}/permanent} - 204.
- */
+/** Tests for NoteController. */
 @WebSliceSupport
 @WebMvcTest(
         controllers = NoteController.class,
@@ -150,10 +107,6 @@ class NoteControllerTest {
         return PagedResponse.of(List.of(), page);
     }
 
-    // ----------------------------------------------------------------
-    // POST /notes
-    // ----------------------------------------------------------------
-
     @Test
     void createNote_validRequest_returns201WithLocationHeaderAndBody() throws Exception {
         authenticateAs(1L);
@@ -199,10 +152,6 @@ class NoteControllerTest {
         verify(noteService).createNote(eq(42L), any());
     }
 
-    // ----------------------------------------------------------------
-    // GET /notes/{id}
-    // ----------------------------------------------------------------
-
     @Test
     void getNote_validRequest_returns200WithTheNote() throws Exception {
         authenticateAs(1L);
@@ -224,10 +173,6 @@ class NoteControllerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value("Note not found."));
     }
-
-    // ----------------------------------------------------------------
-    // GET /notes (list)
-    // ----------------------------------------------------------------
 
     @Test
     void listNotes_noParams_defaultsToActiveOnlyAndPageableDefaultOfSize20SortedByPinnedThenUpdatedAtDesc() throws Exception {
@@ -265,17 +210,9 @@ class NoteControllerTest {
                 .andExpect(jsonPath("$.hasNext").value(false));
     }
 
-    // ----------------------------------------------------------------
-    // GET /notes/trash
-    // ----------------------------------------------------------------
-
     private void verifyNoInteractions_getNoteOnly() {
         org.mockito.Mockito.verify(noteService, org.mockito.Mockito.never()).getNote(anyLong(), anyLong());
     }
-
-    // ----------------------------------------------------------------
-    // GET /notes/search
-    // ----------------------------------------------------------------
 
     @Test
     void searchNotes_forwardsTheQueryParamAndDefaultsToSize20SortedByUpdatedAtDesc() throws Exception {
@@ -303,10 +240,6 @@ class NoteControllerTest {
         verifyNoInteractions(noteService);
     }
 
-    // ----------------------------------------------------------------
-    // PUT /notes/{id}
-    // ----------------------------------------------------------------
-
     @Test
     void updateNote_validRequest_returns200WithTheUpdatedNote() throws Exception {
         authenticateAs(1L);
@@ -333,10 +266,6 @@ class NoteControllerTest {
                 .andExpect(status().isNotFound());
     }
 
-    // ----------------------------------------------------------------
-    // PATCH /notes/{id} (auto-save)
-    // ----------------------------------------------------------------
-
     @Test
     void autoSave_partialUpdateWithNoContent_returns200() throws Exception {
         authenticateAs(1L);
@@ -352,18 +281,6 @@ class NoteControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.version").value(2));
     }
-
-    // ----------------------------------------------------------------
-    // DELETE /notes/{id} (soft delete)
-    // ----------------------------------------------------------------
-
-    // ----------------------------------------------------------------
-    // POST /notes/{id}/restore
-    // ----------------------------------------------------------------
-
-    // ----------------------------------------------------------------
-    // Pin / unpin
-    // ----------------------------------------------------------------
 
     @Test
     void pinNote_delegatesToSetPinnedWithTrue() throws Exception {
@@ -386,10 +303,6 @@ class NoteControllerTest {
 
         verify(noteService).setPinned(1L, 5L, false);
     }
-
-    // ----------------------------------------------------------------
-    // DELETE /notes/{id}/permanent
-    // ----------------------------------------------------------------
 
     private Map<String, String> createBody(String content) {
         Map<String, String> body = new HashMap<>();

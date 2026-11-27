@@ -27,6 +27,7 @@ import java.util.Optional;
 
 import static com.notare.common.constant.GeneralConstant.MAX_ID_GENERATION_ATTEMPTS;
 
+/** Registration through internal-auth-server, the current user's profile and the AI tidy setting. */
 @Slf4j
 @RequiredArgsConstructor
 @Service
@@ -37,7 +38,6 @@ public class UserServiceImplementation implements UserService {
     private final ApplicationEventPublisher eventPublisher;
     private final RegistrationValidator registrationValidator;
     private final InternalAuthClient authClient;
-
 
     @Override
     @Transactional
@@ -62,9 +62,6 @@ public class UserServiceImplementation implements UserService {
             }
         }
 
-        // Send the normalized values, not the raw request ones - otherwise IAM
-        // and Notare can end up holding two different casings/whitespace
-        // variants of the same email for one person.
         RegisterRequest registerRequest = new RegisterRequest(username, null, email, request.getPassword(), request.getConfirmPassword());
 
         InternalAuthApiResponse<RegisterResponse> registerResponse = authClient.register(registerRequest);
@@ -83,18 +80,11 @@ public class UserServiceImplementation implements UserService {
             rollbackIamUser(response.getInternalAuthUserId());
             throw new UserAlreadyExistException("A user with this username or email is already registered");
         } catch (NotarianIdGenerationException ex) {
-            // Not a duplicate-account problem: keep the real failure, but
-            // still remove the IAM account so the person can retry later.
             rollbackIamUser(response.getInternalAuthUserId());
             throw ex;
         }
     }
 
-    /**
-     * Best-effort cleanup of an IAM account created before the local save
-     * failed. If the delete itself fails, log it and let the caller surface
-     * the original failure rather than a downstream cleanup error.
-     */
     private void rollbackIamUser(String internalAuthUserId) {
         try {
             authClient.deleteUser(internalAuthUserId);
@@ -106,10 +96,6 @@ public class UserServiceImplementation implements UserService {
     @Override
     @Transactional(readOnly = true)
     public CurrentUserResponse getCurrentUser(Long userId) {
-        // The id comes from the authenticated principal, so a miss here means
-        // the account was deleted while its token was still valid rather than
-        // that someone asked for a stranger. 404 either way; there is nothing
-        // to protect, since the caller already proved they are this user.
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found."));
 
@@ -137,7 +123,6 @@ public class UserServiceImplementation implements UserService {
 
         return userRepository.save(user);
     }
-
 
     private String generateUniqueNotarianId() {
 

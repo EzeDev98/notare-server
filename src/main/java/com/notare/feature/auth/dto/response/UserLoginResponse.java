@@ -3,6 +3,7 @@ package com.notare.feature.auth.dto.response;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+/** Response to a successful sign-in. */
 @Getter
 @AllArgsConstructor
 public class UserLoginResponse {

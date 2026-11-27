@@ -8,11 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 
-/**
- * Test-only JwtDecoder: accepts exactly the access tokens StubInternalAuthClient
- * has issued and not yet revoked. Replaces the JWKS-backed decoder, which is
- * disabled under the "test" profile.
- */
+/** Test stand-in used by the integration tests. */
 @Component
 @Profile("test")
 public class StubJwtDecoder implements JwtDecoder {

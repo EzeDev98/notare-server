@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 
 import java.util.List;
 
+/** Registers argument resolvers, the client-version check and rate limits for the web layer. */
 @RequiredArgsConstructor
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
@@ -28,17 +29,14 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Value("${app.title}")
     private String appTitle;
 
-
     @Override
     public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
         resolvers.add(clientIpArgumentResolver);
         resolvers.add(userAgentArgumentResolver);
     }
 
-    /** Step 17j (B-15): per-user limit on the sync endpoint. */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        // Step 17k: first, so an outdated client is turned away before it uses up any rate limit.
         registry.addInterceptor(clientVersionInterceptor)
                 .addPathPatterns("/" + appTitle + "/**")
                 .excludePathPatterns("/" + appTitle + "/internal/**", "/" + appTitle + "/admin/**",

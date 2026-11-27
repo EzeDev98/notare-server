@@ -15,6 +15,7 @@ import java.util.function.Function;
 
 import static com.notare.common.constant.GeneralConstant.*;
 
+/** Creates and reads the server's own signed tokens. */
 @Service
 public class JwtService {
 

@@ -15,15 +15,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
 
-/**
- * A transcription is one-to-one with a voice note, so it's modeled as a
- * sub-resource of the voice note: /voice-notes/{voiceNoteId}/transcription.
- * The controller lives in the transcription module even though its URL nests
- * under voice-notes — URL shape and module ownership are allowed to differ.
- *
- * <p>Step 17d: POST is for the note's owner and anyone with WRITE on it (a Viewer gets 403); GET is
- * open to Viewers too. Someone with no access to the note gets 404.
- */
+/** Endpoints for requesting and reading a voice clip's transcription. */
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("${app.title}/voice-notes/{voiceNoteId}/transcription")
@@ -31,27 +23,15 @@ public class TranscriptionController {
 
     private final TranscriptionService transcriptionService;
 
-    /**
-     * Submit a transcription job. Returns 202 Accepted — the correct code for
-     * "request accepted, processing will happen asynchronously". The body holds
-     * the current (initially PENDING) state, and the Location header points at
-     * the status endpoint the client should poll. Idempotent: re-submitting just
-     * returns the existing job's state.
-     */
     @PostMapping
     public ResponseEntity<TranscriptionResponse> submit(@AuthenticationPrincipal UserDetail userDetail, @PathVariable Long voiceNoteId) {
 
         TranscriptionResponse response = transcriptionService.submit(userDetail.getUser().getId(), voiceNoteId);
 
-        // The poll URL is this same path via GET.
         URI pollLocation = ServletUriComponentsBuilder.fromCurrentRequest().build().toUri();
         return ResponseEntity.accepted().location(pollLocation).body(response);
     }
 
-    /**
-     * Poll the transcription status/result for this voice note. 404 if no job
-     * has been submitted for it yet.
-     */
     @GetMapping
     public ResponseEntity<TranscriptionResponse> getStatus(@AuthenticationPrincipal UserDetail userDetail, @PathVariable Long voiceNoteId) {
 

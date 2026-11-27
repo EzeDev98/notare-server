@@ -19,21 +19,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 
-/**
- * Deletes an account for good (step 17g, B-03), in steps that can be repeated: each step runs in its
- * own transaction and is recorded in account_deletions before the next begins.
- *
- * <pre>
- * STARTED       publish UserDeletionRequested: every module deletes what it owns      -> DATA_DELETED
- * DATA_DELETED  publish UserDeletionSweep: clear what the deletes left behind          -> SWEPT
- * SWEPT         delete the auth user (already gone counts as done)                     -> AUTH_DELETED
- * AUTH_DELETED  delete the local user and this progress row
- * </pre>
- *
- * <p>A failure keeps the progress row. Calling again, or the recovery job, continues from the step
- * that failed. This class holds no transaction of its own: each step opens one, so a failure never
- * rolls back a step that already finished.
- */
+/** Deletes an account and everything it owns, in steps that can be repeated. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -47,7 +33,6 @@ public class AccountDeletionService {
     private final ApplicationEventPublisher events;
     private final TransactionTemplate tx;
 
-    /** The person asked to delete their account. Typing the username is the confirmation. */
     public void delete(User user, String confirmation) {
         if (confirmation == null || !user.getUsername().equals(confirmation.trim())) {
             throw new InvalidAccountRequestException("The username does not match.");
@@ -58,7 +43,6 @@ public class AccountDeletionService {
         resume(user.getId());
     }
 
-    /** Continue a deletion from its recorded step. Safe to call again. */
     public void resume(Long userId) {
         try {
             AccountDeletion progress = deletions.findById(userId).orElse(null);
@@ -106,13 +90,13 @@ public class AccountDeletionService {
 
     private void deleteAuthUser(String internalAuthId) {
         if (internalAuthId == null) {
-            return; // Never linked to an auth user.
+            return;
         }
         try {
             authClient.deleteUser(internalAuthId);
         } catch (InternalAuthCallException ex) {
             if (ex.getStatus() != HttpStatus.NOT_FOUND) {
-                throw ex; // Not found: a previous attempt already deleted it.
+                throw ex;
             }
         }
     }

@@ -35,35 +35,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 15b of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox</b> - see {@link AuthControllerTest}'s
- * disclaimer (Step 15a); same reasoning, same {@code @MockBean} choice for
- * Boot 3.2.5. Run via {@code mvn test} before trusting it.
- *
- * <p>Same shape as {@link AuthControllerTest}: security is off
- * ({@code addFilters = false}) because {@code POST /api/v1/login/login} is
- * itself on {@code WebSecurityConfig}'s permit-all list - logging in cannot
- * require a token you don't have yet - and {@link WebMvcConfig} plus the two
- * resolvers are imported so {@code @ClientIp}/{@code @UserAgent} resolve for
- * real rather than silently going null.
- *
- * <p>Route note: the mapping is {@code @RequestMapping("${app.title}/login")}
- * on the class PLUS {@code @PostMapping("/login")} on the method, so the
- * actual path has "login" twice - {@code /api/v1/login/login}. Confirmed
- * against {@code WebSecurityConfig}'s allowlist entry, which is
- * {@code "/api/v1/login/**"} for exactly this reason.
- *
- * <p>Covers: a valid login maps to 200 with every {@link UserLoginResponse}
- * field surfaced; the resolved client IP / user agent reach
- * {@link LoginService#login}; blank username-or-email / blank password are
- * rejected by bean validation before the service runs; and the three
- * authentication failure modes {@link LoginService} can throw -
- * {@link BadCredentialsException}, {@link DisabledException}, and
- * {@link LockedException} - each surface with the correct status through
- * {@link com.notare.common.exception.GlobalExceptionHandler} (Step 14a).
- */
+/** Tests for LoginController. */
 @WebSliceSupport
 @WebMvcTest(
         controllers = LoginController.class,

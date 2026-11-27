@@ -16,6 +16,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+/** Tests for LogoutServiceImpl. */
 @ExtendWith(MockitoExtension.class)
 class LogoutServiceImplTest {
 

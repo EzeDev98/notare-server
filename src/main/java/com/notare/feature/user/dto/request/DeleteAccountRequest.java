@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Body for DELETE /user/me (step 17g, B-03): the person types their username to confirm. */
+/** Request body for deleting an account: the username typed to confirm. */
 @Getter
 @Setter
 @NoArgsConstructor

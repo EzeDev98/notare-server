@@ -16,39 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Applies exactly ONE queued operation, in its own transaction.
- *
- * <h2>Why this is a separate bean</h2>
- *
- * It has to be. @Transactional works through a Spring AOP proxy, and a call
- * from one method to another INSIDE the same bean bypasses that proxy entirely
- * — the annotation is silently ignored and the code runs in whatever
- * transaction the caller happened to have. This is the same self-invocation
- * trap as @Async in Step 5, and here it would be quietly catastrophic: the
- * batch would run as one transaction, so a conflict on operation seven would
- * roll back the six that already succeeded, which is precisely the failure
- * Step 9 was designed to avoid.
- *
- * <p>REQUIRES_NEW rather than REQUIRED, even though the orchestrator is
- * deliberately non-transactional and REQUIRED would behave identically today.
- * It states the requirement rather than depending on the caller continuing to
- * be careful: if anyone ever wraps the push service in a transaction, this
- * still isolates each operation instead of silently joining theirs.
- *
- * <h2>What is inside the transaction</h2>
- *
- * The ledger check, the note change, and the ledger write. All three, together,
- * on purpose. If the ledger write could commit separately from the note change,
- * the two could disagree — and a missing ledger row means the next replay
- * reports a CONFLICT against the user's own successful write, which is the
- * phantom conflict this whole mechanism exists to prevent.
- *
- * <p>Conflicts and missing notes are NOT caught here. They propagate, so the
- * transaction rolls back cleanly and the orchestrator classifies them. Catching
- * a conflict in-place would mean continuing to use a persistence context that
- * an optimistic-lock failure has already left in an unusable state.
- */
+/** Applies one queued operation in its own transaction. */
 @Component
 @RequiredArgsConstructor
 public class SyncOperationApplier {
@@ -57,35 +25,24 @@ public class SyncOperationApplier {
     private final SyncOperationRepository syncOperationRepository;
     private final VoiceNoteService voiceNoteService;
 
-    /**
-     * @throws com.notare.common.exception.NoteConflictException  stale version
-     * @throws com.notare.common.exception.NoteNotFoundException  note gone
-     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public SyncOperationResult apply(Long ownerId, SyncOperationRequest request) {
 
-        // A clip delete needs no ledger: deleting a clip that is already gone is a 404 the push service
-        // reports as NOT_FOUND, which the client treats as done. It has no note to point a ledger row at.
         if (request.getType() == SyncOperationType.CLIP_DELETE) {
             voiceNoteService.removeClip(ownerId, request.getClipId());
             return applied(request, null);
         }
 
-        // 1. Already done? Replay the recorded result instead of the operation.
         var recorded = syncOperationRepository
                 .findByOwnerIdAndOperationId(ownerId, request.getOperationId());
 
         if (recorded.isPresent()) {
-            // The note may be absent (a replayed DELETE, or a later permanent
-            // delete) and that's fine — APPLIED is still the honest answer. The
-            // client only needs to know it can drop this from its queue.
             NoteResponse note = noteService
                     .findAnyNote(ownerId, recorded.get().getNoteId())
                     .orElse(null);
             return applied(request, note);
         }
 
-        // 2. Do the work.
         NoteResponse note = switch (request.getType()) {
             case CREATE -> create(ownerId, request);
             case UPDATE -> update(ownerId, request);
@@ -93,7 +50,6 @@ public class SyncOperationApplier {
             case CLIP_DELETE -> throw new IllegalStateException("CLIP_DELETE is handled before the ledger.");
         };
 
-        // 3. Record it, in this same transaction.
         record(ownerId, request, note);
 
         return applied(request, note);
@@ -102,32 +58,22 @@ public class SyncOperationApplier {
     private NoteResponse create(Long ownerId, SyncOperationRequest request) {
         CreateNoteRequest createRequest = new CreateNoteRequest();
         createRequest.setContent(request.getContent());
-        // createWithClientId is itself idempotent on (owner, clientId), so a
-        // create is protected twice over: by the ledger above and by the unique
-        // constraint underneath. Belt and braces is warranted — a duplicated
-        // note is data the user has to clean up by hand.
         return noteService.createWithClientId(ownerId, createRequest, request.getClientId());
     }
 
     private NoteResponse update(Long ownerId, SyncOperationRequest request) {
         UpdateNoteRequest updateRequest = new UpdateNoteRequest();
         updateRequest.setContent(request.getContent());
-        // The ORDINARY owner-facing update. Last write wins: whatever content
-        // arrives replaces what is stored.
         return noteService.updateNote(ownerId, request.getNoteId(), updateRequest);
     }
 
     private NoteResponse delete(Long ownerId, SyncOperationRequest request) {
         noteService.permanentlyDeleteNote(ownerId, request.getNoteId());
-        // The note is gone, so there is no version to record; a replay answers NOT_FOUND, which is harmless.
         return null;
     }
 
     private void record(Long ownerId, SyncOperationRequest request, NoteResponse note) {
         if (note == null) {
-            // Nothing to point the ledger at. Only reachable if a note vanished
-            // between the write and the re-read; skipping the entry costs at
-            // most one redundant replay, which is safe.
             return;
         }
         SyncOperation operation = new SyncOperation();
@@ -143,8 +89,6 @@ public class SyncOperationApplier {
                 request.getOperationId(),
                 SyncResultStatus.APPLIED,
                 note,
-                // clientId echoed only for CREATE — it's how the client maps its
-                // local note onto note.id().
                 request.getClientId(),
                 null);
     }

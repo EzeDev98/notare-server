@@ -12,6 +12,7 @@ import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** Tests for FileBlobRepository. */
 @DataJpaTest
 @ActiveProfiles("test")
 class FileBlobRepositoryTest {
@@ -167,8 +168,6 @@ class FileBlobRepositoryTest {
         blob.setContentType(contentType);
         blob.setSizeBytes(content.length);
 
-        // This also verifies that @PrePersist does not overwrite an
-        // explicitly supplied creation timestamp.
         blob.setCreatedAt(
                 LocalDateTime.of(2026, 1, 1, 12, 0)
         );

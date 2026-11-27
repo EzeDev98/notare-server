@@ -37,39 +37,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 11a of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox.</b> This environment has no route to a
- * Maven mirror, so Mockito, Spring context ({@code ApplicationEventPublisher}),
- * and Spring Data ({@code Page}/{@code Pageable}) are unavailable as
- * compile-time dependencies here, and {@code target/classes} only holds this
- * project's own already-compiled classes, not third-party jars. Every test
- * below is reasoned carefully from {@link TranscriptionServiceImpl}'s source
- * and follows this codebase's existing Mockito conventions exactly, but it has
- * not actually been compiled or run. Please run it via {@code mvn test}
- * before trusting it.
- *
- * <p>Covers {@link TranscriptionServiceImpl#submit}, {@code getByVoiceNote},
- * and {@code searchTranscripts}.
- *
- * <p>The interesting behavior in {@code submit} is entirely in the branching
- * over the four {@link TranscriptionStatus} values for an EXISTING job:
- * PENDING/PROCESSING/COMPLETED must all be idempotent no-ops (return the
- * current row, publish nothing, insert nothing new), while FAILED must be
- * reset back to PENDING and re-queued. That reset also has its own
- * requirement worth locking in: every result field from the failed attempt
- * (transcript, confidence, language, errorMessage) must be cleared, not just
- * the status flipped — otherwise a retried job could briefly show stale
- * COMPLETED-looking data under a PENDING status.
- *
- * <p>Ownership is delegated, not duplicated: {@code submit} calls {@code
- * voiceNoteService.getVoiceNote} purely for its side effect of throwing
- * {@link VoiceNoteNotFoundException} when the caller doesn't own the voice
- * note. Its return value is discarded. Several tests assert this call
- * happens, and that a rejection from it short-circuits everything after —
- * no repository write, no event.
- */
+/** Tests for TranscriptionServiceImpl. */
 @ExtendWith(MockitoExtension.class)
 class TranscriptionServiceImplTest {
 
@@ -114,10 +82,6 @@ class TranscriptionServiceImplTest {
         return t;
     }
 
-    // -------------------------------------------------------------------
-    // submit — ownership gate
-    // -------------------------------------------------------------------
-
     @Test
     void submit_callerDoesNotOwnTheVoiceNote_isRejectedBeforeAnyRepositoryOrEventWork() {
         when(voiceNoteService.getVoiceNote(OWNER_ID, VOICE_NOTE_ID))
@@ -130,10 +94,6 @@ class TranscriptionServiceImplTest {
         verify(transcriptionRepository, never()).save(any());
         verifyNoInteractions(eventPublisher);
     }
-
-    // -------------------------------------------------------------------
-    // submit — no existing job: create PENDING, save, publish
-    // -------------------------------------------------------------------
 
     @Test
     void submit_noExistingJob_createsPendingJobAndPublishesRequestedEvent() {
@@ -159,10 +119,6 @@ class TranscriptionServiceImplTest {
 
         verify(eventPublisher).publishEvent(new TranscriptionRequestedEvent(TRANSCRIPTION_ID));
     }
-
-    // -------------------------------------------------------------------
-    // submit — existing job in a "leave it alone" state
-    // -------------------------------------------------------------------
 
     @Test
     void submit_existingPendingJob_isIdempotent_returnsCurrentStateAndPublishesNothing() {
@@ -214,15 +170,10 @@ class TranscriptionServiceImplTest {
         TranscriptionResponse result = service.submit(OWNER_ID, VOICE_NOTE_ID);
 
         assertThat(result).isEqualTo(response);
-        // Nothing about the completed result is touched.
         assertThat(completed.getTranscript()).isEqualTo("hello world");
         verify(transcriptionRepository, never()).save(any());
         verifyNoInteractions(eventPublisher);
     }
-
-    // -------------------------------------------------------------------
-    // submit — existing FAILED job: reset and re-queue
-    // -------------------------------------------------------------------
 
     @Test
     void submit_existingFailedJob_resetsEveryResultFieldToPendingAndRepublishesRequested() {
@@ -242,9 +193,6 @@ class TranscriptionServiceImplTest {
         TranscriptionResponse result = service.submit(OWNER_ID, VOICE_NOTE_ID);
 
         assertThat(result).isEqualTo(response);
-        // Every field a failed attempt could have populated must be cleared,
-        // not just the status — a half-reset row would show FAILED-attempt
-        // leftovers under a PENDING status.
         assertThat(failed.getStatus()).isEqualTo(TranscriptionStatus.PENDING);
         assertThat(failed.getErrorMessage()).isNull();
         assertThat(failed.getTranscript()).isNull();
@@ -254,10 +202,6 @@ class TranscriptionServiceImplTest {
         verify(transcriptionRepository).save(failed);
         verify(eventPublisher).publishEvent(new TranscriptionRequestedEvent(TRANSCRIPTION_ID));
     }
-
-    // -------------------------------------------------------------------
-    // getByVoiceNote
-    // -------------------------------------------------------------------
 
     @Test
     void getByVoiceNote_existingJob_returnsMappedResponse() {
@@ -283,10 +227,6 @@ class TranscriptionServiceImplTest {
                 .isInstanceOf(TranscriptionNotFoundException.class);
     }
 
-    // -------------------------------------------------------------------
-    // searchTranscripts — term normalization, escaping, status scoping
-    // -------------------------------------------------------------------
-
     @Test
     void searchTranscripts_nullQuery_normalizesToEmptyStringAndScopesToCompleted() {
         Pageable pageable = PageRequest.of(0, 20);
@@ -306,8 +246,6 @@ class TranscriptionServiceImplTest {
         Pageable pageable = PageRequest.of(0, 20);
         Transcription t = existing(TranscriptionStatus.COMPLETED);
         Page<Transcription> page = new PageImpl<>(List.of(t), pageable, 1);
-        // "50%_off" -> trimmed already, then LikeEscaper turns it into
-        // "50!%!_off" so the literal % and _ don't act as wildcards.
         when(transcriptionRepository.searchByOwnerAndStatus(
                 eq(OWNER_ID), eq(TranscriptionStatus.COMPLETED), eq("50!%!_off"), eq(pageable)))
                 .thenReturn(page);
@@ -327,11 +265,6 @@ class TranscriptionServiceImplTest {
         Transcription first = existing(TranscriptionStatus.COMPLETED);
         Transcription second = existing(TranscriptionStatus.COMPLETED);
         second.setId(501L);
-        // totalElements must exceed 20 (not just 10) so page 1 is a genuine
-        // middle page: page 0 covers items 0-9, page 1 covers items 10-19.
-        // At total=12, page 1 is the LAST page and hasNext() is correctly
-        // false. 22 puts a page 2 after this one, making both hasNext() and
-        // hasPrevious() true.
         Page<Transcription> page = new PageImpl<>(List.of(first, second), pageable, 22);
         when(transcriptionRepository.searchByOwnerAndStatus(anyLong(), eq(TranscriptionStatus.COMPLETED), any(), eq(pageable)))
                 .thenReturn(page);

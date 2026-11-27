@@ -22,6 +22,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 
+/** A voice clip's transcription job and its result. */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -45,61 +46,38 @@ public class Transcription {
     @Column(name = "owner_id", nullable = false, updatable = false)
     private Long ownerId;
 
-    /**
-     * The voice note this transcribes. A plain Long (decoupled, like everywhere
-     * else). The unique constraint above enforces one transcription per voice
-     * note — a re-transcribe updates this row rather than inserting a second.
-     */
     @Column(name = "voice_note_id", nullable = false, updatable = false)
     private Long voiceNoteId;
 
-    /**
-     * EnumType.STRING is deliberate: the status name ("PENDING") is stored, not
-     * its ordinal position (0). With ORDINAL, reordering or inserting an enum
-     * constant later would silently remap every existing row to the wrong
-     * status. STRING is stable against enum edits.
-     */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private TranscriptionStatus status = TranscriptionStatus.PENDING;
 
-    /** Populated when COMPLETED. */
     @Column(columnDefinition = "TEXT")
     private String transcript;
 
-    /** Engine confidence 0.0–1.0, populated when COMPLETED. */
     private Double confidence;
 
-    /** Detected/So language code, e.g. "en". Populated when COMPLETED. */
     @Column(length = 16)
     private String language;
 
-    /** Populated when FAILED, to explain what went wrong. */
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
-    /**
-     * Who asked for this transcript (step 17d). It can be an Editor, not the clip's owner, so the
-     * "ready" and "failed" notices go to this person. Null on older rows, which the owner asked for.
-     */
     @Column(name = "requested_by")
     private Long requestedBy;
 
-    /** The language asked for. "auto" lets the engine detect it; nothing else is read yet (O-23). */
     @Column(name = "requested_language", nullable = false, length = 16)
     private String requestedLanguage = "auto";
 
-    /** When the job was submitted. */
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    /** Last status change. */
     @LastModifiedDate
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    /** The constructor from before step 17d: the two new fields keep their defaults. */
     public Transcription(Long id, Long ownerId, Long voiceNoteId, TranscriptionStatus status, String transcript,
                          Double confidence, String language, String errorMessage,
                          LocalDateTime createdAt, LocalDateTime updatedAt) {

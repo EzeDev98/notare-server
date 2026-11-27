@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Request body for logging out. */
 @Getter
 @Setter
 @AllArgsConstructor

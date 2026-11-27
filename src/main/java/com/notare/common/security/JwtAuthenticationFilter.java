@@ -19,10 +19,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-/**
- * Authenticates a request from an internal-auth-server access token. The token
- * is verified against IAM's signing keys (JWKS); notare holds no session state.
- */
+/** Authenticates a request from its internal-auth-server access token. */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
@@ -74,7 +71,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    /** IAM is multi-tenant and shares one signing key, so pin tokens to notare's client when configured. */
     private boolean belongsToThisApp(Jwt jwt) {
         if (expectedClientApplicationId.isEmpty()) {
             return true;

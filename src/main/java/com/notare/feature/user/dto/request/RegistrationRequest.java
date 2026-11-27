@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Request body for registering a new account. */
 @Getter
 @Setter
 @NoArgsConstructor

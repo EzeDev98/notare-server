@@ -14,34 +14,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.UUID;
 
-/**
- * Temporary prod voice-note storage: bytes live in Postgres (the same
- * database as everything else) instead of R2. This exists purely to unblock
- * a first production deploy before an R2 account is set up — R2FileStorageService
- * is untouched and ready to take back over the moment it's configured.
- *
- * Selected via notare.storage.backend=postgres (see StorageProperties). Both
- * this class and R2FileStorageService stay under @Profile("prod") — dev/test
- * are unaffected either way, they always get LocalFileStorageService.
- *
- * Same contract as every other FileStorageService implementation:
- *   - the backend generates the key (random UUID + original extension),
- *     never derived from client input
- *   - store() is never @Transactional at the call site above this class —
- *     see FileStorageService's own javadoc on why upload is a saga, not a
- *     transaction. Here specifically that no longer matters much (there's no
- *     separate file I/O step, just one DB write), but the interface contract
- *     is identical across backends on purpose: callers never need to know
- *     which one is active.
- *   - delete() treats a missing key as success.
- *
- * Trade-off worth knowing: voice notes now count against your Postgres
- * storage quota (Neon's free tier included), and every /stream Range request
- * pulls the full row back from Postgres before slicing it in memory — same
- * "read from byte 0, discard the rest" limitation R2FileStorageService's
- * javadoc already documents for R2, just against Postgres instead. Fine at
- * MVP scale; revisit if voice notes get long or numerous before R2 lands.
- */
+/** File storage in the Postgres database. */
 @Service
 @Profile("prod")
 @ConditionalOnProperty(prefix = "notare.storage", name = "backend", havingValue = "postgres")
@@ -89,9 +62,6 @@ public class PostgresFileStorageService implements FileStorageService {
     @Override
     @Transactional
     public void delete(String storageKey) {
-        // Mirrors the "missing key = success" contract every other backend
-        // follows: JpaRepository.deleteById() throws on a missing row, so we
-        // check first instead of catching the exception.
         if (repository.existsById(storageKey)) {
             repository.deleteById(storageKey);
         }

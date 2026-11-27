@@ -10,12 +10,11 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.util.Collection;
 import java.util.List;
 
+/** Spring Security view of a User. */
 @RequiredArgsConstructor
 public class UserDetail implements UserDetails {
 
     private final User user;
-
-
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
@@ -24,7 +23,7 @@ public class UserDetail implements UserDetails {
 
     @Override
     public @Nullable String getPassword() {
-        return null; // credentials live only in internal-auth-server
+        return null;
     }
 
     @Override

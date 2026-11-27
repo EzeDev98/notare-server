@@ -7,17 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Step 3a of the coverage roadmap.
- *
- * <p>Covers {@link NoteMapper#toResponse}, {@link NoteMapper#toSummary}, and
- * the private preview-building logic exercised through {@code toSummary}:
- * null/blank content collapsing to a null preview, whitespace stripping, and
- * both edges of the 200-character truncation - a real off-by-one risk given
- * how close it is to {@link com.notare.common.util.NoteLabeler}'s own
- * 255-character truncation (Step 1b), but a DIFFERENT limit and a DIFFERENT
- * class, so it earns its own boundary tests rather than borrowing 1b's.
- */
+/** Tests for NoteMapper. */
 class NoteMapperTest {
 
     private final NoteMapper mapper = new NoteMapper();
@@ -44,8 +34,6 @@ class NoteMapperTest {
 
     @Test
     void toResponse_doesNotTruncateTheFullContent() {
-        // Unlike the summary's preview, the detail response carries the
-        // whole thing untouched, however long.
         String longContent = "x".repeat(500);
         Note note = new Note();
         note.setContent(longContent);
@@ -99,11 +87,6 @@ class NoteMapperTest {
 
     @Test
     void toSummary_contentOver200CharactersIsTruncatedWithAnEllipsis() {
-        // Unlike NoteLabeler's truncate() (Step 1b), which reserves space for
-        // the ellipsis so the total stays AT the cap, this one appends the
-        // ellipsis AFTER the 200 characters - so the result is 201 characters
-        // long, not 200. Locking in the actual behavior, not the "nicer"
-        // assumption.
         String chars201 = "b".repeat(201);
         Note note = new Note();
         note.setContent(chars201);

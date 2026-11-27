@@ -4,11 +4,7 @@ import com.notare.feature.voicenote.model.VoiceNote;
 import com.notare.feature.voicenote.dto.response.VoiceNoteResponse;
 import org.springframework.stereotype.Component;
 
-/**
- * Hand-written mapper (matching the codebase convention). toEntity takes plain
- * values, not a MultipartFile, so the mapper stays free of any web dependency —
- * the service extracts the file's fields and passes them in.
- */
+/** Maps voice clips to their response. */
 @Component
 public class VoiceNoteMapper {
 

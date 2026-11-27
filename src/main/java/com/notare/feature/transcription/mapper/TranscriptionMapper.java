@@ -4,6 +4,7 @@ import com.notare.feature.transcription.dto.response.TranscriptionResponse;
 import com.notare.feature.transcription.model.Transcription;
 import org.springframework.stereotype.Component;
 
+/** Maps transcriptions to their response. */
 @Component
 public class TranscriptionMapper {
 

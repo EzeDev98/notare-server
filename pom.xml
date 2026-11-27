@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Maven build for the Notare server. -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
@@ -6,7 +7,7 @@
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
 		<version>3.2.5</version>
-		<relativePath/> <!-- lookup parent from repository -->
+		<relativePath/>
 	</parent>
 	<groupId>com.notare</groupId>
 	<artifactId>notare</artifactId>
@@ -28,15 +29,7 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
-		<!--
-			Spring Modulith tracks the Boot release train: 1.1.x is the line built
-			for Boot 3.2.x. 2.x targets Boot 4 and will not resolve here.
-		-->
 		<spring-modulith.version>1.1.12</spring-modulith.version>
-		<!--
-			springdoc 2.5.x is the correct pairing for Boot 3.2.x — this is now
-			consistent, which is the point of the downgrade.
-		-->
 		<springdoc.version>2.5.0</springdoc.version>
 	</properties>
 	<dependencies>
@@ -56,38 +49,14 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-jdbc</artifactId>
 		</dependency>
-		<!--
-			Schema migrations (step 2). No <version> — managed by the
-			spring-boot-starter-parent 3.2.5 BOM, which pins Flyway 9.22.x.
-			Under Flyway 9, flyway-core bundles Postgres (and MySQL) support
-			directly, so nothing else is needed here.
-
-			IMPORTANT if this project ever bumps to Boot 3.3+: Flyway 10 split
-			per-database support out of flyway-core into separate artifacts for
-			licensing reasons, so upgrading Boot without also adding
-			flyway-database-postgresql as a dependency will fail at runtime with
-			"Unsupported Database: PostgreSQL" even though the build succeeds.
-			Same class of trap the Boot/Modulith/springdoc note above already
-			warns about — check this dependency specifically when Boot moves.
-		-->
 		<dependency>
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-core</artifactId>
 		</dependency>
-		<!--
-			WAS spring-boot-starter-webmvc. That artifact only exists in Boot 4 —
-			it is the renamed form of this one. Boot 3.x calls it starter-web.
-
-			ALSO ABSORBED: spring-boot-starter-restclient, which likewise only
-			exists in Boot 4. RestClient itself shipped in Spring Framework 6.1
-			(Boot 3.2), inside spring-web, so it arrives with this starter and
-			your existing RestClient code needs no change.
-		-->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
-		<!-- One instance runs each scheduled job (step 17e, B-21). -->
 		<dependency>
 			<groupId>net.javacrumbs.shedlock</groupId>
 			<artifactId>shedlock-spring</artifactId>
@@ -98,45 +67,16 @@
 			<artifactId>shedlock-provider-jdbc-template</artifactId>
 			<version>5.13.0</version>
 		</dependency>
-		<!--
-			Render's health check needs a path that returns 200 without
-			authentication. Everything else in this API requires a JWT
-			(WebSecurityConfig's anyRequest().authenticated()), so without this,
-			Render's check would hit an authenticated path and see 401/403
-			instead of a healthy 200. /actuator/health is permitted explicitly
-			in WebSecurityConfig; nothing else under /actuator is exposed.
-		-->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
-		<!--
-			Prod voice-note storage (R2FileStorageService, @Profile("prod")).
-			R2 is Cloudflare's S3-compatible object store — this is the plain AWS
-			SDK v2 S3 client, pointed at R2's endpoint instead of AWS's, not an
-			R2-specific library. No BOM: this is the only AWS SDK module the app
-			uses, so one pinned version is simpler than importing the whole BOM
-			for a single artifact.
-		-->
 		<dependency>
 			<groupId>software.amazon.awssdk</groupId>
 			<artifactId>s3</artifactId>
 			<version>2.54.2</version>
 		</dependency>
 
-		<!--
-			Explicit sync HTTP client for the s3 dependency above, instead of
-			letting the SDK auto-select one from the classpath. Since AWS SDK
-			2.46.0, S3Client defaults to Apache5HttpClient, which is built on
-			Apache HttpClient 5.6.x — that pulls in httpclient5/httpcore5,
-			whose versions Spring Boot's own dependencyManagement also pins
-			(older ones, for RestTemplate/actuator). Spring's pin always wins
-			over the transitive one, producing NoSuchMethodError /
-			NoClassDefFoundError at runtime because the two don't match.
-			url-connection-client sidesteps this permanently: it's built on
-			java.net.HttpURLConnection, so it has no Apache HttpClient
-			dependency at all, and needs no version pin here.
-		-->
 		<dependency>
 			<groupId>software.amazon.awssdk</groupId>
 			<artifactId>url-connection-client</artifactId>
@@ -196,14 +136,6 @@
 			<artifactId>lombok</artifactId>
 			<optional>true</optional>
 		</dependency>
-		<!--
-			UserDetail imports org.jspecify.annotations.Nullable. JSpecify is not a
-			dependency of Spring Framework 6.1, so that import will NOT resolve on
-			Boot 3.2 unless it is declared explicitly. Two options:
-			  1. keep this dependency, or
-			  2. delete it and change the import to org.springframework.lang.Nullable
-			Option 2 is the more idiomatic choice on 3.2 and costs one line.
-		-->
 		<dependency>
 			<groupId>org.jspecify</groupId>
 			<artifactId>jspecify</artifactId>
@@ -214,17 +146,6 @@
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>${springdoc.version}</version>
 		</dependency>
-		<!--
-			Boot 4 split testing into per-technology starters
-			(spring-boot-starter-{data-jpa,jdbc,restclient,security,webmvc}-test).
-			None of those artifacts exist in Boot 3.x — there is ONE
-			spring-boot-starter-test covering JUnit 5, AssertJ, Mockito,
-			JSONassert, Hamcrest, spring-test and the Boot test slices.
-
-			Security test support is the one piece that is NOT in it, so
-			spring-security-test is declared separately (version managed by the
-			Boot parent).
-		-->
 		<dependency>
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
@@ -272,24 +193,6 @@
 					</excludes>
 				</configuration>
 			</plugin>
-			<!--
-				The Lombok <path> entries previously carried NO <version>. Resolving
-				an annotationProcessorPath version from dependencyManagement only
-				works on newer maven-compiler-plugin releases; the one pinned by the
-				Boot 3.2.5 parent is older, so the path could not resolve and Lombok
-				stopped running. Because declaring annotationProcessorPaths REPLACES
-				classpath-based processor discovery, that failure is silent — javac
-				just reports "cannot find symbol" for every generated getter.
-
-				${lombok.version} is defined by spring-boot-dependencies, so this
-				stays in step with whatever Boot manages.
-
-				Worth knowing: this whole plugin block is optional. Lombok is already
-				declared as a dependency, and javac discovers processors on the
-				classpath by itself, so deleting the block entirely also works and is
-				one less thing to keep in sync. It's kept here only because it was
-				already in your build.
-			-->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>

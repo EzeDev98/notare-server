@@ -18,38 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 13d of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox.</b> This environment has no route to a
- * Maven mirror, so Mockito is unavailable as a compile-time dependency here,
- * and {@code target/classes} only holds this project's own already-compiled
- * classes, not third-party jars. Every test below is reasoned carefully from
- * {@link SyncRetentionJob}'s source and follows this codebase's existing
- * Mockito conventions exactly (see {@code VoiceUploadValidatorTest} for the
- * pattern of instantiating a real {@code @ConfigurationProperties} bean
- * directly rather than mocking it), but it has not actually been compiled or
- * run. Please run it via {@code mvn test} before trusting it.
- *
- * <p>{@code @Scheduled} and {@code @Transactional} are infrastructure wiring
- * applied by Spring proxies at runtime — not observable by calling
- * {@link SyncRetentionJob#sweep} directly, which is what these tests do,
- * exactly like this codebase's other scheduled/event-listener suites (see
- * {@code TranscriptionWorkerTest}).
- *
- * <p>Covers, per the class's own doc comment:
- * <ul>
- *   <li>both repositories are swept with the SAME cutoff — the doc comment
- *       is explicit that the two tables describe the same retention window
- *       and must never be allowed to describe different ones;</li>
- *   <li>the cutoff is computed from {@code syncProperties.getRetentionDays()},
- *       not a hardcoded value;</li>
- *   <li>both deletes always run, in either order relative to each other,
- *       regardless of how many rows each one reports removing — including
- *       the zero-rows case, which the doc comment says is logged
- *       unconditionally rather than treated as a no-op skip.</li>
- * </ul>
- */
+/** Tests for SyncRetentionJob. */
 @ExtendWith(MockitoExtension.class)
 class SyncRetentionJobTest {
 

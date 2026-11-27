@@ -8,18 +8,7 @@ import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Step 3f of the coverage roadmap.
- *
- * <p>Covers {@link VoiceNoteMapper#toEntity} and {@link
- * VoiceNoteMapper#toResponse}. {@code toEntity} takes seven positional
- * arguments, several of them same-typed ({@code sizeBytes} is a primitive
- * {@code long}, {@code durationSeconds} a boxed {@code Integer}, both
- * numeric) - exactly the shape where a caller-side or mapper-side argument
- * swap goes unnoticed until a file's size and duration come back
- * transposed. Each is asserted against a distinct, recognizable value for
- * that reason.
- */
+/** Tests for VoiceNoteMapper. */
 class VoiceNoteMapperTest {
 
     private final VoiceNoteMapper mapper = new VoiceNoteMapper();

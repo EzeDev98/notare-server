@@ -6,8 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/** Data access for account deletions. */
 public interface AccountDeletionRepository extends JpaRepository<AccountDeletion, Long> {
 
-    /** Deletions that have not moved for a while: what the recovery job picks up. */
     List<AccountDeletion> findByUpdatedAtBefore(LocalDateTime before);
 }

@@ -14,11 +14,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/**
- * Add next to {@code @WebMvcTest}. A web slice scans {@code ClientVersionInterceptor}
- * (a HandlerInterceptor) but not the {@code @Component} property classes it and
- * {@code WebMvcConfig} depend on, so the context cannot start without these beans.
- */
+/** Test stand-in used by the integration tests. */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented

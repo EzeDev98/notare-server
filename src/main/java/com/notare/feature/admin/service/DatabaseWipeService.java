@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/** Deletes all application data from the database, keeping the Flyway history. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -50,9 +51,6 @@ public class DatabaseWipeService {
     private List<String> listTables(Connection connection, String product) throws SQLException {
         List<String> tables = new ArrayList<>();
         DatabaseMetaData metaData = connection.getMetaData();
-        // MySQL has no separate schema concept the driver exposes here — the
-        // catalog IS the database. Postgres keeps its user tables in the
-        // "public" schema by default, which is also all this app ever uses.
         String schema = "PostgreSQL".equalsIgnoreCase(product) ? "public" : null;
 
         try (ResultSet rs = metaData.getTables(connection.getCatalog(), schema, "%", new String[]{"TABLE"})) {
@@ -66,10 +64,6 @@ public class DatabaseWipeService {
         return tables;
     }
 
-    /** No single statement truncates multiple tables in MySQL, and foreign
-     * keys would otherwise block truncating them out of dependency order —
-     * disabling the check for the duration sidesteps needing that order at
-     * all. */
     private void wipeMySql(Connection connection, List<String> tables) throws SQLException {
         try (Statement statement = connection.createStatement()) {
             statement.execute("SET FOREIGN_KEY_CHECKS = 0");
@@ -83,9 +77,6 @@ public class DatabaseWipeService {
         }
     }
 
-    /** One statement, CASCADE — Postgres truncates every listed table
-     * together and follows the foreign keys between them itself, so no
-     * dependency ordering is needed here either. */
     private void wipePostgres(Connection connection, List<String> tables) throws SQLException {
         String quotedTables = tables.stream()
                 .map(table -> "\"" + table + "\"")

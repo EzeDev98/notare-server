@@ -35,26 +35,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 10c of the coverage roadmap.
- *
- * <p>R2FileStorageService builds its own {@link S3Client} inside its
- * constructor from {@link StorageProperties} — there is no seam to inject a
- * mock through, unlike every other collaborator in this codebase. Rather
- * than change production code just to make it testable (a real client isn't
- * hard to construct; it never touches the network until a request is made),
- * this test builds the service normally against harmless dummy R2 config,
- * then reflectively swaps its private {@code s3} field for a Mockito mock.
- * The dummy config (a syntactically valid but unreachable endpoint) is never
- * actually dialed — {@code S3Client.builder().build()} only configures a
- * client, it doesn't connect.
- *
- * <p>Covers the same three-method contract as the other two backends: the
- * UUID-plus-extension key scheme, store/load/delete happy paths verified
- * against the exact request the SDK was called with, and each of the
- * documented S3Exception / NoSuchKeyException / IOException failure paths
- * mapping to StorageException.
- */
+/** Tests for R2FileStorageService. */
 @ExtendWith(MockitoExtension.class)
 class R2FileStorageServiceTest {
 
@@ -75,10 +56,6 @@ class R2FileStorageServiceTest {
 
         service = new R2FileStorageService(properties);
 
-        // Swap the real SDK client the constructor built for our mock. Both
-        // fields are `private final`, but that only blocks reassignment from
-        // OUTSIDE reflection at the language level — Field#set on an
-        // instance (non-static) final field works once made accessible.
         Field s3Field = R2FileStorageService.class.getDeclaredField("s3");
         s3Field.setAccessible(true);
         s3Field.set(service, s3);

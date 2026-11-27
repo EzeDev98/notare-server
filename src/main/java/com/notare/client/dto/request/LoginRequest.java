@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Request body for POST /api/v1/auth/login (Step 11A). */
+/** Request body sent to internal-auth-server to sign in. */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -14,10 +14,6 @@ public class LoginRequest {
     private String username;
     private String password;
 
-    /**
-     * Step 17h: the person's own browser User-Agent. internal-auth-server labels the session with it
-     * ("Mac, Chrome"); without it every device would be labelled with this server's HTTP client.
-     */
     private String userAgent;
 
     public LoginRequest(String username, String password) {

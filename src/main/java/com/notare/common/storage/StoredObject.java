@@ -2,6 +2,6 @@ package com.notare.common.storage;
 
 import java.time.Instant;
 
-/** One object as a storage backend lists it (step 19b). */
+/** One stored file as a backend lists it. */
 public record StoredObject(String key, Instant lastModified) {
 }

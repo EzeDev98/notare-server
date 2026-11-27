@@ -42,62 +42,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 7a of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox</b> - Mockito and Spring Data
- * ({@code Page}/{@code Pageable}/{@code Sort}) are unavailable as
- * compile-time dependencies here (see {@link
- * UserServiceImplementationTest} for the
- * full explanation). {@link NoteMapper} itself is real - it has no
- * third-party runtime dependency and was executed and verified in Step 3 - so
- * the entity/DTO shapes below follow its actual, confirmed field mapping, but
- * this file as a whole still cannot compile or run here because of {@code
- * NoteRepository}, {@code ApplicationEventPublisher}, and Mockito. Reasoned
- * carefully from source; run via {@code mvn test} before trusting it.
- *
- * <p>{@link NoteServiceImpl} is the largest class touched so far, so this
- * suite is organized around its own documented invariants rather than just
- * method-by-method happy paths:
- *
- * <ul>
- *   <li><b>Ownership scoping doubles as authorization.</b> Every owner-facing
- *       method resolves a note through a finder that already filters by
- *       ownerId, so "belongs to someone else" and "doesn't exist" produce the
- *       identical {@link NoteNotFoundException}, and a trashed note is 404
- *       to every method except restore/permanent-delete/findAnyNote - see
- *       {@code requireOwnActiveNote}'s own doc comment on why that's
- *       deliberate.</li>
- *   <li><b>The version gate ({@code requireMatchingVersion}) is shared</b> by
- *       {@code updateNote}, {@code autoSave}, and their {@code *Authorized}
- *       counterparts - one gate, so optimistic locking can't silently apply
- *       to only one of the two writer paths.</li>
- *   <li><b>PUT vs. PATCH null-handling is opposite and load-bearing:</b> a
- *       null content in {@code UpdateNoteRequest} CLEARS the note; a null
- *       content in {@code AutoSaveNoteRequest} leaves it untouched. Getting
- *       this backwards silently wipes a note, so both directions are tested
- *       explicitly.</li>
- *   <li><b>{@code withStableOrder} is applied inconsistently on purpose.</b>
- *       {@code listNotes} appends an {@code id}
- *       tiebreaker so paging is well-defined when timestamps tie;
- *       {@code searchNotes} does NOT - it passes the caller's {@code
- *       Pageable} straight through to {@code searchByOwner} untouched. That
- *       asymmetry is confirmed directly against source, not assumed, and is
- *       called out below as an observation rather than "fixed" here.</li>
- *   <li><b>{@code permanentlyDeleteNote} looks up by owner-scoped id, then
- *       calls {@code delete(entity)} - never {@code deleteById}</b> - the
- *       class's own comment explains that {@code deleteById} would bypass the
- *       ownership check entirely.</li>
- * </ul>
- */
+/** Tests for NoteServiceImpl. */
 @ExtendWith(MockitoExtension.class)
 class NoteServiceImplTest {
 
     @Mock private NoteRepository noteRepository;
     @Mock private ApplicationEventPublisher eventPublisher;
 
-    // NoteMapper is real: no Mockito/Spring dependency of its own, and its
-    // exact field mapping was already executed and confirmed in Step 3.
     private final NoteMapper noteMapper = new NoteMapper();
 
     private NoteServiceImpl service;
@@ -136,8 +87,6 @@ class NoteServiceImplTest {
         return request;
     }
 
-    // ---- createNote -------------------------------------------------
-
     @Test
     void createNote_mapsTheRequestAndSaves_thenReturnsTheMappedResponse() {
         CreateNoteRequest request = createNoteRequest("hello world");
@@ -161,8 +110,6 @@ class NoteServiceImplTest {
         assertThat(response.version()).isEqualTo(0L);
     }
 
-    // ---- getNote -------------------------------------------------
-
     @Test
     void getNote_returnsTheMappedNote_whenItIsActiveAndOwnedByTheCaller() {
         when(noteRepository.findByIdAndOwnerIdAndDeletedFalse(5L, 9L))
@@ -176,17 +123,12 @@ class NoteServiceImplTest {
 
     @Test
     void getNote_throwsNoteNotFoundException_whenNoActiveOwnedNoteMatches() {
-        // Covers "doesn't exist", "trashed", and "belongs to someone else" all
-        // at once - findByIdAndOwnerIdAndDeletedFalse can't distinguish them,
-        // and neither can this method.
         when(noteRepository.findByIdAndOwnerIdAndDeletedFalse(5L, 9L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getNote(9L, 5L))
                 .isInstanceOf(NoteNotFoundException.class)
                 .hasMessage("Note not found.");
     }
-
-    // ---- listNotes -------------------------------------------------
 
     @Test
     void listNotes_queriesFindByOwnerIdAndDeletedFalse() {
@@ -249,8 +191,6 @@ class NoteServiceImplTest {
         assertThat(result.content().get(0).contentPreview()).isEqualTo("some content");
     }
 
-    // ---- setPinned -------------------------------------------------
-
     @Test
     void setPinned_throwsNoteNotFoundException_whenNoActiveOwnedNoteMatches() {
         when(noteRepository.findByIdAndOwnerIdAndDeletedFalse(5L, 9L)).thenReturn(Optional.empty());
@@ -275,8 +215,6 @@ class NoteServiceImplTest {
         assertThat(response.pinned()).isTrue();
     }
 
-    // ---- searchNotes -------------------------------------------------
-
     @Test
     void searchNotes_treatsANullQueryAsAnEmptyTerm_behavingLikeListAll() {
         when(noteRepository.searchByOwner(eq(9L), eq(""), any())).thenReturn(new PageImpl<>(List.of()));
@@ -299,10 +237,6 @@ class NoteServiceImplTest {
 
     @Test
     void searchNotes_doesNotApplyWithStableOrder_unlikeListNotesAndListTrashedNotes() {
-        // Deliberately checking the ASYMMETRY: search passes the caller's
-        // Pageable straight through, untouched, with no id tiebreaker appended -
-        // confirmed directly against NoteServiceImpl#searchNotes's source, which
-        // calls searchByOwner(ownerId, term, pageable) and never withStableOrder.
         Pageable requested = PageRequest.of(0, 20, Sort.by(Sort.Order.desc("updatedAt")));
         when(noteRepository.searchByOwner(eq(9L), eq(""), eq(requested))).thenReturn(new PageImpl<>(List.of()));
 
@@ -310,8 +244,6 @@ class NoteServiceImplTest {
 
         verify(noteRepository).searchByOwner(9L, "", requested);
     }
-
-    // ---- updateNote -------------------------------------------------
 
     @Test
     void updateNote_throwsNoteNotFoundException_whenNoActiveOwnedNoteMatches() {
@@ -330,9 +262,6 @@ class NoteServiceImplTest {
 
         service.updateNote(9L, 5L, updateNoteRequest(null, 3L));
 
-        // Unlike auto-save, a null content here CLEARS the field rather than
-        // leaving it alone - this is the entire reason UpdateNoteRequest and
-        // AutoSaveNoteRequest stay separate types.
         assertThat(note.getContent()).isNull();
         verify(noteRepository).saveAndFlush(note);
     }
@@ -348,8 +277,6 @@ class NoteServiceImplTest {
         assertThat(note.getContent()).isEqualTo("brand new");
         assertThat(response.content()).isEqualTo("brand new");
     }
-
-    // ---- autoSave -------------------------------------------------
 
     @Test
     void autoSave_throwsNoteNotFoundException_whenNoActiveOwnedNoteMatches() {
@@ -382,8 +309,6 @@ class NoteServiceImplTest {
         assertThat(note.getContent()).isEqualTo("patched");
     }
 
-    // ---- permanentlyDeleteNote -------------------------------------------------
-
     @Test
     void permanentlyDeleteNote_throwsNoteNotFoundException_whenNoOwnedNoteMatchesRegardlessOfDeletedState() {
         when(noteRepository.findByIdAndOwnerId(5L, 9L)).thenReturn(Optional.empty());
@@ -399,8 +324,6 @@ class NoteServiceImplTest {
 
         service.permanentlyDeleteNote(9L, 5L);
 
-        // The class's own comment: deleteById(noteId) would bypass the owner
-        // check entirely and let one user wipe another's note by guessing an id.
         verify(noteRepository).delete(note);
         verify(noteRepository, never()).deleteById(anyLong());
     }
@@ -417,8 +340,6 @@ class NoteServiceImplTest {
         assertThat(captor.getValue().noteId()).isEqualTo(5L);
         assertThat(captor.getValue().ownerId()).isEqualTo(9L);
     }
-
-    // ---- createWithClientId -------------------------------------------------
 
     @Test
     void createWithClientId_returnsTheExistingNote_whenAReplayedClientIdIsAlreadyKnown_withoutSavingAgain() {
@@ -473,8 +394,6 @@ class NoteServiceImplTest {
                 .isSameAs(raceLoss);
     }
 
-    // ---- findAnyNote -------------------------------------------------
-
     @Test
     void findAnyNote_returnsTheNote_evenWhenItIsTrashed_becauseThereIsNoDeletedFilter() {
         Note trashed = note(5L, 9L, "x", 1L);
@@ -493,8 +412,6 @@ class NoteServiceImplTest {
 
         assertThat(service.findAnyNote(9L, 5L)).isEmpty();
     }
-
-    // ---- findChangesSince -------------------------------------------------
 
     @Test
     void findChangesSince_withNoCursor_queriesActiveNotesOnly() {

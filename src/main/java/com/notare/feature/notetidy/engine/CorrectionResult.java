@@ -1,11 +1,6 @@
 package com.notare.feature.notetidy.engine;
 
-/**
- * What a corrector returns.
- *
- * @param languageCode the detected language, for example "en-US"
- * @param text         the corrected text; equal to the input when nothing was fixed
- */
+/** A corrector's result: the detected language and the corrected text. */
 public record CorrectionResult(String languageCode, String text) {
 
     public boolean isEnglish() {

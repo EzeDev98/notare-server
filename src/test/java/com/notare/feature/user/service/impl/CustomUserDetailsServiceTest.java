@@ -18,24 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 5b of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox</b> - Mockito and Spring Security are
- * unavailable as compile-time dependencies here (see the note in {@link
- * UserServiceImplementationTest}). Reasoned from source; run via
- * {@code mvn test} before trusting it.
- *
- * <p>Covers {@link CustomUserDetailsService#loadUserByUsername}. Small class,
- * but two things are worth pinning down explicitly: (1) the SAME value the
- * caller passed in is used for both the username and the email argument of
- * {@code findByUsernameOrEmail} - a login form has one text field, and the
- * class relies entirely on the repository query to figure out which column
- * it matches; (2) a miss produces {@link UsernameNotFoundException} with a
- * message that does not repeat back whatever the caller typed, so a
- * brute-forcer cannot use the error to distinguish "wrong username" from
- * "wrong password".
- */
+/** Tests for CustomUserDetailsService. */
 @ExtendWith(MockitoExtension.class)
 class CustomUserDetailsServiceTest {
 
@@ -59,9 +42,6 @@ class CustomUserDetailsServiceTest {
 
     @Test
     void loadUserByUsername_worksWhenTheCallerTypedAnEmailInstead() {
-        // Same call shape either way - the repository's OR clause is what
-        // decides whether "johndoe" or "john@example.com" is a match, not
-        // this class.
         User user = new User();
         user.setId(1L);
         user.setUsername("johndoe");
@@ -104,9 +84,6 @@ class CustomUserDetailsServiceTest {
 
     @Test
     void loadUserByUsername_errorMessageNeverEchoesBackTheAttemptedIdentifier() {
-        // A message that repeated the input ("No account found for 'admin@bank.com'")
-        // would hand an attacker a free username/email oracle. This locks the
-        // fixed, generic wording in place.
         when(userRepository.findByUsernameOrEmail("admin@bank.com", "admin@bank.com")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> newService().loadUserByUsername("admin@bank.com"))

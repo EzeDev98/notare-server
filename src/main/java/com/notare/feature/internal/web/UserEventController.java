@@ -18,19 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
-/**
- * Receives user lifecycle pushes from internal-auth-server (IAM) so notare's
- * local user row never drifts from IAM, the source of truth.
- * <p>
- * Gated on a shared secret (internal-auth.user-events.secret), not a user
- * JWT. A blank secret disables the endpoint. Rows are never deleted -
- * notes, shares and collaborations reference them - only their status
- * changes: DELETED -> DEACTIVATED, DISABLED -> SUSPENDED, ENABLED -> ACTIVE
- * (only from SUSPENDED/DEACTIVATED).
- * <p>
- * Idempotent, and an unknown user is a 200 no-op, so IAM's best-effort
- * push can be safely repeated.
- */
+/** Receives user lifecycle events from internal-auth-server. */
 @Slf4j
 @RestController
 @RequiredArgsConstructor

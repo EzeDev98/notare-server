@@ -1,12 +1,6 @@
 package com.notare.feature.transcription.enums;
 
-/**
- * Lifecycle of a transcription job:
- *   PENDING    -> just submitted, not yet picked up
- *   PROCESSING -> the async worker is running it
- *   COMPLETED  -> transcript/confidence/language are populated
- *   FAILED     -> errorMessage explains why
- */
+/** Where a transcription job is in its lifecycle. */
 public enum TranscriptionStatus {
     PENDING,
     PROCESSING,

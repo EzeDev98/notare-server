@@ -42,12 +42,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Real JwtAuthenticationFilter + real WebSecurityConfig. Only the filter's
- * collaborators (JwtDecoder standing in for internal-auth-server's signing
- * keys, and CustomUserDetailsService) are mocked. NoteController sits behind
- * anyRequest().authenticated(); LoginController behind an explicit permitAll().
- */
+/** Tests for WebSecurityFilterChain. */
 @WebSliceSupport
 @WebMvcTest(controllers = {NoteController.class, LoginController.class})
 @Import({WebSecurityConfig.class, ProblemDetailAuthenticationEntryPoint.class, ProblemDetailAccessDeniedHandler.class})

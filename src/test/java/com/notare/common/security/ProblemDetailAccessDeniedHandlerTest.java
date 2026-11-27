@@ -21,23 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 4d of the coverage roadmap.
- *
- * <p>Covers {@link ProblemDetailAccessDeniedHandler#handle}: the 403 status
- * and {@code application/problem+json} content type, the fixed
- * title/detail text (deliberately generic - see
- * {@link #handle_neverLeaksTheUnderlyingExceptionMessageIntoTheResponse()}),
- * and that {@code instance} is populated from the request's own URI so a
- * client can tell which call was denied.
- *
- * <p>{@code ObjectMapper} is mocked rather than real - the class's own doc
- * comment explains why a real {@code new ObjectMapper()} would be WRONG here
- * (it wouldn't carry Boot's {@code ProblemDetailJacksonMixin} and would
- * serialize a different shape than every other error in the app), so this
- * test only verifies the class hands the mapper the right {@link
- * ProblemDetail}, not how Jackson itself serializes it.
- */
+/** Tests for ProblemDetailAccessDeniedHandler. */
 @ExtendWith(MockitoExtension.class)
 class ProblemDetailAccessDeniedHandlerTest {
 

@@ -6,6 +6,7 @@ import java.security.SecureRandom;
 
 import static com.notare.common.constant.GeneralConstant.*;
 
+/** Generates random, readable Notarian ids. */
 @Component
 public class NotarianIdGenerator {
 

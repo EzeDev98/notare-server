@@ -37,42 +37,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 15o of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox</b> - see {@link
- * com.notare.feature.auth.web.AuthControllerTest}'s disclaimer (Step 15a);
- * same reasoning. Run via {@code mvn test} before trusting it.
- *
- * <p>Authenticated principal is supplied the same way as
- * {@link com.notare.feature.collaboration.web.CollaborationControllerTest}
- * (Step 15d) - directly on {@code SecurityContextHolder} in the test thread,
- * with {@code addFilters = false} keeping the real
- * {@code JwtAuthenticationFilter} chain out of this slice. {@code register}
- * itself needs no principal - it's on the permit-all list, same as Step
- * 15c/15h's endpoints.
- *
- * <p>{@code register} is unusual among mutating endpoints in this codebase:
- * the controller echoes {@link RegistrationResponse#getStatusCode()} as the
- * HTTP status rather than a fixed {@code ResponseEntity.status(...)}
- * constant, exactly the pattern {@code LogoutController} uses (Step 15e) -
- * so the first test below exists to confirm the controller forwards
- * whatever the service decided (201, per the service's own
- * {@code SC_CREATED}) rather than hard-coding one.
- *
- * <p>{@code /me} deliberately carries no path variable - the controller's own
- * javadoc explains why a {@code /user/{userId}} shape was rejected - so its
- * test doesn't need the "uses the authenticated principal, not the path"
- * pattern every other controller's id-based test uses; there is no other id
- * available to confuse it with.
- *
- * <p>Covers: {@code POST /user/register} - the service's status code echoed
- * (201), the notarianId/message fields, a required-field validation failure,
- * and {@link UserAlreadyExistException} -&gt; 409. {@code GET /user/me} -
- * 200 with the full profile (including email), and
- * {@link UserNotFoundException} -&gt; 404 for a token whose account no
- * longer exists.
- */
+/** Tests for UserController. */
 @WebSliceSupport
 @WebMvcTest(
         controllers = UserController.class,
@@ -133,10 +98,6 @@ class UserControllerTest {
         return registrationBody("Jane", "Doe", "janedoe", "jane@example.com", "Passw0rd", "Passw0rd");
     }
 
-    // ----------------------------------------------------------------
-    // POST /user/register
-    // ----------------------------------------------------------------
-
     @Test
     void register_validRequest_echoesTheServicesStatusCodeAndBody() throws Exception {
         when(userService.registerUser(any())).thenReturn(new RegistrationResponse(
@@ -195,10 +156,6 @@ class UserControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value("A user with this username is already registered"));
     }
-
-    // ----------------------------------------------------------------
-    // GET /user/me
-    // ----------------------------------------------------------------
 
     @Test
     void getCurrentUser_validRequest_returns200WithTheFullProfileIncludingEmail() throws Exception {

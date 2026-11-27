@@ -33,49 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 15m of the coverage roadmap.
- *
- * <p><b>Not executed in this sandbox</b> - see {@link
- * AuthControllerTest}'s disclaimer (Step 15a);
- * same reasoning. Run via {@code mvn test} before trusting it.
- *
- * <p>Authenticated principal is supplied the same way as
- * {@link CollaborationControllerTest}
- * (Step 15d) - directly on {@code SecurityContextHolder} in the test thread,
- * with {@code addFilters = false} keeping the real
- * {@code JwtAuthenticationFilter} chain out of this slice.
- *
- * <p>{@code submit}'s Location header is built from {@code
- * ServletUriComponentsBuilder.fromCurrentRequest()} rather than pointing at a
- * different resource - per the controller's own comment, the poll URL IS
- * this same GET, so the assertion below is that Location equals the request
- * path itself, not merely that it exists.
- *
- * <p>Both of this controller's failure modes come from a DIFFERENT module
- * than the one it lives in: {@code submit} delegates the
- * voice-note-exists-and-is-mine check to {@code VoiceNoteService} (the
- * controller's own comment on why - consulting another module's public
- * service, not its repository), so a bad {@code voiceNoteId} surfaces as
- * {@link VoiceNoteNotFoundException}, not a transcription-specific one.
- * {@code getStatus} surfaces {@link TranscriptionNotFoundException} for a
- * voice note that exists but has no submitted job. Both map to 404 via
- * {@code GlobalExceptionHandler} (Step 14a) and are indistinguishable to the
- * client at the HTTP layer - which is this controller's actual contract to
- * verify, since the two exception types come from different services
- * entirely.
- *
- * <p>Covers: {@code POST .../transcription} - 202 Accepted with a Location
- * equal to the request's own path and a PENDING body on first submission; a
- * resubmission against an already PENDING/PROCESSING/COMPLETED job still
- * returns 202 with whatever state the service hands back (idempotent, per
- * the controller's own javadoc - the controller does not special-case this,
- * so the test's job is confirming it doesn't); and
- * {@link VoiceNoteNotFoundException} -&gt; 404 for a voice note that isn't
- * the caller's. {@code GET .../transcription} - 200 with the completed
- * job's transcript/confidence/language fields, and {@link TranscriptionNotFoundException} -&gt; 404 when no
- * job has ever been submitted for that voice note.
- */
+/** Tests for TranscriptionController. */
 @WebSliceSupport
 @WebMvcTest(
         controllers = TranscriptionController.class,
@@ -125,10 +83,6 @@ class TranscriptionControllerTest {
                 id, voiceNoteId, TranscriptionStatus.COMPLETED,
                 "hello world", 0.97, "en", null, now, now);
     }
-
-    // ----------------------------------------------------------------
-    // POST /voice-notes/{voiceNoteId}/transcription
-    // ----------------------------------------------------------------
 
     @Test
     void submit_firstSubmission_returns202WithLocationEqualToTheRequestPathAndAPendingBody() throws Exception {
@@ -180,10 +134,6 @@ class TranscriptionControllerTest {
 
         verify(transcriptionService).submit(42L, 7L);
     }
-
-    // ----------------------------------------------------------------
-    // GET /voice-notes/{voiceNoteId}/transcription
-    // ----------------------------------------------------------------
 
     @Test
     void getStatus_completedJob_returns200WithTheFullResult() throws Exception {
