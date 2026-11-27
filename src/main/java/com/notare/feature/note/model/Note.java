@@ -152,4 +152,24 @@ public class Note {
     @LastModifiedBy
     @Column(name = "last_modified_by")
     private Long lastModifiedBy;
+
+    /** The version AI tidy produced. A note is picked again only once version moves past it. */
+    @Column(name = "tidied_version")
+    private Long tidiedVersion;
+
+    /** The first line AI tidy wrote. Regenerated only while the first line still equals it. */
+    @Column(name = "ai_title")
+    private String aiTitle;
+
+    /** The content before the last tidy, for "Restore original". */
+    @Column(name = "pre_tidy_content", columnDefinition = "TEXT")
+    private String preTidyContent;
+
+    /** Failed tidy runs in a row. The note is left alone once this reaches the max. */
+    @Column(name = "tidy_attempts", nullable = false)
+    private int tidyAttempts;
+
+    /** Backoff: the note is not picked before this time. */
+    @Column(name = "tidy_next_at")
+    private LocalDateTime tidyNextAt;
 }

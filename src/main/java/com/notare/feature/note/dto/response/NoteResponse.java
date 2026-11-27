@@ -41,6 +41,19 @@ public record NoteResponse(
         Long lastModifiedBy,
 
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+
+        /**
+         * True while the note is exactly as AI tidy left it, so "Restore
+         * original" can bring back the text from before the tidy. False once
+         * anyone edits it.
+         */
+        boolean restorable,
+
+        /**
+         * The note's title, inferred by AI tidy from the whole note. Never part of
+         * {@code content}. Null until AI tidy has titled the note.
+         */
+        String aiTitle
 ) {
 }

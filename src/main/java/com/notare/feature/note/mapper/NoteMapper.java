@@ -6,6 +6,8 @@ import com.notare.feature.note.dto.response.NoteSummaryResponse;
 import com.notare.feature.note.model.Note;
 import org.springframework.stereotype.Component;
 
+import java.util.Objects;
+
 /**
  * Hand-written mapper (the codebase doesn't use MapStruct). It's a @Component
  * so the service can inject it. Keeping mapping here means the service focuses
@@ -38,8 +40,15 @@ public class NoteMapper {
                 note.getVersion(),
                 note.getLastModifiedBy(),
                 note.getCreatedAt(),
-                note.getUpdatedAt()
+                note.getUpdatedAt(),
+                isRestorable(note),
+                note.getAiTitle()
         );
+    }
+
+    /** The note is still exactly as AI tidy left it, and the text from before is kept. */
+    public boolean isRestorable(Note note) {
+        return note.getPreTidyContent() != null && Objects.equals(note.getVersion(), note.getTidiedVersion());
     }
 
     public NoteSummaryResponse toSummary(Note note) {

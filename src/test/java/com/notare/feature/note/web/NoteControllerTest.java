@@ -138,7 +138,7 @@ class NoteControllerTest {
 
     private NoteResponse sampleNote(Long id, Long ownerId, String content, Long version) {
         LocalDateTime now = LocalDateTime.now();
-        return new NoteResponse(id, ownerId, content, false, version, ownerId, now, now);
+        return new NoteResponse(id, ownerId, content, false, version, ownerId, now, now, false, null);
     }
 
     private NoteSummaryResponse sampleSummary(Long id) {

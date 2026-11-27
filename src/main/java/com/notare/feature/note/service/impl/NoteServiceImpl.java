@@ -72,6 +72,24 @@ public class NoteServiceImpl implements NoteService {
         return saveOrganisationChange(note);
     }
 
+    @Override
+    @Transactional
+    public NoteResponse restoreOriginal(Long ownerId, Long noteId) {
+        Note note = requireOwnActiveNote(ownerId, noteId);
+        if (!noteMapper.isRestorable(note)) {
+            throw new NoteConflictException(noteId, note.getVersion());
+        }
+
+        note.setContent(note.getPreTidyContent());
+        note.setPreTidyContent(null);
+        // The save below takes the version up by one; marking that version as
+        // tidied stops AI tidy redoing the same change straight away.
+        note.setTidiedVersion(note.getVersion() + 1);
+
+        Note saved = noteRepository.saveAndFlush(note);
+        return noteMapper.toResponse(saved);
+    }
+
     /**
      * Shared tail of the pin toggle above.
      *

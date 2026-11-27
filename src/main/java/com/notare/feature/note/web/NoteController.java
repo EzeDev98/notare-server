@@ -192,4 +192,13 @@ public class NoteController {
 
         return ResponseEntity.ok(noteService.setPinned(userDetail.getUser().getId(), noteId, false));
     }
+
+    /** "Restore original": the text from before AI tidy. 409 once the note has been edited since. */
+    @PostMapping("/{noteId}/restore-original")
+    public ResponseEntity<NoteResponse> restoreOriginal(
+            @AuthenticationPrincipal UserDetail userDetail,
+            @PathVariable Long noteId) {
+
+        return ResponseEntity.ok(noteService.restoreOriginal(userDetail.getUser().getId(), noteId));
+    }
 }

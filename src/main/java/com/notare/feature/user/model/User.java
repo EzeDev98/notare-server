@@ -10,6 +10,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Getter
@@ -55,4 +56,16 @@ public class User {
 
     @LastModifiedDate
     private LocalDateTime updatedAt;
+
+    /** AI tidy opt-in. Off until the user turns it on in Settings. */
+    @Column(name = "ai_tidy_enabled", nullable = false)
+    private boolean aiTidyEnabled;
+
+    /** The day tidyTitlesUsed counts for. */
+    @Column(name = "tidy_title_day")
+    private LocalDate tidyTitleDay;
+
+    /** Titles AI tidy has inferred for this user on tidyTitleDay, against the daily cap. */
+    @Column(name = "tidy_titles_used", nullable = false)
+    private int tidyTitlesUsed;
 }

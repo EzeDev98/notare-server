@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -138,4 +139,79 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
     Page<Note> searchByOwner(@Param("ownerId") Long ownerId,
                              @Param("term") String term,
                              Pageable pageable);
+
+    /**
+     * Notes AI tidy may work on: owner opted in, not deleted, left alone since
+     * idleBefore, changed since the last tidy, out of backoff, attempts left.
+     * Oldest edit first, so no note waits forever behind busier ones.
+     */
+    @Query("""
+            SELECT n.id FROM Note n, User u
+            WHERE u.id = n.ownerId
+              AND u.aiTidyEnabled = true
+              AND n.deleted = false
+              AND n.updatedAt < :idleBefore
+              AND (n.tidiedVersion IS NULL OR n.version > n.tidiedVersion)
+              AND (n.tidyNextAt IS NULL OR n.tidyNextAt <= :now)
+              AND n.tidyAttempts < :maxAttempts
+            ORDER BY n.updatedAt ASC, n.id ASC
+            """)
+    List<Long> findTidyCandidateIds(@Param("idleBefore") LocalDateTime idleBefore,
+                                    @Param("now") LocalDateTime now,
+                                    @Param("maxAttempts") int maxAttempts,
+                                    Pageable pageable);
+
+    /**
+     * Saves AI tidy's result only if the note is still at the version it read.
+     * Bumps version and updated_at so the sync pull delivers it to every device.
+     * Returns 0 when the user edited (or deleted) the note while the job ran.
+     * {@code previous} is null when only the title changed: nothing to restore.
+     */
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            UPDATE Note n
+            SET n.content = :content,
+                n.preTidyContent = :previous,
+                n.version = n.version + 1,
+                n.lastModifiedBy = null,
+                n.updatedAt = :now,
+                n.tidiedVersion = :version + 1,
+                n.aiTitle = :aiTitle,
+                n.tidyAttempts = 0,
+                n.tidyNextAt = null
+            WHERE n.id = :id AND n.version = :version AND n.deleted = false
+            """)
+    int applyTidy(@Param("id") Long id,
+                  @Param("version") Long version,
+                  @Param("content") String content,
+                  @Param("previous") String previous,
+                  @Param("aiTitle") String aiTitle,
+                  @Param("now") LocalDateTime now);
+
+    /**
+     * Nothing to change at this version: remember it so the note is not picked
+     * again until edited. The kept pre-tidy text is cleared, because the note
+     * was edited since that tidy and restoring it would undo those edits.
+     */
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            UPDATE Note n
+            SET n.tidiedVersion = :version, n.preTidyContent = null, n.tidyAttempts = 0, n.tidyNextAt = null
+            WHERE n.id = :id AND n.version = :version
+            """)
+    int markTidied(@Param("id") Long id, @Param("version") Long version);
+
+    /** The user edited during the job: try again later. Not a failure. */
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE Note n SET n.tidyNextAt = :nextAt WHERE n.id = :id")
+    int deferTidy(@Param("id") Long id, @Param("nextAt") LocalDateTime nextAt);
+
+    /** A failed run: count it and back off. */
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE Note n SET n.tidyAttempts = n.tidyAttempts + 1, n.tidyNextAt = :nextAt WHERE n.id = :id")
+    int recordTidyFailure(@Param("id") Long id, @Param("nextAt") LocalDateTime nextAt);
 }

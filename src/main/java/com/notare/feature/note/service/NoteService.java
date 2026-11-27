@@ -41,6 +41,13 @@ public interface NoteService {
      */
     NoteResponse setPinned(Long ownerId, Long noteId, boolean pinned);
 
+    /**
+     * "Restore original": puts back the text from before AI tidy, as a normal
+     * edit by the owner. Only while the note is exactly as AI tidy left it;
+     * otherwise 409, because restoring would undo edits made since.
+     */
+    NoteResponse restoreOriginal(Long ownerId, Long noteId);
+
     PagedResponse<NoteSummaryResponse> searchNotes(Long ownerId, String query, Pageable pageable);
 
     NoteResponse updateNote(Long ownerId, Long noteId, UpdateNoteRequest request);

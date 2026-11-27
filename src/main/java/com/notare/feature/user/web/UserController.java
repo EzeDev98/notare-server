@@ -1,6 +1,8 @@
 package com.notare.feature.user.web;
 
+import com.notare.feature.user.dto.request.AiTidySettingRequest;
 import com.notare.feature.user.dto.request.DeleteAccountRequest;
+import com.notare.feature.user.dto.response.AiTidySettingResponse;
 import com.notare.feature.user.service.AccountDeletionService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 
@@ -15,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -67,5 +70,19 @@ public class UserController {
             @AuthenticationPrincipal UserDetail userDetail) {
 
         return ResponseEntity.ok(userService.getCurrentUser(userDetail.getUser().getId()));
+    }
+
+    /** AI tidy opt-in for the caller. */
+    @GetMapping("/me/ai-tidy")
+    public ResponseEntity<AiTidySettingResponse> getAiTidy(@AuthenticationPrincipal UserDetail userDetail) {
+        return ResponseEntity.ok(userService.getAiTidy(userDetail.getUser().getId()));
+    }
+
+    @PutMapping("/me/ai-tidy")
+    public ResponseEntity<AiTidySettingResponse> setAiTidy(
+            @AuthenticationPrincipal UserDetail userDetail,
+            @Valid @RequestBody AiTidySettingRequest request) {
+
+        return ResponseEntity.ok(userService.setAiTidy(userDetail.getUser().getId(), request.getEnabled()));
     }
 }

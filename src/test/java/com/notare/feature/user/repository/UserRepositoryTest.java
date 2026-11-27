@@ -74,7 +74,10 @@ class UserRepositoryTest {
                 UserStatus.ACTIVE,
                 true,
                 LocalDateTime.now(),
-                LocalDateTime.now()
+                LocalDateTime.now(),
+                false,
+                null,
+                0
         );
     }
 }

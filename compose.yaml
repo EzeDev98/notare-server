@@ -16,3 +16,7 @@ services:
       - 'POSTGRES_USER=myuser'
     ports:
       - '5432'
+  languagetool:
+    image: 'erikvl87/languagetool'
+    ports:
+      - '8010:8010'

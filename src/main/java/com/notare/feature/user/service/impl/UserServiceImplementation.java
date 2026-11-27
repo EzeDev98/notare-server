@@ -7,6 +7,7 @@ import com.notare.client.service.InternalAuthClient;
 import com.notare.common.exception.*;
 import com.notare.feature.auth.validation.RegistrationValidator;
 import com.notare.feature.user.dto.request.RegistrationRequest;
+import com.notare.feature.user.dto.response.AiTidySettingResponse;
 import com.notare.feature.user.dto.response.CurrentUserResponse;
 import com.notare.feature.user.dto.response.RegistrationResponse;
 import com.notare.feature.user.enums.UserStatus;
@@ -149,5 +150,22 @@ public class UserServiceImplementation implements UserService {
         }
 
         throw new NotarianIdGenerationException("Unable to generate a unique notarianId after " + MAX_ID_GENERATION_ATTEMPTS + " attempts");
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AiTidySettingResponse getAiTidy(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found."));
+        return new AiTidySettingResponse(user.isAiTidyEnabled());
+    }
+
+    @Override
+    @Transactional
+    public AiTidySettingResponse setAiTidy(Long userId, boolean enabled) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found."));
+        user.setAiTidyEnabled(enabled);
+        return new AiTidySettingResponse(userRepository.save(user).isAiTidyEnabled());
     }
 }

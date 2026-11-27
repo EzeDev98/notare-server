@@ -102,7 +102,7 @@ class SyncPushServiceImplTest {
     }
 
     private NoteResponse note(Long id, Long version) {
-        return new NoteResponse(id, OWNER_ID, "hello", false, version, OWNER_ID, null, null);
+        return new NoteResponse(id, OWNER_ID, "hello", false, version, OWNER_ID, null, null, false, null);
     }
 
     private SyncOperationResult applied(String operationId) {
